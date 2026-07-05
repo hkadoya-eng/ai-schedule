@@ -135,6 +135,10 @@
   .bar.pend{background-image:linear-gradient(rgba(255,255,255,.66),rgba(255,255,255,.66))!important;}
   .bar.edge{box-shadow:inset -2px 0 0 rgba(0,0,0,.18);}  /* 済み/未達の境目 */
   .roll{position:absolute; left:-1px; right:-1px; top:10px; bottom:10px; background:rgba(90,110,135,.30);}
+  /* 依存関係の矢印オーバーレイ（タイムラインと一緒にスクロール／固定列の下に潜る） */
+  #depsvg{position:absolute; top:0; left:0; pointer-events:none; z-index:1; overflow:visible; display:none;}
+  body.show-deps #depsvg{display:block;}
+  #depsvg path.dep{fill:none; stroke:#d99a3c; stroke-width:1.6; opacity:.9;}
   .roll.s{left:2px;border-top-left-radius:3px;border-bottom-left-radius:3px;}
   .roll.e{right:2px;border-top-right-radius:3px;border-bottom-right-radius:3px;}
   td.tl.preview{background:rgba(31,142,142,.18)!important;}
@@ -481,6 +485,7 @@
     <button class="btn flt" id="fMine" title="自分が担当の作業だけ表示">自分のみ</button>
     <button class="btn flt" id="fOpen" title="未完（完了以外）だけ表示">未完のみ</button>
     <button class="btn" id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
+    <button class="btn" id="depToggle" title="依存関係の矢印を表示／非表示（詳細パネルの「依存」に先行No.を入力）">🔗 依存線 ▷</button>
     <button class="btn" id="undoBtn" title="元に戻す (Ctrl+Z)" disabled>↶ 戻す</button>
     <button class="btn" id="redoBtn" title="やり直し (Ctrl+Y)" disabled>↷ 進む</button>
     <span class="seg" id="modeSeg" title="スクロール＝既存バーを動かさない／編集＝バーを引く・動かす">
@@ -499,6 +504,7 @@
 
 <div class="wrap">
   <table id="grid"></table>
+  <svg id="depsvg" xmlns="http://www.w3.org/2000/svg"></svg>
   <div class="addarea"><button class="btn" id="addBigBtn">＋ 大項目を追加</button></div>
   <div class="foot">
     操作: 上部の<b>🖐スクロール／✏編集</b>切替、または<b>空きをダブルクリックでモード切替</b>。【🖐】ドラッグで移動（既存バーは動かない）。【✏】空きを<b>ドラッグでバー作成（ビーッ）</b>・バー中央で移動・端で伸縮。どのモードでもスクロールは<b>ホイール／中ボタンドラッグ</b>可。<b>バーをダブルクリックで詳細</b>。<b>行を右クリックでメニュー</b>。
@@ -533,6 +539,7 @@
 </div>
 
 <input type="file" id="fileInput" accept="application/json" style="display:none">
+<input type="file" id="xlsxInput" accept=".xlsx" style="display:none">
 
 <script>
 "use strict";
@@ -814,7 +821,46 @@ function render(){
   autoSizeColumns();
   computeKPIs();
   // sticky オフセットの調整（上端・左固定列）
-  requestAnimationFrame(()=>{ setStickyTops(); fixStickyLefts(); });
+  requestAnimationFrame(()=>{ setStickyTops(); fixStickyLefts(); renderDeps(); });
+}
+
+// ===== 依存関係の矢印（先行→後続） =====
+// 各ノードの deps（"17, 21" のような先行No.）を、その No. のノードのバー終端 → 自分のバー始端へ矢印で結ぶ。
+function renderDeps(){
+  const svg=document.getElementById('depsvg'); if(!svg) return;
+  if(!document.body.classList.contains('show-deps')){ svg.innerHTML=''; return; }
+  const wrap=grid.parentElement; if(!wrap) return;
+  svg.style.width=grid.offsetWidth+'px'; svg.style.height=grid.offsetHeight+'px';
+  const wrapRect=wrap.getBoundingClientRect();
+  // No. → ノード、id → 行 のマップ
+  const noMap={};
+  walkAll(state.tree, n=>{ if(n.no!=null && String(n.no)!==''){ const k=normNo(n.no); if(!(k in noMap)) noMap[k]=n; } });
+  const trMap={}; grid.querySelectorAll('tbody tr[data-id]').forEach(tr=>{ trMap[tr.getAttribute('data-id')]=tr; });
+  const rowBars=(id)=>{ const tr=trMap[id]; if(!tr) return null; const bars=tr.querySelectorAll('.bar,.roll'); return bars.length?bars:null; };
+  const P=(el,right)=>{ const r=el.getBoundingClientRect();
+    return { x:(right?r.right:r.left)-wrapRect.left+wrap.scrollLeft, y:(r.top+r.bottom)/2-wrapRect.top+wrap.scrollTop }; };
+  let paths='';
+  walkAll(state.tree, t=>{
+    const deps=String(t.deps||'').split(/[\s,、，]+/).map(s=>s.trim()).filter(Boolean);
+    if(!deps.length) return;
+    const tb=rowBars(t.id); if(!tb) return;
+    const tp=P(tb[0], false);                    // 後続の開始（左端・中央）
+    deps.forEach(d=>{
+      const s=noMap[normNo(d)]; if(!s || s.id===t.id) return;
+      const sb=rowBars(s.id); if(!sb) return;
+      const sp=P(sb[sb.length-1], true);          // 先行の終了（右端・中央）
+      const dx=Math.max(16, Math.abs(tp.x-sp.x)*0.4);
+      paths+=`<path class="dep" d="M ${sp.x.toFixed(1)} ${sp.y.toFixed(1)} C ${(sp.x+dx).toFixed(1)} ${sp.y.toFixed(1)} ${(tp.x-dx).toFixed(1)} ${tp.y.toFixed(1)} ${tp.x.toFixed(1)} ${tp.y.toFixed(1)}" marker-end="url(#depArrow)"/>`;
+    });
+  });
+  svg.innerHTML='<defs><marker id="depArrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">'+
+    '<path d="M0,0 L6,3 L0,6 Z" fill="#d99a3c"/></marker></defs>'+paths;
+}
+function setDepsMode(on){
+  document.body.classList.toggle('show-deps', on);
+  try{ localStorage.setItem('ai_sched_deps', on?'1':'0'); }catch(e){}
+  const b=document.getElementById('depToggle'); if(b) b.textContent = on ? '🔗 依存線 ▼' : '🔗 依存線 ▷';
+  renderDeps();
 }
 
 // ===== KPI サマリー =====
@@ -1416,10 +1462,115 @@ function excelToState(rows){
   return { view:(state&&state.view)||'month', projectStart:'2026-06-01', projectEnd:'2027-04-30', tree:[big], seq };
 }
 
+// ===== ブラウザ用 XLSX リーダー（xlsxlite.js のブラウザ移植：DecompressionStreamでinflate） =====
+const XLSXB=(function(){
+  const td=new TextDecoder('utf-8');
+  const u16=(dv,o)=>dv.getUint16(o,true), u32=(dv,o)=>dv.getUint32(o,true);
+  function readZipEntries(dv,bytes){
+    let eocd=-1;
+    for(let i=bytes.length-22;i>=0 && i>=bytes.length-22-65536;i--){ if(u32(dv,i)===0x06054b50){eocd=i;break;} }
+    if(eocd<0) throw new Error('ZIP: EOCDが見つかりません（.xlsxではない可能性）');
+    const cdCount=u16(dv,eocd+10); let off=u32(dv,eocd+16); const entries={};
+    for(let n=0;n<cdCount;n++){
+      if(u32(dv,off)!==0x02014b50) break;
+      const method=u16(dv,off+10), compSize=u32(dv,off+20);
+      const nameLen=u16(dv,off+28), extraLen=u16(dv,off+30), commentLen=u16(dv,off+32), localOff=u32(dv,off+42);
+      const name=td.decode(bytes.subarray(off+46,off+46+nameLen));
+      entries[name]={method,compSize,localOff};
+      off+=46+nameLen+extraLen+commentLen;
+    }
+    return entries;
+  }
+  async function inflateRaw(bytes){
+    const ds=new DecompressionStream('deflate-raw');
+    const ab=await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer();
+    return new Uint8Array(ab);
+  }
+  async function extractEntry(dv,bytes,ent){
+    const lo=ent.localOff;
+    if(u32(dv,lo)!==0x04034b50) throw new Error('ZIP: ローカルヘッダ不正');
+    const nameLen=u16(dv,lo+26), extraLen=u16(dv,lo+28), dataStart=lo+30+nameLen+extraLen;
+    const data=bytes.subarray(dataStart,dataStart+ent.compSize);
+    if(ent.method===0) return data;
+    if(ent.method===8) return await inflateRaw(data);
+    throw new Error('ZIP: 未対応の圧縮方式 '+ent.method);
+  }
+  function decodeEntities(s){ return s.replace(/&#x([0-9a-fA-F]+);/g,(_,h)=>String.fromCodePoint(parseInt(h,16)))
+    .replace(/&#(\d+);/g,(_,d)=>String.fromCodePoint(parseInt(d,10)))
+    .replace(/&quot;/g,'"').replace(/&apos;/g,"'").replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&amp;/g,'&'); }
+  function colToIndex(ref){ const m=/^([A-Z]+)/.exec(ref); let n=0; for(const ch of m[1]) n=n*26+(ch.charCodeAt(0)-64); return n-1; }
+  function parseSharedStrings(xml){ if(!xml) return []; const out=[]; const siRe=/<si\b[^>]*>([\s\S]*?)<\/si>/g; let m;
+    while((m=siRe.exec(xml))){ const inner=m[1].replace(/<rPh\b[\s\S]*?<\/rPh>/g,''); let text=''; const tRe=/<t\b[^>]*>([\s\S]*?)<\/t>/g; let t;
+      while((t=tRe.exec(inner))) text+=t[1]; out.push(decodeEntities(text)); } return out; }
+  function listNames(wbXml){ if(!wbXml) return []; const names=[]; const shRe=/<sheet\b[^>]*\/?>/g; let s;
+    while((s=shRe.exec(wbXml))){ const nm=/name="([^"]*)"/.exec(s[0]); if(nm) names.push(decodeEntities(nm[1])); } return names; }
+  function sheetTarget(wbXml,relsXml,sheetName){ if(!wbXml||!relsXml) return null;
+    const rid2tgt={}; const relRe=/<Relationship\b[^>]*Id="([^"]+)"[^>]*Target="([^"]+)"[^>]*\/?>/g; let r;
+    while((r=relRe.exec(relsXml))) rid2tgt[r[1]]=r[2];
+    const shRe=/<sheet\b[^>]*\/?>/g; let s;
+    while((s=shRe.exec(wbXml))){ const tag=s[0]; const nm=/name="([^"]*)"/.exec(tag); const rid=/r:id="([^"]*)"/.exec(tag);
+      if(nm&&rid&&decodeEntities(nm[1])===sheetName){ let tgt=rid2tgt[rid[1]]; if(!tgt) return null;
+        if(!tgt.startsWith('xl/')) tgt='xl/'+tgt.replace(/^\/+/,''); return tgt; } } return null; }
+  function parseSheet(xml,shared){ const rows=[]; const rowRe=/<row\b[^>]*\br="(\d+)"[^>]*>([\s\S]*?)<\/row>/g; let rm;
+    while((rm=rowRe.exec(xml))){ const rowNum=parseInt(rm[1],10); const body=rm[2]; const arr=[];
+      const cRe=/<c\b([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g; let cm;
+      while((cm=cRe.exec(body))){ const attrs=cm[1], inner=cm[2]; const refM=/r="([A-Z]+\d+)"/.exec(attrs); if(!refM) continue;
+        const ci=colToIndex(refM[1]); const tM=/t="([^"]+)"/.exec(attrs); const t=tM?tM[1]:null; let val='';
+        if(inner!=null){ if(t==='s'){ const v=/<v>([\s\S]*?)<\/v>/.exec(inner); if(v) val=shared[parseInt(v[1],10)]||''; }
+          else if(t==='inlineStr'){ let txt=''; const tRe=/<t\b[^>]*>([\s\S]*?)<\/t>/g; let tt; while((tt=tRe.exec(inner))) txt+=tt[1]; val=decodeEntities(txt); }
+          else { const v=/<v>([\s\S]*?)<\/v>/.exec(inner); if(v) val=decodeEntities(v[1]); } }
+        arr[ci]=val; }
+      rows[rowNum-1]=arr; }
+    for(let i=0;i<rows.length;i++) if(!rows[i]) rows[i]=[]; return rows; }
+  async function openFromArrayBuffer(ab){
+    const bytes=new Uint8Array(ab), dv=new DataView(ab); const entries=readZipEntries(dv,bytes);
+    const rd=async(name)=>{ const e=entries[name]; if(!e) return null; return td.decode(await extractEntry(dv,bytes,e)); };
+    const names=listNames(await rd('xl/workbook.xml')||'');
+    let shared=null, wbXml=null, relsXml=null;
+    return { names, async read(sheetName){
+      if(shared==null) shared=parseSharedStrings(await rd('xl/sharedStrings.xml'));
+      if(!wbXml){ wbXml=await rd('xl/workbook.xml'); relsXml=await rd('xl/_rels/workbook.xml.rels'); }
+      const target=sheetTarget(wbXml,relsXml,sheetName); if(!target) throw new Error('シートが見つかりません: '+sheetName);
+      const xml=await rd(target); if(!xml) throw new Error('シート本体を読めません: '+target);
+      return parseSheet(xml,shared);
+    } };
+  }
+  return { open:openFromArrayBuffer, supported:(typeof DecompressionStream!=='undefined') };
+})();
+
+// ベース(作業分担一覧)取込の共通処理（rows→state置換）。electron/web 両対応。
+function importBaseRows(fp, sheet, rows){
+  const ns=excelToState(rows); const cnt=countSmalls(ns);
+  if(!cnt){ alert('作業行が見つかりませんでした。シートを確認してください: '+sheet); return; }
+  const prev={}; walkAll(state.tree||[], n=>{ if(n.kind==='small'&&n.no) prev[normNo(n.no)]=n; });
+  let carried=0;
+  walkAll(ns.tree, n=>{ if(n.kind==='small'&&n.no&&prev[normNo(n.no)]){ const p=prev[normNo(n.no)];
+    if(p.tools){ n.tools=p.tools; carried++; } if(p.deps){ n.deps=p.deps; } } });
+  ns.baseFile=fp; ns.baseSheet=sheet; ns.baseImportedAt=new Date().toISOString();
+  if(!confirm(`「${sheet}」から ${cnt} 件の作業を取り込みます。\n現在の表は置き換えられます（手入力リンクは No. で引き継ぎ）。\n\n続行しますか？`)) return;
+  state=ns; save(); syncToolbar(); render(); closeDetail();
+  alert(`取り込み完了：${cnt} 件${carried?`（リンク ${carried} 件を引き継ぎ）`:''}`);
+}
+
+// Web版：ドロップ/選択された File を読み取り、着手前チェックシート or 作業分担一覧を判定して取込
+async function handleDroppedFileWeb(file){
+  if(!/\.xlsx$/i.test(file.name||'')){ alert('Excel(.xlsx) をドロップしてください。'); return; }
+  if(!XLSXB.supported){ alert('お使いのブラウザはWeb版Excel取込に未対応です（Chrome/Edge等の最新ブラウザをご利用ください）。'); return; }
+  let wb; try{ wb=await XLSXB.open(await file.arrayBuffer()); }catch(e){ alert('Excel読み取りに失敗: '+(e.message||e)); return; }
+  const fp=file.name;   // Web版はファイル名を識別子に（ローカルパスは取得不可）
+  const cs=wb.names.find(n=>/着手前チェックシート/.test(n));
+  if(cs){ let rows; try{ rows=await wb.read(cs); }catch(e){ alert('読み取り失敗: '+(e.message||e)); return; } importChecksheet(fp, rows); return; }
+  const bs=wb.names.find(n=>/作業分担一覧/.test(n)) || wb.names.find(n=>/作業/.test(n));
+  if(bs){ let rows; try{ rows=await wb.read(bs); }catch(e){ alert('読み取り失敗: '+(e.message||e)); return; } importBaseRows(fp, bs, rows); return; }
+  alert('対応フォーマットが見つかりませんでした。\nシート: '+wb.names.join(' / '));
+}
+
 // ===== Excel 取り込み =====
 async function importExcel(){
   if(!(window.electronAPI && electronAPI.pickFile && electronAPI.xlsxReadSheet)){
-    alert('Excel取り込みはアプリ版（Electron）でのみ利用できます。'); return; }
+    // Web版：ファイル選択ダイアログ経由で取込
+    const inp=document.getElementById('xlsxInput'); if(inp){ inp.value=''; inp.click(); }
+    return; }
   const pick=await electronAPI.pickFile({ title:'ベースExcel（作業分担一覧）を選択',
     defaultPath: state.baseFile||undefined,
     filters:[{name:'Excel', extensions:['xlsx']}] });
@@ -1565,9 +1716,16 @@ async function handleDroppedFile(fp){
   window.addEventListener('dragleave', e=>{ if(!hasFiles(e)) return; depth--; if(depth<=0){ depth=0; dz.classList.remove('on'); } });
   window.addEventListener('drop', e=>{ e.preventDefault(); depth=0; dz.classList.remove('on');
     const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0]; if(!f) return;
-    const fp=(electronAPI&&electronAPI.getPathForFile?electronAPI.getPathForFile(f):'')||f.path||'';
-    if(!fp){ alert('ファイルのパスが取得できませんでした。'); return; }
-    handleDroppedFile(fp); });
+    if(window.electronAPI && electronAPI.xlsxSheetNames){          // アプリ版：ローカルパスで処理
+      const fp=(electronAPI.getPathForFile?electronAPI.getPathForFile(f):'')||f.path||'';
+      if(!fp){ alert('ファイルのパスが取得できませんでした。'); return; }
+      handleDroppedFile(fp);
+    } else {                                                        // Web版：File を直接読む
+      handleDroppedFileWeb(f);
+    } });
+  // Web版：ファイル選択ダイアログからの取込
+  const xi=document.getElementById('xlsxInput');
+  if(xi) xi.addEventListener('change', ()=>{ const f=xi.files&&xi.files[0]; if(f) handleDroppedFileWeb(f); });
 })();
 
 // ===== 詳細 / リンク パネル =====
@@ -1874,6 +2032,16 @@ function applyNoteCol(){ const c=noteCollapsed();
 noteToggle.addEventListener('click', ()=>{ const c=!noteCollapsed();
   try{ localStorage.setItem(NOTE_KEY, c?'1':'0'); }catch(e){} applyNoteCol(); });
 applyNoteCol();
+
+// 依存線トグル（既定OFF。localStorageに保存）
+const depToggle=document.getElementById('depToggle');
+if(depToggle){
+  depToggle.addEventListener('click', ()=> setDepsMode(!document.body.classList.contains('show-deps')));
+  setDepsMode(localStorage.getItem('ai_sched_deps')==='1');
+}
+// スクロールしても矢印は内容と一緒に動く（座標は内容基準）。リサイズ時のみ再計算。
+window.addEventListener('resize', ()=>{ clearTimeout(_rzTimer2); _rzTimer2=setTimeout(renderDeps, 140); });
+let _rzTimer2=null;
 
 // ウィンドウリサイズでも幅調整を再実行
 let _rzTimer=null;
