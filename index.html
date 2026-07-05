@@ -435,9 +435,33 @@
   #modeToast.show{opacity:1;}
   #modeToast.edit{border-color:var(--teal); box-shadow:0 0 26px rgba(47,182,176,.4);}
   #modeToast.scroll{border-color:#6f8093;}
+  /* ログイン画面 */
+  #loginGate{position:fixed; inset:0; z-index:200; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(900px 400px at 70% 0%, rgba(53,214,207,.12), transparent 60%), var(--bg);}
+  #loginGate .gatebox{text-align:center; background:linear-gradient(180deg,var(--panel),var(--bg2));
+    border:1px solid var(--line); border-radius:18px; padding:44px 52px; box-shadow:0 30px 90px rgba(0,0,0,.6);}
+  #loginGate .gicon{font-size:44px;}
+  #loginGate .gt{font-size:22px; font-weight:750; margin-top:10px; letter-spacing:.5px;}
+  #loginGate .gs{font-size:13px; color:var(--muted); margin-top:8px;}
+  #loginGate .gbtn{margin-top:24px; display:inline-flex; align-items:center; gap:10px; padding:12px 26px;
+    background:var(--teal); color:#04222b; border:none; border-radius:10px; font-size:15px; font-weight:700;
+    cursor:pointer; font-family:inherit; box-shadow:0 0 24px rgba(47,182,176,.35);}
+  #loginGate .gbtn:hover{filter:brightness(1.06);}
+  #loginGate .gmsg{color:#ff9ba1; font-size:12.5px; margin-top:14px; min-height:16px;}
+  #sbStatus{font-size:11px; color:var(--dim); display:flex; align-items:center; gap:6px;}
 </style>
 </head>
 <body class="view-month">
+<div id="loginGate"><div class="gatebox">
+  <div class="gicon">📊</div>
+  <div class="gt">AI推進スケジューラ</div>
+  <div class="gs">社内メンバー専用（@key-cre.co.jp のGoogleアカウント）</div>
+  <button id="googleLogin" class="gbtn">
+    <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.7 1.2 9.2 3.6l6.9-6.9C35.9 2.4 30.5 0 24 0 14.6 0 6.5 5.4 2.6 13.2l8 6.2C12.4 13.7 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M47 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.9c-.6 3-2.3 5.5-4.8 7.2l7.7 6c4.5-4.2 7.2-10.4 7.2-17.7z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-8-6.2C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.8l7.9-6.2z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.7-6c-2.1 1.4-4.9 2.3-8.2 2.3-6.3 0-11.6-4.2-13.5-9.9l-7.9 6.2C6.5 42.6 14.6 48 24 48z"/></svg>
+    Googleでログイン
+  </button>
+  <div id="gateMsg" class="gmsg"></div>
+</div></div>
 <header>
   <h1>AI推進スケジューラ</h1>
   <span class="sub" id="subtitle"></span>
@@ -466,6 +490,8 @@
     <button class="btn" id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む">📊 ベース取込</button>
     <button class="btn" id="exportBtn">書き出し</button>
     <button class="btn" id="importBtn">読み込み</button>
+    <span id="sbStatus" title="共有状態"></span>
+    <button class="btn" id="signOut" title="ログアウト">⏻</button>
   </div>
 </header>
 
@@ -677,12 +703,13 @@ function load(){
 // ===== 保存 & Undo/Redo =====
 let undoStack=[], redoStack=[], lastSnap=null;
 function snap(){ return JSON.stringify(state); }
-function persist(){ try{ localStorage.setItem(STORAGE_KEY, snap()); }catch(e){} }  // 履歴なし保存（ドラッグ中など）
+function persist(){ try{ localStorage.setItem(STORAGE_KEY, snap()); }catch(e){} if(window.__saveBoard) window.__saveBoard(); }  // 履歴なし保存（ドラッグ中など）
 function save(track=true){
   const cur=snap();
   if(track && lastSnap!=null && lastSnap!==cur){ undoStack.push(lastSnap); if(undoStack.length>80) undoStack.shift(); redoStack.length=0; }
   lastSnap=cur;
   try{ localStorage.setItem(STORAGE_KEY, cur); }catch(e){}
+  if(window.__saveBoard) window.__saveBoard();   // Supabaseへ同期（デバウンス）
   updateUndoUI();
 }
 function applyState(json){ state=JSON.parse(json); lastSnap=json;
@@ -1547,9 +1574,10 @@ async function handleDroppedFile(fp){
 let detailId=null;
 function looksPath(s){ return /^[a-zA-Z]:[\\/]/.test(s) || s.indexOf('\\\\')===0 || /^\//.test(s); }
 async function openViaPath(p){
+  if(/^https?:\/\//i.test(p)){ window.open(p, '_blank', 'noopener'); return; }   // URLは新規タブ
   if(window.electronAPI && electronAPI.openPath){ const r=await electronAPI.openPath(p);
-    if(r && !r.ok) alert('開けませんでした: '+(r.error||'')+'\n'+p); }
-  else alert('ファイルを開く機能はアプリ版でのみ利用できます。'); }
+    if(r && !r.ok) alert('開けませんでした: '+(r.error||'')+'\n'+p); return; }
+  alert('Web版ではローカルパスは開けません。Google DriveなどのURLを貼ってください。'); }
 function esca(s){ return esc(s); }
 function openDetail(id){
   const r=findNode(id); if(!r) return; const t=r.node; detailId=id;
@@ -1851,9 +1879,75 @@ applyNoteCol();
 let _rzTimer=null;
 window.addEventListener('resize', ()=>{ clearTimeout(_rzTimer); _rzTimer=setTimeout(autoSizeColumns, 120); });
 
-// ===== 起動 =====
-lastSnap=snap(); updateUndoUI();
-syncToolbar(); render();
+// ===== 起動（Web版：ログイン＆データ取得後に認証モジュールが呼ぶ）=====
+window.__getState = ()=> state;
+window.__initApp = function(board){
+  if(board && board.tree) state=board;          // Supabaseの保存内容で開始（無ければ現stateのまま）
+  lastSnap=snap(); updateUndoUI(); syncToolbar(); render();
+};
+window.__applyRemote = function(board){          // 他の人の更新を反映（入力中は上書きしない）
+  if(!board || !board.tree) return;
+  const ae=document.activeElement;
+  if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable)) return;
+  state=board; lastSnap=snap();
+  try{ localStorage.setItem(STORAGE_KEY, snap()); }catch(e){}
+  const dd=document.getElementById('detail'); if(dd) dd.classList.remove('open'); detailId=null;
+  syncToolbar(); render();
+};
+</script>
+
+<!-- ===== Supabase 認証＋同期（Web版のみ） ===== -->
+<script type="module">
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+const SUPA_URL = "https://vpzbtuucopucablwyqeq.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZwemJ0dXVjb3B1Y2FibHd5cWVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2Mjk2MzEsImV4cCI6MjA5MTIwNTYzMX0.qry7pSzmm3lWK82Vnp7Wz-R9wHsDVwbj7ysy62xUhuA";
+const sb = createClient(SUPA_URL, SUPA_KEY);
+const gate=document.getElementById('loginGate'), gateMsg=document.getElementById('gateMsg'), statusEl=document.getElementById('sbStatus');
+let started=false, saveTimer=null, myEmail='';
+function setStatus(t,c){ if(statusEl){ statusEl.textContent=t; statusEl.style.color=c||'var(--dim)'; } }
+function isKeycre(s){ return (s && s.user && s.user.email || '').endsWith('@key-cre.co.jp'); }
+document.getElementById('googleLogin').addEventListener('click', async ()=>{
+  gateMsg.textContent='';
+  const { error }=await sb.auth.signInWithOAuth({ provider:'google', options:{ redirectTo: window.location.origin } });
+  if(error) gateMsg.textContent='ログインに失敗: '+error.message;
+});
+const soBtn=document.getElementById('signOut'); if(soBtn) soBtn.addEventListener('click', ()=> sb.auth.signOut());
+async function loadBoard(){
+  const { data, error }=await sb.from('schedule_board').select('data').eq('id','main').maybeSingle();
+  if(error){ console.warn('load', error); return null; }
+  return (data && data.data && data.data.tree) ? data.data : null;
+}
+window.__saveBoard=function(){
+  clearTimeout(saveTimer); setStatus('保存中…','var(--muted)');
+  saveTimer=setTimeout(async ()=>{
+    try{ const st=window.__getState && window.__getState(); if(!st) return;
+      // upsert＝行が無ければ作る／あれば更新。.select()で実際に書けた行を確認する。
+      const { data, error }=await sb.from('schedule_board')
+        .upsert({ id:'main', data:st, updated_at:new Date().toISOString(), updated_by:myEmail }, { onConflict:'id' })
+        .select('id');
+      if(error){ setStatus('保存失敗: '+error.message,'#ff9ba1'); console.error('[save]', error); return; }
+      if(!data || !data.length){ setStatus('保存不可（権限RLS？0行）','#ff9ba1'); console.error('[save] 0 rows written — RLS拒否かログイン切れの可能性'); return; }
+      setStatus('● 同期済み','#8fe7b4');
+    }catch(e){ setStatus('保存失敗: '+(e&&e.message||e),'#ff9ba1'); console.error('[save]', e); }
+  }, 700);
+};
+async function afterLogin(session){
+  myEmail=session.user.email; window.__user=myEmail;
+  const board=await loadBoard();
+  gate.style.display='none';
+  setStatus('● '+myEmail.split('@')[0]+'（共有中）','#8fe7b4');
+  if(!started){ started=true; window.__initApp(board); } else if(board) window.__applyRemote(board);
+  sb.channel('board').on('postgres_changes', {event:'UPDATE',schema:'public',table:'schedule_board',filter:'id=eq.main'}, (p)=>{
+    if(!p.new || p.new.updated_by===myEmail) return;             // 自分の更新は無視
+    if(p.new.data && p.new.data.tree){ window.__applyRemote(p.new.data); setStatus('● 更新を受信','#8fe7b4'); }
+  }).subscribe();
+}
+sb.auth.getSession().then(({data:{session}})=>{
+  if(session && isKeycre(session)) afterLogin(session);
+  else { gate.style.display='flex';
+    if(session && !isKeycre(session)){ gateMsg.textContent='@key-cre.co.jp のアカウントでログインしてください'; sb.auth.signOut(); } }
+});
+sb.auth.onAuthStateChange((_e,session)=>{ if(session && isKeycre(session) && !started) afterLogin(session); });
 </script>
 </body>
 </html>
