@@ -427,6 +427,22 @@
   #importModal .mf{padding:12px 18px; border-top:1px solid var(--line); display:flex; gap:10px; justify-content:flex-end;}
   #importModal .big{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:9px 20px; cursor:pointer; font-family:inherit; font-size:13px;}
   #importModal .ghost{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 16px; cursor:pointer; font-family:inherit;}
+  /* 汎用モーダル（使い方・復元） */
+  .modal{position:fixed; inset:0; z-index:130; display:none; align-items:center; justify-content:center; background:rgba(6,10,16,.72);}
+  .modal.on{display:flex;}
+  .modal .m{width:min(720px,94vw); max-height:86vh; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; box-shadow:0 20px 60px rgba(0,0,0,.5);}
+  .modal .mh{padding:14px 18px; border-bottom:1px solid var(--line); background:linear-gradient(180deg,var(--panel3),var(--panel2));}
+  .modal .mh .t{font-size:16px; font-weight:700;} .modal .mh .s{font-size:12px; color:var(--muted); margin-top:3px;}
+  .modal .mb{padding:14px 18px; overflow:auto; font-size:13px; line-height:1.7;}
+  .modal .mf{padding:12px 18px; border-top:1px solid var(--line); display:flex; gap:10px; justify-content:flex-end;}
+  .modal .big{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:9px 20px; cursor:pointer; font-family:inherit; font-size:13px;}
+  .modal .ghost{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 16px; cursor:pointer; font-family:inherit;}
+  .modal .mb h4{margin:14px 0 6px; font-size:13.5px; color:var(--teal);}
+  .modal .mb ul{margin:0 0 4px; padding-left:20px;} .modal .mb li{margin:3px 0;}
+  .bkrow{display:flex; align-items:center; gap:12px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:7px;}
+  .bkrow .bt{flex:1; font-size:12.5px;} .bkrow .bt b{font-variant-numeric:tabular-nums;}
+  .bkrow button{background:var(--panel3); color:var(--text); border:1px solid var(--line); border-radius:7px; padding:6px 12px; cursor:pointer; font-family:inherit; font-size:12px;}
+  .bkrow button:hover{background:var(--teal); color:#04222b;}
   .diffsum{display:flex; gap:16px; margin-bottom:10px; font-size:13px;}
   .diffsum b{font-variant-numeric:tabular-nums;}
   .diffgrp{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin:12px 0 4px;}
@@ -504,8 +520,10 @@
       <button data-m="edit">✏ 編集</button>
     </span>
     <button class="btn" id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む">📊 ベース取込</button>
+    <button class="btn" id="helpBtn" title="使い方を見る">❓ 使い方</button>
     <button class="btn" id="exportBtn">書き出し</button>
     <button class="btn" id="importBtn">読み込み</button>
+    <button class="btn" id="backupBtn" title="自動バックアップから復元">🕘 復元</button>
     <span id="sbStatus" title="共有状態"></span>
     <button class="btn" id="signOut" title="ログアウト">⏻</button>
   </div>
@@ -551,6 +569,18 @@
 
 <input type="file" id="fileInput" accept="application/json" style="display:none">
 <input type="file" id="xlsxInput" accept=".xlsx" style="display:none">
+
+<div class="modal" id="helpModal"><div class="m">
+  <div class="mh"><div class="t">❓ AI推進スケジューラ 使い方</div><div class="s">みんなで進捗を共有するツールです。変更は自動で保存・共有されます。</div></div>
+  <div class="mb" id="helpBody"></div>
+  <div class="mf"><button class="big" id="helpClose">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="backupModal"><div class="m">
+  <div class="mh"><div class="t">🕘 バックアップから復元</div><div class="s">この端末に自動保存された最近の状態です。誤って消した・上書きした時に戻せます。</div></div>
+  <div class="mb" id="backupBody"></div>
+  <div class="mf"><button class="ghost" id="backupClose">閉じる</button></div>
+</div></div>
 
 <script>
 "use strict";
@@ -729,7 +759,19 @@ function save(track=true){
   lastSnap=cur;
   try{ localStorage.setItem(STORAGE_KEY, cur); }catch(e){}
   if(window.__saveBoard) window.__saveBoard();   // Supabaseへ同期（デバウンス）
+  pushLocalBackup();                             // 自動バックアップ（この端末・スロットル付き）
   updateUndoUI();
+}
+// ===== 自動バックアップ（localStorage・直近8世代・90秒スロットル）=====
+const BACKUP_KEY='ai_sched_backups'; let _lastBackup=0;
+function pushLocalBackup(force){
+  const now=Date.now(); if(!force && now-_lastBackup<90000) return; _lastBackup=now;
+  try{ let arr=[]; try{ arr=JSON.parse(localStorage.getItem(BACKUP_KEY)||'[]')||[]; }catch(e){}
+    arr.push({ t:now, by:(window.__user||localStorage.getItem('ai_sched_user')||''), data:snap() });
+    while(arr.length>8) arr.shift();
+    try{ localStorage.setItem(BACKUP_KEY, JSON.stringify(arr)); }
+    catch(e){ arr=arr.slice(-4); try{ localStorage.setItem(BACKUP_KEY, JSON.stringify(arr)); }catch(e2){} }
+  }catch(e){}
 }
 function applyState(json){ state=JSON.parse(json); lastSnap=json;
   try{ localStorage.setItem(STORAGE_KEY, json); }catch(e){}
@@ -1442,8 +1484,62 @@ document.getElementById('exportBtn').addEventListener('click', ()=>{
 const fileInput=document.getElementById('fileInput');
 document.getElementById('importBtn').addEventListener('click', ()=>fileInput.click());
 fileInput.addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
-  rd.onload=()=>{ try{ const s=JSON.parse(rd.result); if(s&&s.tree){ state=s; save(); syncToolbar(); render(); } else alert('形式が違います'); }
+  rd.onload=()=>{ try{ const s=JSON.parse(rd.result); if(s&&s.tree){ state=s; window.__forceOverwrite=true; save(); syncToolbar(); render(); } else alert('形式が違います'); }
     catch(err){ alert('読み込み失敗: '+err.message); } }; rd.readAsText(f); fileInput.value=''; });
+
+// ===== バックアップ復元 =====
+function __bumpAll(){ const now=Date.now(); (function w(ns){ (ns||[]).forEach(n=>{ n._u=now; if(n.children) w(n.children); }); })(state.tree); }
+function fmtBkTime(ms){ const d=new Date(ms), p=n=>String(n).padStart(2,'0'); return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function openBackup(){
+  let arr=[]; try{ arr=JSON.parse(localStorage.getItem(BACKUP_KEY)||'[]')||[]; }catch(e){}
+  const body=document.getElementById('backupBody');
+  if(!arr.length){ body.innerHTML='<div class="hint">まだ自動バックアップがありません（編集すると自動で保存されます）。</div>'; }
+  else{ body.innerHTML=arr.map((b,i)=>i).reverse().map(idx=>{ const b=arr[idx]; let cnt=0;
+      try{ const s=JSON.parse(b.data); (function w(ns){ (ns||[]).forEach(n=>{ if(n.kind==='small')cnt++; w(n.children); }); })(s.tree); }catch(e){}
+      return `<div class="bkrow"><div class="bt"><b>${fmtBkTime(b.t)}</b>　作業${cnt}件${b.by?'　'+esc(b.by):''}</div><button data-bk="${idx}">この状態に戻す</button></div>`;
+    }).join('')+'<div class="hint" style="margin-top:8px">※復元すると全員に反映されます。念のため先に「書き出し」でバックアップも推奨。</div>'; }
+  document.getElementById('backupModal').classList.add('on');
+}
+document.getElementById('backupBtn').addEventListener('click', openBackup);
+document.getElementById('backupModal').addEventListener('click', e=>{
+  if(e.target.id==='backupModal'||e.target.id==='backupClose'){ document.getElementById('backupModal').classList.remove('on'); return; }
+  const btn=e.target.closest('button[data-bk]'); if(!btn) return;
+  let arr=[]; try{ arr=JSON.parse(localStorage.getItem(BACKUP_KEY)||'[]')||[]; }catch(e2){}
+  const bk=arr[+btn.dataset.bk]; if(!bk) return;
+  if(!confirm(`${fmtBkTime(bk.t)} の状態に戻します。\n現在の内容は上書きされ、全員に反映されます。よろしいですか？`)) return;
+  document.getElementById('backupModal').classList.remove('on');
+  applyState(bk.data); __bumpAll(); window.__forceOverwrite=true; save();
+  alert('復元しました。');
+});
+
+// ===== 使い方ガイド =====
+document.getElementById('helpBody').innerHTML=`
+<h4>1. これは何？</h4>
+<ul><li>AI推進プロジェクトの<b>作業スケジュールと進捗</b>をみんなで共有・更新するツールです。</li>
+<li>変更は<b>自動で保存・共有</b>され、他の人の画面にも反映されます（同時に別の作業を編集しても大丈夫）。</li></ul>
+<h4>2. 見方</h4>
+<ul><li>左が作業一覧（No.＝マスターの番号）、右がガント（期間バー）。</li>
+<li>大項目▸中項目(領域)▸作業▸段取り工程 の階層。左端の▼で開閉。</li>
+<li>作業の下の <b>番号バッジ(1,2,3…)＝段取り工程</b>。左のティール線でひとまとまりに見えます。</li></ul>
+<h4>3. 進捗を更新する（いちばんよく使う）</h4>
+<ul><li>「進捗」列の<b>ステージのピルをクリック</b> → その場でステージ(未着手/着手/レビュー中/完了/保留)と％を設定。</li>
+<li>←→キーや ± ボタンでも±5%。子工程がある作業は子の集計が自動反映。</li>
+<li>更新前に、ヘッダーの<b>「更新者」に自分の名前</b>を入れておくと記録されます。</li></ul>
+<h4>4. 段取りを取り込む（着手前チェックシート）</h4>
+<ul><li>チェックシートのExcelを<b>画面にドラッグ＆ドロップ</b> → 対象作業にNo.で紐づき、工程が入ります（差分プレビューで確認）。</li>
+<li>対象作業が無い場合は「新規作業として追加」も選べます。</li></ul>
+<h4>5. ガント（期間バー）</h4>
+<ul><li>ヘッダーの<b>🖐スクロール／✏編集</b>を切替（空きダブルクリックでも切替）。</li>
+<li>✏編集で<b>空きをドラッグ＝バー作成</b>、バー中央で移動、端で伸縮。<b>右クリック→「⌫バーを消去」</b>で削除。</li>
+<li><b>🔗依存線</b>をONにすると、作業間の前後関係（依存欄のNo.）が矢印で見えます。</li></ul>
+<h4>6. バックアップ・元に戻す</h4>
+<ul><li><b>Ctrl+Z / Ctrl+Y</b>で元に戻す・やり直し。</li>
+<li><b>「🕘 復元」</b>でこの端末の自動バックアップから戻せます。<b>「書き出し」</b>でファイル保存も可能。</li></ul>
+<h4>7. 注意</h4>
+<ul><li><b>「📊 ベース取込」は基本さわらない</b>（大元の作業一覧が大きく変わった時だけ）。日々の更新は進捗とチェックシート取込でOK。</li>
+<li>担当・備考はセルを直接クリックで編集できます。</li></ul>`;
+document.getElementById('helpBtn').addEventListener('click', ()=>document.getElementById('helpModal').classList.add('on'));
+document.getElementById('helpModal').addEventListener('click', e=>{ if(e.target.id==='helpModal'||e.target.id==='helpClose') document.getElementById('helpModal').classList.remove('on'); });
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(!confirm('⚠️ 初期化（1/2）\n\n今のデータ（進捗・サブタスク・レポート・リンク等）をすべて破棄し、初期サンプル(34件)に置き換えます。\n通常この操作は不要です。続けますか？')) return;
   if(!confirm('⚠️ 初期化（2/2 最終確認）\n\n本当に全データをサンプルに戻します。よろしいですか？\n（誤操作なら Ctrl+Z で戻せます）')) return;
@@ -2203,11 +2299,14 @@ window.__saveBoard=function(){
   clearTimeout(saveTimer); setStatus('保存中…','var(--muted)');
   saveTimer=setTimeout(async ()=>{
     try{ let st=window.__getState && window.__getState(); if(!st) return;
+      const force=window.__forceOverwrite; window.__forceOverwrite=false;   // 読み込み/復元は強制上書き
       // 書き込み前に最新のリモートを取得し、他者の更新があればID単位でマージ（同時編集で消えないように）
-      const { data:remote }=await sb.from('schedule_board').select('data,updated_by').eq('id','main').maybeSingle();
-      if(remote && remote.data && remote.data.tree && remote.updated_by!==myEmail && window.__mergeBoards){
-        st=window.__mergeBoards(remote.data, st);
-        if(window.__applyMerged) window.__applyMerged(st);   // 画面にも他者の更新を反映
+      if(!force){
+        const { data:remote }=await sb.from('schedule_board').select('data,updated_by').eq('id','main').maybeSingle();
+        if(remote && remote.data && remote.data.tree && remote.updated_by!==myEmail && window.__mergeBoards){
+          st=window.__mergeBoards(remote.data, st);
+          if(window.__applyMerged) window.__applyMerged(st);   // 画面にも他者の更新を反映
+        }
       }
       const { data, error }=await sb.from('schedule_board')
         .upsert({ id:'main', data:st, updated_at:new Date().toISOString(), updated_by:myEmail }, { onConflict:'id' })
