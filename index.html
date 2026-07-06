@@ -456,6 +456,7 @@
   .difftag.del{background:rgba(242,88,95,.16); color:#f2585f;}
   /* 右クリックメニュー */
   #ctxMenu button{width:196px; display:flex; align-items:center; gap:9px;}
+  #moreMenu button{width:184px; display:flex; align-items:center; gap:9px;}
   #ctxMenu button.danger{color:#e78a93;}
   .ctxsep{height:1px; background:var(--line2); margin:5px 4px;}
   /* モード表示トースト */
@@ -519,11 +520,8 @@
       <button data-m="scroll" class="on">🖐 スクロール</button>
       <button data-m="edit">✏ 編集</button>
     </span>
-    <button class="btn" id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む">📊 ベース取込</button>
     <button class="btn" id="helpBtn" title="使い方を見る">❓ 使い方</button>
-    <button class="btn" id="exportBtn">書き出し</button>
-    <button class="btn" id="importBtn">読み込み</button>
-    <button class="btn" id="backupBtn" title="自動バックアップから復元">🕘 復元</button>
+    <button class="btn" id="moreBtn" title="データ管理（ベース取込・書き出し・読み込み・復元）">⚙ 管理 ▾</button>
     <span id="sbStatus" title="共有状態"></span>
     <button class="btn" id="signOut" title="ログアウト">⏻</button>
   </div>
@@ -547,6 +545,12 @@
 <div class="pop" id="statusPop"></div>
 <div class="pop" id="progPop"></div>
 <div class="pop" id="ctxMenu"></div>
+<div class="pop" id="moreMenu">
+  <button id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む（管理者向け）">📊 ベース取込</button>
+  <button id="exportBtn">💾 書き出し（保存）</button>
+  <button id="importBtn">📂 読み込み</button>
+  <button id="backupBtn">🕘 復元</button>
+</div>
 <div id="modeToast"></div>
 
 <div id="dropzone"><div class="box"><div class="ic">📥</div><div class="t">Excelをドロップして取り込み</div>
@@ -1318,7 +1322,16 @@ ppop.addEventListener('click', e=>{
 });
 function closeProgPop(){ const wasOpen=(ppId!=null); ppop.style.display='none'; ppId=null;
   if(wasOpen) render(); }  // 集計（中/大項目の%）を反映
-function closeAllPops(){ closePop(); closeProgPop(); closeCtx(); }
+function closeAllPops(){ closePop(); closeProgPop(); closeCtx(); closeMore(); }
+// ⚙ 管理メニュー（普段使わない：ベース取込・書き出し・読み込み・復元）
+function closeMore(){ const m=document.getElementById('moreMenu'); if(m) m.style.display='none'; }
+(function(){ const btn=document.getElementById('moreBtn'), menu=document.getElementById('moreMenu'); if(!btn||!menu) return;
+  btn.addEventListener('click', e=>{ e.stopPropagation();
+    const open=menu.style.display==='block'; closeAllPops(); if(open) return;
+    const r=btn.getBoundingClientRect();
+    menu.style.left=Math.min(r.left, window.innerWidth-200)+'px'; menu.style.top=(r.bottom+4)+'px'; menu.style.display='block'; });
+  menu.addEventListener('click', ()=> closeMore());   // 項目クリックで閉じる（各ボタンの処理はそのまま動く）
+})();
 
 // ===== 右クリック（コンテキスト）メニュー =====
 const ctxEl=document.getElementById('ctxMenu'); let ctxId=null;
