@@ -1045,7 +1045,7 @@ function smallRowHTML(t, counter){
   const rowcls='row-small'+(stg==='完了'?' done':'')+(stg==='保留'?' hold':'')+(group?' has-kids':'')
     +(t.status==='excluded'?' excluded':'')+(dOver?' overdue':'')+(t.priority==='high'?' prio-hi':'');
   let h=`<tr class="${rowcls}" data-id="${t.id}">`;
-  h+=`<td class="sl c-no no">${counter.n}</td>`;
+  h+=`<td class="sl c-no no" title="${t.no?('マスターNo.'+esc(normNo(t.no))):'マスター未登録'}">${t.no?esc(normNo(t.no)):'—'}</td>`;
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:40px">`+
      caretHTML(t)+
      `<span class="statusdot" data-status="${t.id}" title="状態: ${st.label}（クリックで変更）" style="background:${st.color}"></span>`+
