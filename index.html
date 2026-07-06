@@ -723,6 +723,7 @@ let undoStack=[], redoStack=[], lastSnap=null;
 function snap(){ return JSON.stringify(state); }
 function persist(){ try{ localStorage.setItem(STORAGE_KEY, snap()); }catch(e){} if(window.__saveBoard) window.__saveBoard(); }  // 履歴なし保存（ドラッグ中など）
 function save(track=true){
+  if(window.__stampChanges) window.__stampChanges(lastSnap);   // 変更ノードに更新時刻を刻む（マージ用）
   const cur=snap();
   if(track && lastSnap!=null && lastSnap!==cur){ undoStack.push(lastSnap); if(undoStack.length>80) undoStack.shift(); redoStack.length=0; }
   lastSnap=cur;
@@ -738,6 +739,48 @@ function undo(){ if(!undoStack.length) return; redoStack.push(snap()); applyStat
 function redo(){ if(!redoStack.length) return; undoStack.push(snap()); applyState(redoStack.pop()); }
 function updateUndoUI(){ const u=document.getElementById('undoBtn'), r=document.getElementById('redoBtn');
   if(u) u.disabled=!undoStack.length; if(r) r.disabled=!redoStack.length; }
+
+// ===== 同時編集の安全化：ノードごとの更新時刻(_u)＋ID単位マージ =====
+// 変更されたノードだけに _u(更新時刻)・_by(更新者)を刻む（前スナップショットと比較）
+function __ownSig(n){ const o={}; Object.keys(n).forEach(k=>{ if(k==='children'||k==='_u'||k==='_by') return; o[k]=n[k]; });
+  return JSON.stringify(o, Object.keys(o).sort()); }
+function __indexSig(node, map){ map[node.id]=__ownSig(node); (node.children||[]).forEach(c=>__indexSig(c,map)); }
+window.__stampChanges=function(prevJson){
+  let prev=null; try{ prev=prevJson?JSON.parse(prevJson):null; }catch(e){}
+  const prevMap={}; if(prev&&prev.tree) prev.tree.forEach(n=>__indexSig(n,prevMap));
+  const now=Date.now(), by=(window.__user||localStorage.getItem('ai_sched_user')||'');
+  (function walk(nodes){ (nodes||[]).forEach(n=>{ const sig=__ownSig(n);
+    if(prevMap[n.id]===undefined || prevMap[n.id]!==sig){ n._u=now; if(by) n._by=by; }
+    if(n.children) walk(n.children); }); })(state.tree);
+};
+// remote と local を ID 単位でマージ（各ノードは _u が新しい方を採用・両者の追加は保持）
+function __ownFields(n){ const o={}; Object.keys(n).forEach(k=>{ if(k!=='children') o[k]=n[k]; }); return o; }
+function __mergeNode(rn, ln){ const ru=+rn._u||0, lu=+ln._u||0;
+  const base=(ru>lu)?__ownFields(rn):__ownFields(ln);
+  base.id=ln.id; base.kind=ln.kind||rn.kind;
+  base.children=__mergeSiblings(rn.children||[], ln.children||[]);
+  if(!base.children.length) delete base.children;
+  return base; }
+function __mergeSiblings(rArr, lArr){
+  const rById={}; rArr.forEach(n=>{ rById[n.id]=n; });
+  const lIds={}; lArr.forEach(n=>{ lIds[n.id]=1; });
+  const out=[];
+  lArr.forEach(ln=>{ const rn=rById[ln.id]; out.push(rn?__mergeNode(rn,ln):ln); });   // 共通=マージ／local専用=保持
+  rArr.forEach(rn=>{ if(!lIds[rn.id]) out.push(rn); });                                  // remote専用(他者の追加)=保持
+  return out; }
+window.__mergeBoards=function(remote, local){
+  if(!remote||!remote.tree) return local; if(!local||!local.tree) return remote;
+  const out=Object.assign({}, local);                       // view等のUI設定はlocal優先
+  out.seq=Math.max(+local.seq||0, +remote.seq||0);           // ID採番は大きい方（衝突回避）
+  out.tree=__mergeSiblings(remote.tree, local.tree);
+  return out; };
+// マージ結果を反映（入力中はUI再描画を控える）
+window.__applyMerged=function(merged){
+  state=merged; lastSnap=snap();
+  try{ localStorage.setItem(STORAGE_KEY, lastSnap); }catch(e){}
+  const ae=document.activeElement;
+  if(!(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable))){ syncToolbar(); render(); }
+  updateUndoUI(); };
 function nextId(){ state.seq=(state.seq||0)+1; return 'n'+state.seq+'_'+Math.floor(performance.now()); }
 
 // ===== ツリー探索 =====
@@ -2159,8 +2202,13 @@ async function loadBoard(){
 window.__saveBoard=function(){
   clearTimeout(saveTimer); setStatus('保存中…','var(--muted)');
   saveTimer=setTimeout(async ()=>{
-    try{ const st=window.__getState && window.__getState(); if(!st) return;
-      // upsert＝行が無ければ作る／あれば更新。.select()で実際に書けた行を確認する。
+    try{ let st=window.__getState && window.__getState(); if(!st) return;
+      // 書き込み前に最新のリモートを取得し、他者の更新があればID単位でマージ（同時編集で消えないように）
+      const { data:remote }=await sb.from('schedule_board').select('data,updated_by').eq('id','main').maybeSingle();
+      if(remote && remote.data && remote.data.tree && remote.updated_by!==myEmail && window.__mergeBoards){
+        st=window.__mergeBoards(remote.data, st);
+        if(window.__applyMerged) window.__applyMerged(st);   // 画面にも他者の更新を反映
+      }
       const { data, error }=await sb.from('schedule_board')
         .upsert({ id:'main', data:st, updated_at:new Date().toISOString(), updated_by:myEmail }, { onConflict:'id' })
         .select('id');
@@ -2178,7 +2226,12 @@ async function afterLogin(session){
   if(!started){ started=true; window.__initApp(board); } else if(board) window.__applyRemote(board);
   sb.channel('board').on('postgres_changes', {event:'UPDATE',schema:'public',table:'schedule_board',filter:'id=eq.main'}, (p)=>{
     if(!p.new || p.new.updated_by===myEmail) return;             // 自分の更新は無視
-    if(p.new.data && p.new.data.tree){ window.__applyRemote(p.new.data); setStatus('● 更新を受信','#8fe7b4'); }
+    if(p.new.data && p.new.data.tree){
+      // 他者の更新をID単位でマージ（自分の未保存編集を残したまま反映）
+      const merged=(window.__mergeBoards&&window.__getState)?window.__mergeBoards(p.new.data, window.__getState()):p.new.data;
+      window.__applyMerged?window.__applyMerged(merged):window.__applyRemote(merged);
+      setStatus('● 更新を受信','#8fe7b4');
+    }
   }).subscribe();
 }
 sb.auth.getSession().then(({data:{session}})=>{
