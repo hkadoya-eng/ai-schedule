@@ -1548,18 +1548,69 @@ const XLSXB=(function(){
   return { open:openFromArrayBuffer, supported:(typeof DecompressionStream!=='undefined') };
 })();
 
-// ベース(作業分担一覧)取込の共通処理（rows→state置換）。electron/web 両対応。
+// ベース(作業分担一覧)取込。electron/web 両対応。
+// 方針：既存を消さない。No.一致は保持（＝段取り/進捗/週報など手入力を守る）、Excelにしか無い作業は「追加」。
+// 基本情報(名前/担当/フェーズ等)に差分がある既存作業は、確認のうえ任意で上書き。
+const BASE_MERGE_FIELDS=['name','role','phase','category','aptitude','bg','usage','status'];
+const BASE_FIELD_LABEL={name:'作業名',role:'担当',phase:'フェーズ',category:'カテゴリ',aptitude:'AI適性',bg:'評価背景',usage:'活用イメージ',status:'振り分け'};
 function importBaseRows(fp, sheet, rows){
   const ns=excelToState(rows); const cnt=countSmalls(ns);
   if(!cnt){ alert('作業行が見つかりませんでした。シートを確認してください: '+sheet); return; }
-  const prev={}; walkAll(state.tree||[], n=>{ if(n.kind==='small'&&n.no) prev[normNo(n.no)]=n; });
-  let carried=0;
-  walkAll(ns.tree, n=>{ if(n.kind==='small'&&n.no&&prev[normNo(n.no)]){ const p=prev[normNo(n.no)];
-    if(p.tools){ n.tools=p.tools; carried++; } if(p.deps){ n.deps=p.deps; } } });
-  ns.baseFile=fp; ns.baseSheet=sheet; ns.baseImportedAt=new Date().toISOString();
-  if(!confirm(`「${sheet}」から ${cnt} 件の作業を取り込みます。\n現在の表は置き換えられます（手入力リンクは No. で引き継ぎ）。\n\n続行しますか？`)) return;
-  state=ns; save(); syncToolbar(); render(); closeDetail();
-  alert(`取り込み完了：${cnt} 件${carried?`（リンク ${carried} 件を引き継ぎ）`:''}`);
+  // Excel側の作業を領域つきで列挙
+  const incoming=[];
+  ((ns.tree[0]&&ns.tree[0].children)||[]).forEach(mid=>{ (mid.children||[]).forEach(s=>incoming.push({area:mid.name, s})); });
+  // 既存 small を No. で索引
+  const exist={}; walkAll(state.tree||[], n=>{ if(n.kind==='small'&&n.no!=null&&String(n.no)!=='') exist[normNo(n.no)]=n; });
+  const hasExisting=Object.keys(exist).length>0;
+  if(!hasExisting){   // 初回（中身が無い/サンプルのみ）：そのまま採用
+    if(!confirm(`「${sheet}」から ${cnt} 件を取り込みます（初回）。\n続行しますか？`)) return;
+    ns.baseFile=fp; ns.baseSheet=sheet; ns.baseImportedAt=new Date().toISOString();
+    state=ns; save(); syncToolbar(); render(); closeDetail();
+    alert(`取り込み完了：${cnt} 件`); return;
+  }
+  // マージ判定
+  const added=[], updated=[], samed=[];
+  incoming.forEach(it=>{ const ex=exist[normNo(it.s.no)];
+    if(!ex){ added.push(it); return; }
+    const diff=BASE_MERGE_FIELDS.filter(f=>String(ex[f]||'')!==String(it.s[f]||''));
+    if(diff.length) updated.push({ex, s:it.s, diff}); else samed.push(it); });
+  showBaseMergePreview(fp, sheet, {added, updated, samed});
+}
+// ベース取込のマージ内容プレビュー（既存は消えないことを明示）
+function showBaseMergePreview(fp, sheet, data){
+  const {added, updated, samed}=data;
+  let rows='';
+  if(added.length){ rows+=`<div class="diffgrp">➕ 追加される新規作業（${added.length}）</div>`;
+    added.forEach(it=>{ rows+=`<div class="diffrow"><span class="difftag add">新規</span><span class="nm">${esca(it.s.name)}</span><span class="meta">領域: ${esca(it.area||'—')}</span></div>`; }); }
+  if(updated.length){ rows+=`<div class="diffgrp">🔁 既存と内容が違う作業（${updated.length}）</div>`;
+    updated.forEach(u=>{ const flds=u.diff.map(f=>BASE_FIELD_LABEL[f]||f).join('・');
+      rows+=`<div class="diffrow"><span class="difftag chg">差分</span><span class="nm">${esca(u.ex.name)}</span><span class="meta">違い: ${esca(flds)}</span></div>`; }); }
+  if(!added.length && !updated.length) rows+=`<div class="hint">Excelの内容は現状とすべて同じでした（追加・変更なし）。</div>`;
+  document.getElementById('imTitle').textContent='ベース取込（追加・更新）';
+  document.getElementById('imSub').textContent=`「${sheet}」 ／ 新規 ${added.length}・差分 ${updated.length}・同じ ${samed.length}。既存の作業と手入力（段取り／進捗／週報など）は消しません。`;
+  document.getElementById('imBody').innerHTML=
+    `<div class="diffsum"><span>➕新規 <b style="color:#8fe7b4">${added.length}</b></span>`+
+    `<span>🔁差分 <b style="color:#f2b13d">${updated.length}</b></span><span>同じ <b>${samed.length}</b></span></div>`+
+    (updated.length?`<label class="hint" style="display:flex;gap:8px;align-items:center;margin:6px 0 10px;cursor:pointer">`+
+      `<input type="checkbox" id="bmUpdateExisting"> 既存作業の基本情報（作業名・担当・フェーズ等）もExcelで上書きする（オフ＝手入力を完全保持）</label>`:'')+
+    rows;
+  _importApply=()=>{ const upd=document.getElementById('bmUpdateExisting'); applyBaseMerge(fp, sheet, data, !!(upd&&upd.checked)); };
+  document.getElementById('importModal').classList.add('on');
+}
+function applyBaseMerge(fp, sheet, data, updateExisting){
+  let big=(state.tree||[]).find(n=>n.kind==='big');
+  if(!big){ big={id:nextId(),kind:'big',name:'制作物',children:[]}; (state.tree||(state.tree=[])).push(big); }
+  const midByName={}; (big.children||[]).forEach(m=>{ if(m.kind==='mid') midByName[m.name]=m; });
+  let addN=0;
+  data.added.forEach(it=>{ let mid=midByName[it.area];
+    if(!mid){ mid={id:nextId(),kind:'mid',name:it.area||'(領域未設定)',children:[]}; big.children.push(mid); midByName[mid.name]=mid; }
+    const s=Object.assign({}, it.s); s.id=nextId();   // 既存IDと衝突しないよう振り直す
+    mid.children.push(s); addN++; });
+  let updN=0;
+  if(updateExisting) data.updated.forEach(u=>{ u.diff.forEach(f=>{ u.ex[f]=u.s[f]; }); updN++; });
+  state.baseFile=fp; state.baseSheet=sheet; state.baseImportedAt=new Date().toISOString();
+  save(); syncToolbar(); render(); closeDetail();
+  alert(`取り込み完了：新規 ${addN} 件を追加` + (updateExisting?`／既存 ${updN} 件の基本情報を更新`:'（既存はそのまま保持）'));
 }
 
 // Web版：ドロップ/選択された File を読み取り、着手前チェックシート or 作業分担一覧を判定して取込
@@ -1595,18 +1646,7 @@ async function loadFromExcel(fp){
     if(!confirm(`「作業分担一覧」シートが見つかりませんでした。\n代わりに先頭シート「${sheet}」を取り込みますか？`)) return; }
   const rr=await electronAPI.xlsxReadSheet(fp, sheet);
   if(!rr.ok){ alert('読み取りに失敗: '+(rr.error||'不明')); return; }
-  const ns=excelToState(rr.rows);
-  const cnt=countSmalls(ns);
-  if(!cnt){ alert('作業行が見つかりませんでした。シートを確認してください: '+sheet); return; }
-  // 手入力リンク(tools/deps)を No. で引き継ぐ
-  const prev={}; walkAll(state.tree||[], n=>{ if(n.kind==='small'&&n.no) prev[normNo(n.no)]=n; });
-  let carried=0;
-  walkAll(ns.tree, n=>{ if(n.kind==='small'&&n.no&&prev[normNo(n.no)]){ const p=prev[normNo(n.no)];
-    if(p.tools){ n.tools=p.tools; carried++; } if(p.deps){ n.deps=p.deps; } } });
-  ns.baseFile=fp; ns.baseSheet=sheet; ns.baseImportedAt=new Date().toISOString();
-  if(!confirm(`「${sheet}」から ${cnt} 件の作業を取り込みます。\n現在の表は置き換えられます（手入力リンクは No. で引き継ぎ）。\n\n${fp}\n\n続行しますか？`)) return;
-  state=ns; save(); syncToolbar(); render(); closeDetail();
-  alert(`取り込み完了：${cnt} 件${carried?`（リンク ${carried} 件を引き継ぎ）`:''}`);
+  importBaseRows(fp, sheet, rr.rows);   // 追加＋確認更新（既存は消さない）
 }
 
 // ===== 着手前チェックシート 解析＆取り込み =====
