@@ -1681,10 +1681,27 @@ function parseChecksheet(rows){
   return { work, by, date, procs };
 }
 function stripWorkNo(s){ return String(s||'').replace(/^\s*\d+[\.\s　]*/,'').trim(); }
-function findWorkByName(name){ const key=stripWorkNo(name); if(!key) return null; let exact=null, part=null;
-  walkAll(state.tree, n=>{ if(n.kind!=='small') return; const nn=stripWorkNo(n.name);
-    if(nn===key){ exact=exact||n; } else if(nn && (nn.indexOf(key)>=0 || key.indexOf(nn)>=0)){ part=part||n; } });
-  return exact||part; }
+function leadNo(s){ const m=/^\s*0*(\d+)/.exec(String(s||'')); return m?parseInt(m[1],10):null; }   // 先頭のNo.(先頭ゼロ無視)
+function findWorkByName(name){
+  const byNo=leadNo(name), key=stripWorkNo(name);
+  let exact=null, part=null, noHit=null;
+  walkAll(state.tree, n=>{ if(n.kind!=='small') return;
+    if(byNo!=null && n.no!=null && String(n.no)!==''){ const nn=parseInt(String(n.no).replace(/[^\d]/g,''),10); if(nn===byNo) noHit=noHit||n; }
+    const nm=stripWorkNo(n.name);
+    if(key && nm===key){ exact=exact||n; } else if(nm && key && (nm.indexOf(key)>=0 || key.indexOf(nm)>=0)){ part=part||n; } });
+  return noHit||exact||part;   // No.一致を最優先
+}
+// チェックシートの対象作業が表に無い時、新規作業として追加する
+function createWorkForChecksheet(rawName){
+  const no=leadNo(rawName), nm=stripWorkNo(rawName)||String(rawName||'').trim()||'新規作業';
+  let big=(state.tree||[]).find(n=>n.kind==='big');
+  if(!big){ big={id:nextId(),kind:'big',name:'制作物',children:[]}; (state.tree||(state.tree=[])).push(big); }
+  let mid=(big.children||[]).find(x=>x.kind==='mid'&&x.name==='(取込で追加)');
+  if(!mid){ mid={id:nextId(),kind:'mid',name:'(取込で追加)',children:[]}; big.children.push(mid); }
+  const w={ id:nextId(), kind:'small', name:nm, role:'', start:null, end:null, status:'normal', note:'',
+    no:(no!=null?String(no):''), phase:'', category:'', aptitude:'', bg:'', usage:'', assign:'', tools:'', deps:'', children:[] };
+  mid.children.push(w); return w;
+}
 function csMkTask(o){ return { id:nextId(), kind:'task', name:o.name||'工程', pstage:'未着手', progress:0, reports:[],
   start:null, end:null, note:o.todo||'', charge:o.charge||'', priority:'', hoursOld:o.hOld, hoursNew:o.hNew }; }
 async function importChecksheet(fp, rows){
@@ -1692,7 +1709,10 @@ async function importChecksheet(fp, rows){
   if(!p.procs.length){ alert('段取り表が見つかりませんでした（着手前チェックシート形式ではないかもしれません）。'); return; }
   const total=p.procs.reduce((a,pr)=>a+pr.steps.length,0);
   let work=findWorkByName(p.work);
-  if(!work){ alert(`対象作業「${p.work||'(不明)'}」が一覧に見つかりませんでした。\n先にベース(作業分担一覧)を取り込むか、作業名をご確認ください。`); return; }
+  if(!work){
+    if(!confirm(`対象作業「${p.work||'(不明)'}」が一覧に見つかりませんでした。\n\n「OK」＝新しい作業として追加して取り込む\n「キャンセル」＝取り込まない\n（先に正しいベース「作業分担一覧」を取り込むと、既存の作業にNo.で紐づきます）`)) return;
+    work=createWorkForChecksheet(p.work);
+  }
   // 取込内容を適用する処理
   const apply=()=>{
     work.children = (p.procs.length===1)
