@@ -40,6 +40,8 @@
   .tgroup{display:inline-flex; align-items:center; gap:6px; padding:3px 7px; border:1px solid var(--line); border-radius:8px;}
   #moreMenu .mlabel{font-size:10px; color:var(--dim); padding:7px 10px 2px; letter-spacing:.05em; font-weight:700;}
   #moreMenu .mlabel:first-child{padding-top:4px;}
+  #moreMenu .mrow{display:flex; align-items:center; gap:5px; padding:5px 10px 7px; font-size:11.5px; color:var(--muted);}
+  #moreMenu .mrow input{font-family:inherit; font-size:11px; padding:2px 4px; border:1px solid var(--line); border-radius:5px; background:var(--panel3); color:var(--text); color-scheme:dark; width:118px;}
   .legend{display:flex; gap:13px; align-items:center; padding:5px 16px; background:#fbfcfe;
     border-bottom:1px solid var(--line); font-size:11.5px; color:var(--muted); flex-wrap:wrap; flex:0 0 auto;}
   .legend .item{display:flex; align-items:center; gap:5px;}
@@ -511,7 +513,6 @@
       <button data-v="week">週</button>
       <button data-v="day">日</button>
     </span>
-    <span class="datectl">期間 <input type="date" id="pStart"> 〜 <input type="date" id="pEnd"></span>
     <span class="tsep"></span>
     <!-- 自分・絞り込み（氏名とフィルタはセット）-->
     <span class="tgroup">
@@ -525,11 +526,10 @@
       <button id="undoBtn" title="元に戻す (Ctrl+Z)" disabled>↶</button>
       <button id="redoBtn" title="やり直し (Ctrl+Y)" disabled>↷</button>
     </span>
-    <span class="seg" id="modeSeg" title="スクロール＝既存バーを動かさない／編集＝バーを引く・動かす">
-      <button data-m="scroll" class="on">🖐 スクロール</button>
-      <button data-m="edit">✏ 編集</button>
+    <span class="seg" id="modeSeg" title="🖐スクロール＝既存バーを動かさない／✏編集＝バーを引く・動かす">
+      <button data-m="scroll" class="on" title="スクロール（既存バーを動かさない）">🖐</button>
+      <button data-m="edit" title="編集（バーを引く・動かす）">✏</button>
     </span>
-    <button class="btn" id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
     <span class="tsep"></span>
     <!-- 右：ヘルプ・管理・状態 -->
     <button class="btn" id="helpBtn" title="使い方を見る">❓ 使い方</button>
@@ -559,7 +559,9 @@
 <div class="pop" id="ctxMenu"></div>
 <div class="pop" id="moreMenu">
   <div class="mlabel">表示オプション</div>
+  <button id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
   <button id="depToggle" title="依存関係の矢印を表示／非表示（詳細パネルの「依存」に先行No.を入力）">🔗 依存線 ▷</button>
+  <div class="mrow">📅 期間 <input type="date" id="pStart"><span>〜</span><input type="date" id="pEnd"></div>
   <div class="mlabel">データ（管理者向け）</div>
   <button id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む（管理者向け）">📊 ベース取込</button>
   <button id="exportBtn">💾 書き出し（保存）</button>
@@ -1260,13 +1262,13 @@ document.addEventListener('click', e=>{
   const del=e.target.closest('[data-del]'); if(del){ delNode(del.dataset.del); return; }
   // タスク表の外をクリックしたら閉じる（保存してから）
   if(detailId!=null && !e.target.closest('#detail') && !e.target.closest('[data-detail]')) closeDetail();
-  if(!e.target.closest('#statusPop') && !e.target.closest('#progPop')) closeAllPops();
+  if(!e.target.closest('#statusPop') && !e.target.closest('#progPop') && !e.target.closest('#moreMenu') && !e.target.closest('#moreBtn')) closeAllPops();
 });
 // 押した瞬間（pointerdown）でも外側なら閉じる。
 // ※ガントの空きはドラッグ開始のpreventDefaultでclickが出ないため、こちらで確実に閉じる
 document.addEventListener('pointerdown', e=>{
   const t=e.target;
-  if(!t.closest('#statusPop') && !t.closest('#progPop') && !t.closest('#ctxMenu')
+  if(!t.closest('#statusPop') && !t.closest('#progPop') && !t.closest('#ctxMenu') && !t.closest('#moreMenu') && !t.closest('#moreBtn')
      && !t.closest('.statusdot') && !t.closest('[data-prog]')) closeAllPops();
   if(detailId!=null && !t.closest('#detail') && !t.closest('[data-detail]')) closeDetail();
 });
@@ -1345,7 +1347,7 @@ function closeMore(){ const m=document.getElementById('moreMenu'); if(m) m.style
     const open=menu.style.display==='block'; closeAllPops(); if(open) return;
     const r=btn.getBoundingClientRect();
     menu.style.left=Math.min(r.left, window.innerWidth-200)+'px'; menu.style.top=(r.bottom+4)+'px'; menu.style.display='block'; });
-  menu.addEventListener('click', ()=> closeMore());   // 項目クリックで閉じる（各ボタンの処理はそのまま動く）
+  menu.addEventListener('click', e=>{ if(e.target.closest('#excelBtn,#exportBtn,#importBtn,#backupBtn')) closeMore(); });  // データ操作時のみ閉じる（トグル・期間入力では開いたまま）
 })();
 
 // ===== 右クリック（コンテキスト）メニュー =====
