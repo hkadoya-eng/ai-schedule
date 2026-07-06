@@ -93,7 +93,8 @@
   .caret.blank{cursor:default; color:transparent;}
   tr.has-kids .stage{cursor:default;}          /* 集計作業の進捗は編集不可 */
   .bar.grp{top:8px; bottom:8px; opacity:.9;}   /* 集計バーは細め */
-  .iname{outline:none;}
+  .iname{outline:none; display:inline-block; vertical-align:bottom;
+    max-width:calc(var(--w-item) - 92px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .iname[contenteditable="true"]:focus{background:#fffdf5; box-shadow:0 0 0 2px var(--teal) inset;}
   .iname.opener{cursor:pointer;}
   .iname.opener:hover{text-decoration:underline; text-decoration-color:var(--teal); text-underline-offset:2px;}
@@ -982,7 +983,7 @@ function nodeHTML(node, counter, depth, stepNo){
   h+=`<td class="sl c-no no"></td>`;
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:${pad}px">`+
      caretHTML(node)+
-     `<span class="iname opener" data-detail="${node.id}" title="クリックで詳細・並べ替え・削除">${esc(node.name)}</span>`+
+     `<span class="iname opener" data-detail="${node.id}" title="${esc(node.name)} ／ クリックで詳細・並べ替え・削除">${esc(node.name)}</span>`+
      `<span class="ctrls">`+
        `<button class="mini add" data-addchild="${node.id}" title="${childKindLabel}">＋</button>`+
      `</span></div></td>`;
@@ -1050,7 +1051,7 @@ function smallRowHTML(t, counter){
      `<span class="statusdot" data-status="${t.id}" title="状態: ${st.label}（クリックで変更）" style="background:${st.color}"></span>`+
      (apt?`<span class="apt ${apt.cls}" title="AI適性: ${esc(t.aptitude)}">${apt.ch}</span>`:'')+
      pdotHTML(t)+
-     `<span class="iname opener" data-detail="${t.id}" title="クリックで詳細">${esc(t.name)}</span>`+
+     `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls">`+
        `<button class="mini add" data-addchild="${t.id}" title="＋タスク（サブタスク追加）">＋</button>`+
@@ -1092,7 +1093,7 @@ function taskRowHTML(t, counter, depth, stepNo){
      caretHTML(t)+
      ((stepNo && !(depth||0)) ? `<span class="stepno" title="段取り ${stepNo} 番目">${stepNo}</span>` : `<span class="tasktick">└</span>`)+
      pdotHTML(t)+
-     `<span class="iname opener" data-detail="${t.id}" title="クリックで詳細">${esc(t.name)}</span>`+
+     `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls"><button class="mini add" data-addchild="${t.id}" title="＋タスク（さらに下の階層）">＋</button></span>`+
      `</div></td>`;
