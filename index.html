@@ -263,6 +263,16 @@
   .row-task td{background:#131d29;}
   .row-task .iname{color:#9db4cf;}
   .tasktick{color:var(--dim);}
+  /* ── 段取り工程グループ：作業(親)＋サブタスクを一体に見せる ── */
+  .row-small.has-kids > td{ background:#1b2836; }
+  .row-small.has-kids .sl{ background:#1b2836; }
+  .row-small.has-kids .c-item{ box-shadow: inset 3px 0 0 var(--teal); }   /* 親＝グループの頭：太いティール線 */
+  .row-task > td{ background:#141f2c; }
+  .row-task .c-item{ box-shadow: inset 3px 0 0 rgba(47,182,176,.5); }      /* 子＝工程：細いティール線でつながって見える */
+  .stepno{ display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px;
+    padding:0 4px; margin-right:6px; border-radius:8px; background:var(--teal); color:#04222b;
+    font-size:10px; font-weight:700; line-height:1; }
+  tr.done .stepno{ background:var(--dim); color:#0c1420; }                 /* 完了工程は番号を淡く */
   .iname[contenteditable="true"]:focus{background:var(--panel2); box-shadow:0 0 0 2px var(--teal) inset;}
   .mini{background:var(--panel3); color:#cdd8e6;}
   .mini:hover{background:#2c3d52;}
@@ -956,9 +966,9 @@ function fixStickyLefts(){
     const th=headRow.querySelector('th.'+c); acc += th?th.offsetWidth:0; });
 }
 
-function nodeHTML(node, counter, depth){
+function nodeHTML(node, counter, depth, stepNo){
   if(node.kind==='small') return smallRowHTML(node, counter);
-  if(node.kind==='task') return taskRowHTML(node, counter, depth||0);
+  if(node.kind==='task') return taskRowHTML(node, counter, depth||0, stepNo);
   // 先に子を組み立て（フィルタ時に空の親を隠すため）。折りたたみ時は子を出さない
   let childHtml='';
   if(!node.collapsed) (node.children||[]).forEach(ch=>{ childHtml += nodeHTML(ch, counter); });
@@ -1063,11 +1073,11 @@ function smallRowHTML(t, counter){
   h+='</tr>';
   // サブタスク（折りたたみ時は出さない）
   let childHtml='';
-  if(!t.collapsed) (t.children||[]).forEach(c=>{ childHtml += nodeHTML(c, counter, 0); });
+  if(!t.collapsed){ let step=0; (t.children||[]).forEach(c=>{ childHtml += nodeHTML(c, counter, 0, ++step); }); }
   return h + childHtml;
 }
 
-function taskRowHTML(t, counter, depth){
+function taskRowHTML(t, counter, depth, stepNo){
   const group=hasKids(t);
   const stg=getStage(t), sp=stageInfo(stg), pct=getProgress(t);
   const editable=canEditProgress(t);      // 子タスクがあると編集不可
@@ -1080,7 +1090,7 @@ function taskRowHTML(t, counter, depth){
   h+=`<td class="sl c-no no"></td>`;
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:${indent}px">`+
      caretHTML(t)+
-     `<span class="tasktick">└</span>`+
+     ((stepNo && !(depth||0)) ? `<span class="stepno" title="段取り ${stepNo} 番目">${stepNo}</span>` : `<span class="tasktick">└</span>`)+
      pdotHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
