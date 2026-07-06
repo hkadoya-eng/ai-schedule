@@ -33,6 +33,13 @@
   .seg button.on{background:var(--navy); color:#fff;}
   .datectl{font-size:12px; color:var(--muted); display:flex; align-items:center; gap:4px;}
   .datectl input{font-family:inherit; font-size:12px; padding:3px 5px; border:1px solid var(--line); border-radius:5px;}
+  .seg button:disabled{opacity:.38; cursor:default;}
+  #hist button{font-size:14px; padding:5px 10px; line-height:1;}
+  /* ツールバーのグループ化 */
+  .tsep{width:1px; height:22px; background:var(--line); margin:0 3px; flex:0 0 auto;}
+  .tgroup{display:inline-flex; align-items:center; gap:6px; padding:3px 7px; border:1px solid var(--line); border-radius:8px;}
+  #moreMenu .mlabel{font-size:10px; color:var(--dim); padding:7px 10px 2px; letter-spacing:.05em; font-weight:700;}
+  #moreMenu .mlabel:first-child{padding-top:4px;}
   .legend{display:flex; gap:13px; align-items:center; padding:5px 16px; background:#fbfcfe;
     border-bottom:1px solid var(--line); font-size:11.5px; color:var(--muted); flex-wrap:wrap; flex:0 0 auto;}
   .legend .item{display:flex; align-items:center; gap:5px;}
@@ -498,30 +505,35 @@
   <h1>AI推進スケジューラ</h1>
   <span class="sub" id="subtitle"></span>
   <div class="toolbar">
+    <!-- 表示（期間の見せ方）-->
     <span class="seg" id="viewSeg">
       <button data-v="month" class="on">月</button>
       <button data-v="week">週</button>
       <button data-v="day">日</button>
     </span>
-    <span class="datectl">期間
-      <input type="date" id="pStart"> 〜 <input type="date" id="pEnd">
+    <span class="datectl">期間 <input type="date" id="pStart"> 〜 <input type="date" id="pEnd"></span>
+    <span class="tsep"></span>
+    <!-- 自分・絞り込み（氏名とフィルタはセット）-->
+    <span class="tgroup">
+      <span class="datectl">👤 <input id="userName" list="userList" placeholder="氏名" title="進捗更新時にこの名前が記録されます"><datalist id="userList"></datalist></span>
+      <button class="btn flt" id="fMine" title="自分が担当の作業だけ表示">自分のみ</button>
+      <button class="btn flt" id="fOpen" title="未完（完了以外）だけ表示">未完のみ</button>
     </span>
-    <span class="datectl">更新者
-      <input id="userName" list="userList" placeholder="氏名" title="進捗更新時にこの名前が記録されます">
-      <datalist id="userList"></datalist>
+    <span class="tsep"></span>
+    <!-- 操作（元に戻す・モード）-->
+    <span class="seg" id="hist">
+      <button id="undoBtn" title="元に戻す (Ctrl+Z)" disabled>↶</button>
+      <button id="redoBtn" title="やり直し (Ctrl+Y)" disabled>↷</button>
     </span>
-    <button class="btn flt" id="fMine" title="自分が担当の作業だけ表示">自分のみ</button>
-    <button class="btn flt" id="fOpen" title="未完（完了以外）だけ表示">未完のみ</button>
-    <button class="btn" id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
-    <button class="btn" id="depToggle" title="依存関係の矢印を表示／非表示（詳細パネルの「依存」に先行No.を入力）">🔗 依存線 ▷</button>
-    <button class="btn" id="undoBtn" title="元に戻す (Ctrl+Z)" disabled>↶ 戻す</button>
-    <button class="btn" id="redoBtn" title="やり直し (Ctrl+Y)" disabled>↷ 進む</button>
     <span class="seg" id="modeSeg" title="スクロール＝既存バーを動かさない／編集＝バーを引く・動かす">
       <button data-m="scroll" class="on">🖐 スクロール</button>
       <button data-m="edit">✏ 編集</button>
     </span>
+    <button class="btn" id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
+    <span class="tsep"></span>
+    <!-- 右：ヘルプ・管理・状態 -->
     <button class="btn" id="helpBtn" title="使い方を見る">❓ 使い方</button>
-    <button class="btn" id="moreBtn" title="データ管理（ベース取込・書き出し・読み込み・復元）">⚙ 管理 ▾</button>
+    <button class="btn" id="moreBtn" title="表示オプション・データ管理">⚙ 管理 ▾</button>
     <span id="sbStatus" title="共有状態"></span>
     <button class="btn" id="signOut" title="ログアウト">⏻</button>
   </div>
@@ -546,6 +558,9 @@
 <div class="pop" id="progPop"></div>
 <div class="pop" id="ctxMenu"></div>
 <div class="pop" id="moreMenu">
+  <div class="mlabel">表示オプション</div>
+  <button id="depToggle" title="依存関係の矢印を表示／非表示（詳細パネルの「依存」に先行No.を入力）">🔗 依存線 ▷</button>
+  <div class="mlabel">データ（管理者向け）</div>
   <button id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む（管理者向け）">📊 ベース取込</button>
   <button id="exportBtn">💾 書き出し（保存）</button>
   <button id="importBtn">📂 読み込み</button>
