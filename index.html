@@ -475,7 +475,10 @@
   .tphint{font-size:12px; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px 11px; margin-bottom:12px; line-height:1.6;}
   .tpgcal{background:linear-gradient(180deg,#5b8def,#3f6fd6); color:#fff; font-weight:700; border:none; border-radius:8px; padding:7px 13px; cursor:pointer; font-family:inherit; font-size:12.5px; margin-left:auto; white-space:nowrap;}
   .tpgcal:hover{filter:brightness(1.08);}
-  .mtadd input[type=time]{padding:8px 8px;} .mtadd .rm{width:150px;} .mtadd .mtsep{color:var(--dim);}
+  .mtadd{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:11px 12px;}
+  .mtadd .rm{width:150px;} .mtadd .mtsep{color:var(--dim);}
+  .tsel{background:var(--panel3); color:var(--text); border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-family:inherit; font-size:12.5px; color-scheme:dark; cursor:pointer;}
+  .tsel:hover{border-color:var(--teal);}
   .mtrow .mtgcal{flex:none; background:rgba(91,141,239,.16); color:#9dbbf5; border:1px solid rgba(91,141,239,.45); border-radius:7px; padding:4px 10px; cursor:pointer; font-size:13px;}
   .mtrow .mtgcal:hover{filter:brightness(1.12);}
   .tphd .tpmeta{flex:1; min-width:0;}
@@ -1080,8 +1083,8 @@ function computeKPIs(){
   box.innerHTML =
     `<div class="kpi meet" id="kpiMeet" title="クリックで打合せ予定・お題を開く"><div class="go">開く ▸</div>`+
       `<div class="lab">📝 打合せ予定</div>`+
-      `<div class="val">${nextMt?mdNum(parse(nextMt.date)):'—'}</div>`+
-      `<div class="meta">${nextMt?esc((nextMt.title||'定例'))+' ／ ':(mts.length?'':'定例を登録 ／ ')}お題 未対応 ${openTp}件</div></div>`+
+      `<div class="val">${nextMt?mdNum(parse(nextMt.date))+(nextMt.start?' <small>'+esc(nextMt.start)+(nextMt.end?'〜'+esc(nextMt.end):'')+'</small>':''):'—'}</div>`+
+      `<div class="meta">${nextMt?esc((nextMt.title||'定例'))+(nextMt.room?'／'+esc(nextMt.room):'')+' ／ ':(mts.length?'':'定例を登録 ／ ')}お題 未対応 ${openTp}件</div></div>`+
     `<div class="kpi accent"><div class="lab">全体進捗</div><div class="val">${pct}<small>%</small></div>`+
       `<div class="meta">対象 ${total} 件（AI対象外等は除外）</div>`+
       `<div class="ring" style="--p:${pct}"><span>${pct}</span></div></div>`+
@@ -1688,11 +1691,14 @@ function renderTopics(){
   updateTopicBtn();
 }
 function mtWhen(m){ return `${esc(m.date||'日付未設定')}${m.start?' '+esc(m.start)+(m.end?'〜'+esc(m.end):''):''}${m.room?'　@'+esc(m.room):''}`; }
+function timeOpts(sel, ph){ let o=`<option value=""${sel?'':' selected'}>${ph||'--:--'}</option>`;   // 15分刻みの時刻オプション（8:00〜21:45）
+  for(let h=8;h<=21;h++) for(const mm of ['00','15','30','45']){ const v=String(h).padStart(2,'0')+':'+mm; o+=`<option value="${v}"${v===sel?' selected':''}>${v}</option>`; }
+  return o; }
 function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
   let h=`<div class="mtadd"><input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）">`+
-        `<input id="mtDate" type="date" title="日付"><input id="mtStart" type="time" title="開始時刻"><span class="mtsep">〜</span>`+
-        `<input id="mtEnd" type="time" title="終了時刻"><input id="mtRoom" type="text" class="rm" placeholder="会議室/オンライン" title="場所">`+
+        `<input id="mtDate" type="date" title="日付"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts('','開始')}</select><span class="mtsep">〜</span>`+
+        `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts('','終了')}</select><input id="mtRoom" type="text" class="rm" placeholder="会議室/オンライン" title="場所">`+
         `<button id="mtAddBtn">＋ 定例を追加</button></div>`;
   h+=`<div class="tpsec">定例一覧（クリックでお題を記入／📅でカレンダー登録）</div>`;
   h+= list.length ? list.map(m=>{ const c=mtCounts(m.id);
@@ -1711,8 +1717,8 @@ function renderMeetingTable(box){
   let h=`<div class="tphd"><button class="tpback" id="tpBack">← 定例一覧</button>`+
         `<div class="tpmeta"><input class="mtedit tpttl-in" data-mt="title" value="${esca(m.title||'')}" placeholder="定例名">`+
           `<div class="mtline"><input class="mtedit" type="date" data-mt="date" value="${esca(m.date||'')}">`+
-          `<input class="mtedit" type="time" data-mt="start" value="${esca(m.start||'')}" title="開始"><span class="mtsep">〜</span>`+
-          `<input class="mtedit" type="time" data-mt="end" value="${esca(m.end||'')}" title="終了">`+
+          `<select class="mtedit tsel" data-mt="start" title="開始">${timeOpts(m.start||'','開始')}</select><span class="mtsep">〜</span>`+
+          `<select class="mtedit tsel" data-mt="end" title="終了">${timeOpts(m.end||'','終了')}</select>`+
           `<input class="mtedit rm" type="text" data-mt="room" value="${esca(m.room||'')}" placeholder="会議室/オンライン"></div></div>`+
         `<button class="tpgcal" id="tpGcal" title="Googleカレンダーに予定を作成（お題を説明欄に、ログイン済みメンバーを招待先に自動セット）">📅 Googleカレンダーに登録</button></div>`;
   h+=`<div class="tphint">📅 「登録」で日時・会議室・お題・招待先（ログイン済みメンバー）が入った状態でGoogleカレンダーが開きます。不足分はその画面で追加できます。</div>`;
