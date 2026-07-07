@@ -317,6 +317,16 @@
   .msadd input[type=text]{flex:1; min-width:160px; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px;}
   .msadd input[type=date]{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; color-scheme:dark;}
   .msadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px;}
+  /* 週次サマリー */
+  .smstat{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px;}
+  .smstat>div{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:11px 12px; text-align:center;}
+  .smstat b{display:block; font-size:22px; font-weight:750; font-variant-numeric:tabular-nums; line-height:1.1;}
+  .smstat span{font-size:11px; color:var(--muted);}
+  .smstat .bad b{color:#ff6b6b;}
+  .smrow{display:flex; align-items:center; gap:10px; padding:6px 8px; border-bottom:1px solid var(--line2); font-size:12.5px;}
+  .smrow .smn{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .smrow .smmeta{color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap;}
+  .smrow.overdue .smn{color:#ff9ba1; font-weight:600;} .smrow.behind .smn{color:#f2c760;}
   /* バー：発光＋未達は暗く */
   .bar{box-shadow:0 1px 6px rgba(0,0,0,.4); outline:1px solid rgba(255,255,255,.08);}
   .bar.pend{background-image:linear-gradient(rgba(10,16,24,.60),rgba(10,16,24,.60))!important;}
@@ -619,6 +629,7 @@
       <button data-m="edit" title="編集（バーを引く・動かす）">✏</button>
     </span>
     <button class="btn" id="todayBtn" title="今日の位置へスクロール">📍 今日</button>
+    <button class="btn" id="sumBtn" title="今週のサマリー（進捗・遅延・今週やること）">📊 サマリー</button>
     <span class="tsep"></span>
     <!-- 右：ヘルプ・管理・状態 -->
     <button class="btn" id="helpBtn" title="使い方を見る">❓ 使い方</button>
@@ -712,6 +723,12 @@
   <div class="mh"><div class="t">🚩 マイルストーン</div><div class="s">申請日・納期・審査など「締切の日」を登録すると、ガント上に縦線とKPI下の帯で表示されます。</div></div>
   <div class="mb" id="msBody"></div>
   <div class="mf"><button class="ghost" id="msClose">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="summaryModal"><div class="m">
+  <div class="mh"><div class="t">📊 今週のサマリー</div><div class="s">全体進捗・遅延・今週やること・直近マイルストーン。会議でそのまま共有できます。</div></div>
+  <div class="mb" id="summaryBody"></div>
+  <div class="mf"><button class="ghost" id="sumCopy">📋 テキストでコピー</button><button class="big" id="summaryClose">閉じる</button></div>
 </div></div>
 
 <script>
@@ -1960,6 +1977,47 @@ function quickMilestone(ci){ if(ci==null||ci<0||ci>=COLS.length) return; ensureB
   state.milestones.push({ id:uid('ms'), label:(name.trim()||'マイルストーン'), date, _u:Date.now() }); save(); render(); }
 grid.addEventListener('dblclick', e=>{ const u=e.target.closest('th.unit'); if(u && u.dataset.ci!=null){ e.preventDefault(); e.stopPropagation(); quickMilestone(+u.dataset.ci); } });
 grid.addEventListener('contextmenu', e=>{ const u=e.target.closest('th.unit'); if(u && u.dataset.ci!=null){ e.preventDefault(); e.stopPropagation(); quickMilestone(+u.dataset.ci); } });
+
+// ===== 週次サマリー =====
+function collectLeafInfo(){ const out=[];
+  (function walk(nodes, ctxRole){ (nodes||[]).forEach(n=>{
+    const role=(n.role&&n.role.trim())?n.role:ctxRole;
+    if(isLeaf(n)) out.push({n, role}); else walk(n.children, role);
+  }); })(state.tree, '');
+  return out; }
+function summaryData(){
+  const leaves=collectLeafInfo().filter(x=> !(x.n.kind==='small' && x.n.status && x.n.status!=='normal'));
+  let total=0,done=0,sum=0; leaves.forEach(x=>{ total++; sum+=getProgress(x.n); if(getStage(x.n)==='完了')done++; });
+  const pct=total?Math.round(sum/total):0;
+  const late=leaves.filter(x=>schedStatus(x.n)).sort((a,b)=>(schedStatus(a.n)==='overdue'?0:1)-(schedStatus(b.n)==='overdue'?0:1));
+  const today=new Date(); today.setHours(0,0,0,0);
+  const ws=startOfWeek(today), we=addDays(ws,6);
+  const week=leaves.filter(x=>{ if(getStage(x.n)==='完了')return false; if(!x.n.start||!x.n.end)return false; const s=parse(x.n.start),e=parse(x.n.end); return s<=we&&e>=ws; });
+  const ums=(state.milestones||[]).filter(m=>m&&m.date&&parse(m.date)>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
+  return {leaves,total,done,pct,late,week,ws,we,ums};
+}
+function renderSummary(){ ensureBoards(); const box=document.getElementById('summaryBody'); if(!box) return;
+  const d=summaryData();
+  const row=x=>{ const ss=schedStatus(x.n); return `<div class="smrow ${ss||''}"><span class="smn">${lateMark(ss)}${esc(x.n.name)}</span><span class="smmeta">${esc(x.role||'—')} ／ ${x.n.start?mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):'日付未設定'} ／ ${getProgress(x.n)}%</span></div>`; };
+  let h=`<div class="smstat"><div><b>${d.pct}%</b><span>全体進捗</span></div><div><b>${d.done}/${d.total}</b><span>完了</span></div><div class="${d.late.length?'bad':''}"><b>${d.late.length}</b><span>遅延</span></div><div><b>${d.week.length}</b><span>今週</span></div></div>`;
+  h+=`<div class="tpsec">⚠ 遅延している作業（${d.late.length}）</div>`+(d.late.length?d.late.map(row).join(''):'<div class="tpempty">なし。順調です 👍</div>');
+  h+=`<div class="tpsec">📅 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}・${d.week.length}件）</div>`+(d.week.length?d.week.map(row).join(''):'<div class="tpempty">今週に期間がかかる未完作業はありません。</div>');
+  if(d.ums.length) h+=`<div class="tpsec">🚩 この先のマイルストーン</div>`+d.ums.map(m=>`<div class="smrow"><span class="smn">🚩 ${esc(m.label||'')}</span><span class="smmeta">${esc(m.date)}</span></div>`).join('');
+  box.innerHTML=h; }
+function summaryText(){ const d=summaryData(); const L=[];
+  L.push('【AI推進 サマリー '+ymd(new Date())+'】');
+  L.push(`全体進捗 ${d.pct}% ／ 完了 ${d.done}/${d.total} ／ 遅延 ${d.late.length}件`);
+  L.push(''); L.push('■ 遅延している作業');
+  L.push(d.late.length?d.late.map(x=>`・${x.n.name}（${x.role||'—'}・${getProgress(x.n)}%・${schedStatus(x.n)==='overdue'?'超過':'遅れ'}）`).join('\n'):'・なし');
+  L.push(''); L.push(`■ 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}）`);
+  L.push(d.week.length?d.week.map(x=>`・${x.n.name}（${x.role||'—'}・${getProgress(x.n)}%）`).join('\n'):'・なし');
+  if(d.ums.length){ L.push(''); L.push('■ 直近マイルストーン'); L.push(d.ums.map(m=>`・${m.date} ${m.label||''}`).join('\n')); }
+  return L.join('\n'); }
+document.getElementById('sumBtn').addEventListener('click', ()=>{ renderSummary(); document.getElementById('summaryModal').classList.add('on'); });
+document.getElementById('summaryModal').addEventListener('click', e=>{
+  if(e.target.id==='summaryModal'||e.target.id==='summaryClose'){ document.getElementById('summaryModal').classList.remove('on'); return; }
+  const cp=e.target.closest('#sumCopy'); if(cp){ try{ navigator.clipboard.writeText(summaryText()); const o=cp.textContent; cp.textContent='✓ コピーしました'; setTimeout(()=>{cp.textContent=o;},1500); }catch(err){ alert('コピーできませんでした'); } }
+});
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(!confirm('⚠️ 初期化（1/2）\n\n今のデータ（進捗・サブタスク・レポート・リンク等）をすべて破棄し、初期サンプル(34件)に置き換えます。\n通常この操作は不要です。続けますか？')) return;
