@@ -463,22 +463,40 @@
   .difftag.chg{background:rgba(242,177,61,.16); color:#f2b13d;}
   .difftag.same{background:var(--panel3); color:var(--dim);}
   .difftag.del{background:rgba(242,88,95,.16); color:#f2585f;}
-  /* お題・議題ボード */
-  .tpadd{display:flex; gap:8px; align-items:flex-end; margin-bottom:14px;}
-  .tpadd textarea{flex:1; min-height:46px; resize:vertical; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13px; line-height:1.5;}
-  .tpadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px; white-space:nowrap;}
-  .tpsec{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin:12px 0 6px;}
-  .tprow{display:flex; align-items:flex-start; gap:10px; padding:9px 10px; border:1px solid var(--line); border-radius:9px; margin-bottom:7px; background:var(--panel2);}
-  .tprow.done{opacity:.62;}
-  .tprow .chk{flex:none; width:22px; height:22px; border-radius:6px; border:1px solid var(--line); background:var(--panel3); color:var(--teal); cursor:pointer; font-size:13px; display:flex; align-items:center; justify-content:center; margin-top:1px;}
-  .tprow.done .chk{background:var(--teal); color:#04222b; border-color:var(--teal);}
-  .tprow .body{flex:1; min-width:0;}
-  .tprow .txt{font-size:13.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word; outline:none;}
-  .tprow.done .txt{text-decoration:line-through;}
-  .tprow .meta{font-size:11px; color:var(--muted); margin-top:4px; font-variant-numeric:tabular-nums;}
-  .tprow .del{flex:none; background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:2px 4px;}
-  .tprow .del:hover{color:#f2585f;}
+  /* お題・議題ボード（定例ごと → Excel風テーブル）*/
+  #topicModal .m{width:min(900px,96vw);}
+  .mtadd{display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  .mtadd input{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px;}
+  .mtadd input.tt{flex:1; min-width:180px;}
+  .mtadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px; white-space:nowrap;}
+  .tpsec{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin:4px 0 8px;}
   .tpempty{color:var(--muted); font-size:12.5px; padding:8px 2px;}
+  .mtrow{display:flex; align-items:center; gap:12px; padding:12px 13px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; background:var(--panel2); cursor:pointer;}
+  .mtrow:hover{border-color:var(--teal); background:var(--panel3);}
+  .mtrow .mtt{font-weight:700; font-size:14px;}
+  .mtrow .mtd{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;}
+  .mtrow .mtc{margin-left:auto; font-size:11.5px; color:var(--dim); white-space:nowrap;}
+  .mtrow .del{flex:none; background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:2px 6px;}
+  .mtrow .del:hover{color:#f2585f;}
+  .tpback{background:none; border:1px solid var(--line); color:var(--text); border-radius:7px; padding:5px 13px; cursor:pointer; font-family:inherit; font-size:12px;}
+  .tphd{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
+  .tphd .tpttl{font-weight:700; font-size:15px;} .tphd .tpsub{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;}
+  .tptbl{width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;}
+  .tptbl th{text-align:left; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; padding:6px 8px; border-bottom:1px solid var(--line);}
+  .tptbl td{padding:0; border-bottom:1px solid var(--line2); vertical-align:top;}
+  .tptbl td.c-chk{width:38px; text-align:center; padding-top:7px;}
+  .tptbl td.c-name{width:120px;} .tptbl td.c-del{width:34px; text-align:center; padding-top:6px;}
+  .tptbl .cell{padding:8px 8px; outline:none; min-height:20px; white-space:pre-wrap; word-break:break-word; line-height:1.5;}
+  .tptbl .cell:focus{background:var(--panel3); box-shadow:inset 0 0 0 1px var(--teal);}
+  .tptbl .cell:empty:before{content:attr(data-ph); color:var(--dim);}
+  .tptbl tr.done .cell{text-decoration:line-through; opacity:.58;}
+  .tptbl .chk{width:22px; height:22px; border-radius:6px; border:1px solid var(--line); background:var(--panel3); color:var(--teal); cursor:pointer; font-size:13px; display:inline-flex; align-items:center; justify-content:center;}
+  .tptbl tr.done .chk{background:var(--teal); color:#04222b; border-color:var(--teal);}
+  .tptbl .del{background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:2px 4px;}
+  .tptbl .del:hover{color:#f2585f;}
+  .tpaddrow{margin-top:12px;}
+  .tpaddrow button{background:var(--panel3); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 14px; cursor:pointer; font-family:inherit; font-size:12.5px;}
+  .tpaddrow button:hover{border-color:var(--teal);}
   /* 右クリックメニュー */
   #ctxMenu button{width:196px; display:flex; align-items:center; gap:9px;}
   #moreMenu button{width:184px; display:flex; align-items:center; gap:9px;}
@@ -783,7 +801,7 @@ function seedData(){
     });
   });
   const big={ id:nid(), kind:'big', name:'制作物', children: order.map(a=>mids[a]) };
-  return { view:'month', projectStart:'2026-06-01', projectEnd:'2027-04-30', tree:[big], seq, topics:[] };
+  return { view:'month', projectStart:'2026-06-01', projectEnd:'2027-04-30', tree:[big], seq, meetings:[], topics:[] };
 }
 
 // ===== 状態 =====
@@ -868,6 +886,7 @@ window.__mergeBoards=function(remote, local){
   const out=Object.assign({}, local);                       // view等のUI設定はlocal優先
   out.seq=Math.max(+local.seq||0, +remote.seq||0);           // ID採番は大きい方（衝突回避）
   out.tree=__mergeSiblings(remote.tree, local.tree);
+  out.meetings=__mergeList(remote.meetings, local.meetings); // 定例も同時編集で消えないようマージ
   out.topics=__mergeList(remote.topics, local.topics);       // お題も同時編集で消えないようマージ
   return out; };
 // マージ結果を反映（入力中はUI再描画を控える）
@@ -1604,52 +1623,93 @@ document.getElementById('helpBody').innerHTML=`
 document.getElementById('helpBtn').addEventListener('click', ()=>document.getElementById('helpModal').classList.add('on'));
 document.getElementById('helpModal').addEventListener('click', e=>{ if(e.target.id==='helpModal'||e.target.id==='helpClose') document.getElementById('helpModal').classList.remove('on'); });
 
-// ===== お題・議題ボード（全員で共有・Supabase同期・マージ対応）=====
-function ensureTopics(){ if(!Array.isArray(state.topics)) state.topics=[]; return state.topics; }
-function topicId(){ return 'tp_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,8); }
-function topicAuthor(){ return currentUser() || (window.__user? String(window.__user).split('@')[0] : '(名無し)'); }
-function updateTopicBtn(){ const b=document.getElementById('topicBtn'); if(!b) return;
-  const n=ensureTopics().filter(t=>t&&!t.done).length; b.textContent='📝 お題'+(n?' ('+n+')':''); }
+// ===== お題・議題ボード（定例ごとにExcel風テーブルで記入・全員共有・マージ対応）=====
+function ensureBoards(){
+  if(!Array.isArray(state.meetings)) state.meetings=[];
+  if(!Array.isArray(state.topics)) state.topics=[];
+  state.topics.forEach(t=>{ if(t && t.text!=null && t.todo==null){ t.todo=t.text; delete t.text; } });  // 旧リスト形式を「やること」へ移行
+  return true; }
+function uid(p){ return p+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7); }
+function meAuthor(){ return currentUser() || (window.__user? String(window.__user).split('@')[0] : ''); }
+let _openMeeting=null;   // null=定例一覧／会議id=その会議のお題テーブル
+function updateTopicBtn(){ const b=document.getElementById('topicBtn'); if(!b) return; ensureBoards();
+  const n=state.topics.filter(t=>t&&!t.done).length; b.textContent='📝 お題'+(n?' ('+n+')':''); }
 function refreshTopicsIfOpen(){ const m=document.getElementById('topicModal'); if(m&&m.classList.contains('on')) renderTopics(); }
-function openTopics(){ ensureTopics(); renderTopics(); document.getElementById('topicModal').classList.add('on');
-  const ta=document.getElementById('tpNew'); if(ta) ta.focus(); }
+function openTopics(){ ensureBoards(); _openMeeting=null; renderTopics(); document.getElementById('topicModal').classList.add('on'); }
+function mtCounts(id){ const rows=state.topics.filter(t=>t&&t.meetingId===id); return {total:rows.length, open:rows.filter(t=>!t.done).length}; }
 function renderTopics(){
-  const box=document.getElementById('topicBody'); if(!box) return;
-  const list=ensureTopics();
-  const open=list.filter(t=>t&&!t.done), done=list.filter(t=>t&&t.done);
-  const rowHTML=t=>`<div class="tprow${t.done?' done':''}" data-tid="${esca(t.id)}">`+
-      `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'未対応に戻す':'対応済みにする'}">${t.done?'✓':''}</button>`+
-      `<div class="body"><div class="txt" contenteditable="true" data-edit="${esca(t.id)}">${esc(t.text||'')}</div>`+
-      `<div class="meta">🖊 ${esc(t.author||'(名無し)')}　${esc(t.date||'')}</div></div>`+
-      `<button class="del" data-del="${esca(t.id)}" title="削除">✕</button></div>`;
-  let h=`<div class="tpadd"><textarea id="tpNew" placeholder="お題・相談したいことを入力（Ctrl+Enterで追加）"></textarea>`+
-        `<button id="tpAddBtn">＋ 追加</button></div>`;
-  h+=`<div class="tpsec">未対応 ${open.length}</div>`;
-  h+= open.length ? open.map(rowHTML).join('') : `<div class="tpempty">まだお題はありません。上の欄から追加してください。</div>`;
-  if(done.length){ h+=`<div class="tpsec">対応済み ${done.length}</div>`+done.map(rowHTML).join(''); }
-  box.innerHTML=h; updateTopicBtn();
+  const box=document.getElementById('topicBody'); if(!box) return; ensureBoards();
+  if(_openMeeting && state.meetings.some(m=>m.id===_openMeeting)) renderMeetingTable(box); else { _openMeeting=null; renderMeetingList(box); }
+  updateTopicBtn();
 }
-function addTopic(){ const ta=document.getElementById('tpNew'); if(!ta) return; const v=ta.value.trim(); if(!v) return;
-  ensureTopics().unshift({ id:topicId(), text:v, author:topicAuthor(), date:ymd(new Date()), done:false, _u:Date.now() });
-  save(); renderTopics(); const n=document.getElementById('tpNew'); if(n){ n.value=''; n.focus(); } }
-function toggleTopic(id){ const t=ensureTopics().find(x=>x&&x.id===id); if(!t) return; t.done=!t.done; t._u=Date.now(); save(); renderTopics(); }
-function delTopic(id){ const t=ensureTopics().find(x=>x&&x.id===id); if(!t) return;
-  if(!confirm('このお題を削除しますか？\n\n「'+String(t.text||'').slice(0,40)+'」')) return;
-  state.topics=ensureTopics().filter(x=>x&&x.id!==id); save(); renderTopics(); }
-function editTopic(id, text){ const t=ensureTopics().find(x=>x&&x.id===id); if(!t) return; const v=String(text||'').trim();
-  if(v===t.text) return; if(!v){ renderTopics(); return; } t.text=v; t._u=Date.now(); save(); }
+function renderMeetingList(box){
+  const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  let h=`<div class="mtadd"><input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）">`+
+        `<input id="mtDate" type="date"><button id="mtAddBtn">＋ 定例を追加</button></div>`;
+  h+=`<div class="tpsec">定例一覧（クリックでお題を記入）</div>`;
+  h+= list.length ? list.map(m=>{ const c=mtCounts(m.id);
+      return `<div class="mtrow" data-open-mt="${esca(m.id)}">`+
+        `<span class="mtt">${esc(m.title||'(無題の定例)')}</span>`+
+        `<span class="mtd">${esc(m.date||'日付未設定')}</span>`+
+        `<span class="mtc">お題 ${c.total}件${c.open?'（未対応 '+c.open+'）':''}</span>`+
+        `<button class="del" data-del-mt="${esca(m.id)}" title="この定例を削除">✕</button></div>`;
+    }).join('') : `<div class="tpempty">定例がまだありません。上で定例名と日付を入れて「＋ 定例を追加」してください。</div>`;
+  box.innerHTML=h;
+}
+function renderMeetingTable(box){
+  const m=state.meetings.find(x=>x.id===_openMeeting);
+  const rows=state.topics.filter(t=>t&&t.meetingId===_openMeeting);
+  let h=`<div class="tphd"><button class="tpback" id="tpBack">← 定例一覧</button>`+
+        `<div><div class="tpttl">${esc(m.title||'(無題の定例)')}</div><div class="tpsub">${esc(m.date||'日付未設定')}</div></div></div>`;
+  h+=`<table class="tptbl"><thead><tr><th></th><th>名前</th><th>やること</th><th>詳細</th><th></th></tr></thead><tbody>`;
+  h+= rows.length ? rows.map(t=>`<tr class="${t.done?'done':''}" data-tid="${esca(t.id)}">`+
+      `<td class="c-chk"><button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'未対応に戻す':'対応済みにする'}">${t.done?'✓':''}</button></td>`+
+      `<td class="c-name"><div class="cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="名前">${esc(t.name||'')}</div></td>`+
+      `<td><div class="cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="todo" data-ph="やること">${esc(t.todo||'')}</div></td>`+
+      `<td><div class="cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="detail" data-ph="詳細（任意）">${esc(t.detail||'')}</div></td>`+
+      `<td class="c-del"><button class="del" data-del="${esca(t.id)}" title="この行を削除">✕</button></td></tr>`
+    ).join('') : `<tr><td colspan="5"><div class="tpempty" style="padding:12px 8px">まだお題がありません。「＋ 行を追加」から書き込んでください。</div></td></tr>`;
+  h+=`</tbody></table><div class="tpaddrow"><button id="tpAddRow">＋ 行を追加</button></div>`;
+  box.innerHTML=h;
+}
+function addMeeting(){ const t=document.getElementById('mtTitle'), d=document.getElementById('mtDate');
+  const title=(t&&t.value.trim())||'', date=(d&&d.value)||'';
+  if(!title && !date){ alert('定例名か日付を入れてください。'); return; }
+  state.meetings.push({ id:uid('mt'), title:title||'定例', date:date, _u:Date.now() });
+  save(); renderTopics(); }
+function delMeeting(id){ const m=state.meetings.find(x=>x.id===id); if(!m) return; const c=mtCounts(id);
+  if(!confirm('定例「'+(m.title||'')+' '+(m.date||'')+'」を削除しますか？\nこの定例のお題 '+c.total+'件も一緒に削除されます。')) return;
+  state.meetings=state.meetings.filter(x=>x.id!==id);
+  state.topics=state.topics.filter(t=>!(t&&t.meetingId===id));
+  if(_openMeeting===id) _openMeeting=null;
+  save(); renderTopics(); }
+function addRow(){ if(!_openMeeting) return;
+  const t={ id:uid('tp'), meetingId:_openMeeting, done:false, name:meAuthor(), todo:'', detail:'', _u:Date.now() };
+  state.topics.push(t); save(); renderTopics();
+  const cell=document.querySelector('#topicBody [data-edit="'+t.id+'"][data-field="todo"]'); if(cell) cell.focus(); }
+function toggleTopic(id){ const t=state.topics.find(x=>x&&x.id===id); if(!t) return; t.done=!t.done; t._u=Date.now(); save(); renderTopics(); }
+function delTopic(id){ const t=state.topics.find(x=>x&&x.id===id); if(!t) return;
+  if((t.name||t.todo||t.detail) && !confirm('この行を削除しますか？')) return;
+  state.topics=state.topics.filter(x=>x&&x.id!==id); save(); renderTopics(); }
+function editCell(id, field, text){ const t=state.topics.find(x=>x&&x.id===id); if(!t||!field) return;
+  const v=String(text==null?'':text), cur=(t[field]==null?'':String(t[field]));
+  if(v===cur) return; t[field]=v; t._u=Date.now(); save(); }
 document.getElementById('topicBtn').addEventListener('click', openTopics);
 document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.id==='topicModal'||e.target.id==='topicClose') document.getElementById('topicModal').classList.remove('on'); });
 document.getElementById('topicBody').addEventListener('click', e=>{
-  if(e.target.closest('#tpAddBtn')){ addTopic(); return; }
+  if(e.target.closest('#tpBack')){ _openMeeting=null; renderTopics(); return; }
+  if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
+  if(e.target.closest('#tpAddRow')){ addRow(); return; }
+  const dmt=e.target.closest('[data-del-mt]'); if(dmt){ e.stopPropagation(); delMeeting(dmt.dataset.delMt); return; }
+  const omt=e.target.closest('[data-open-mt]'); if(omt){ _openMeeting=omt.dataset.openMt; renderTopics(); return; }
   const tg=e.target.closest('[data-toggle]'); if(tg){ toggleTopic(tg.dataset.toggle); return; }
   const dl=e.target.closest('[data-del]'); if(dl){ delTopic(dl.dataset.del); return; }
 });
 document.getElementById('topicBody').addEventListener('blur', e=>{
-  const ed=e.target.closest('[data-edit]'); if(ed) editTopic(ed.dataset.edit, ed.textContent);
+  const ed=e.target.closest('[data-edit]'); if(ed) editCell(ed.dataset.edit, ed.dataset.field, ed.textContent);
 }, true);
 document.getElementById('topicBody').addEventListener('keydown', e=>{
-  if(e.target.id==='tpNew' && (e.ctrlKey||e.metaKey) && e.key==='Enter'){ e.preventDefault(); addTopic(); }
+  if(e.target.id==='mtTitle' && e.key==='Enter'){ e.preventDefault(); addMeeting(); }
 });
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
