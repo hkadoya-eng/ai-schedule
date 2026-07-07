@@ -293,6 +293,9 @@
   td.role[contenteditable="true"]:focus,td.note[contenteditable="true"]:focus{background:var(--panel2);}
   body.view-day td.tl.weekend{background:rgba(255,255,255,.028);}
   body.view-day tr:hover td.tl.weekend{background:rgba(255,255,255,.05);}
+  /* 今日ライン（今日を含む列の左端に縦線） */
+  td.tl.today{box-shadow:inset 2px 0 0 #ff8a5c; background:rgba(255,138,92,.06);}
+  th.unit.today{box-shadow:inset 2px 0 0 #ff8a5c; color:#ffb98c;}
   /* バー：発光＋未達は暗く */
   .bar{box-shadow:0 1px 6px rgba(0,0,0,.4); outline:1px solid rgba(255,255,255,.08);}
   .bar.pend{background-image:linear-gradient(rgba(10,16,24,.60),rgba(10,16,24,.60))!important;}
@@ -585,6 +588,7 @@
       <button data-m="scroll" class="on" title="スクロール（既存バーを動かさない）">🖐</button>
       <button data-m="edit" title="編集（バーを引く・動かす）">✏</button>
     </span>
+    <button class="btn" id="todayBtn" title="今日の位置へスクロール">📍 今日</button>
     <span class="tsep"></span>
     <!-- 右：ヘルプ・管理・状態 -->
     <button class="btn" id="helpBtn" title="使い方を見る">❓ 使い方</button>
@@ -979,10 +983,11 @@ function runs(cols, keyfn, metafn){
 // ===== レンダリング =====
 const grid=document.getElementById('grid');
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-let COLS=[];
+let COLS=[]; let _todayCol=-1;
 
 function render(){
   COLS=buildColumns();
+  { const _t=new Date(); _t.setHours(0,0,0,0); _todayCol=COLS.findIndex(c=> c.start<=_t && _t<=c.end); }
   const view=state.view;
   const headerRows = (view==='month')?2:3;
   let h='<thead>';
@@ -1008,7 +1013,7 @@ function render(){
   }
   // --- 単位ラベル行 ---
   h+='<tr>';
-  COLS.forEach(c=>{ const cls=['unit']; if(c.mend)cls.push('mend');
+  COLS.forEach((c,i)=>{ const cls=['unit']; if(c.mend)cls.push('mend'); if(i===_todayCol)cls.push('today');
     h+=`<th class="${cls.join(' ')}">${esc(c.label)}</th>`; });
   h+='</tr></thead><tbody>';
 
@@ -1212,7 +1217,7 @@ function barCellsHTML(node, es, ee, pct, editable, group){
   const spanLen = cr ? (cr.hi-cr.lo+1) : 0;
   const doneCells = cr ? Math.round(spanLen*pct/100) : 0;
   let h='';
-  COLS.forEach((c,ci)=>{ const cls=['tl']; if(c.mend)cls.push('mend'); if(c.weekend)cls.push('weekend');
+  COLS.forEach((c,ci)=>{ const cls=['tl']; if(c.mend)cls.push('mend'); if(c.weekend)cls.push('weekend'); if(ci===_todayCol)cls.push('today');
     let bar='';
     if(hasBar && a<=c.end && b>=c.start){
       let col = phaseOfDate(c.start)?phaseOfDate(c.start).color:'var(--navy)';
@@ -1662,6 +1667,13 @@ document.getElementById('helpBody').innerHTML=`
 <li>担当・備考はセルを直接クリックで編集できます。</li></ul>`;
 document.getElementById('helpBtn').addEventListener('click', ()=>document.getElementById('helpModal').classList.add('on'));
 document.getElementById('helpModal').addEventListener('click', e=>{ if(e.target.id==='helpModal'||e.target.id==='helpClose') document.getElementById('helpModal').classList.remove('on'); });
+// 今日の位置へスクロール
+function scrollToToday(){ const wrap=grid.parentElement; if(!wrap) return;
+  const cell=grid.querySelector('th.unit.today')||grid.querySelector('td.tl.today');
+  if(!cell){ alert('今日はプロジェクト期間外です。'); return; }
+  const firstUnit=grid.querySelector('thead th.unit'); const stickyW=firstUnit?firstUnit.offsetLeft:0;
+  wrap.scrollTo({ left:Math.max(0, cell.offsetLeft - stickyW - 24), behavior:'smooth' }); }
+(function(){ const b=document.getElementById('todayBtn'); if(b) b.addEventListener('click', scrollToToday); })();
 
 // ===== お題・議題ボード（定例ごとにExcel風テーブルで記入・全員共有・マージ対応）=====
 function ensureBoards(){
