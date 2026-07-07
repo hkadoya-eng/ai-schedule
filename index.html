@@ -296,6 +296,20 @@
   /* 今日ライン（今日を含む列の左端に縦線） */
   td.tl.today{box-shadow:inset 2px 0 0 #ff8a5c; background:rgba(255,138,92,.06);}
   th.unit.today{box-shadow:inset 2px 0 0 #ff8a5c; color:#ffb98c;}
+  /* マイルストーン（締切の縦線・◆・帯） */
+  td.tl.mstone::before{content:""; position:absolute; left:-1px; top:0; bottom:0; border-left:2px dashed #e6b422; pointer-events:none; z-index:1;}
+  th.unit.mstone{color:#f0cf6b;} .msmark{color:#e6b422; font-size:9px; margin-right:1px;}
+  #msBar{display:none; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 16px; background:#0d1620; border-bottom:1px solid var(--line); font-size:12px;}
+  #msBar .mslab{color:#e6b422; font-weight:700; letter-spacing:.04em;}
+  #msBar .mschip{background:rgba(230,180,34,.14); color:#f0cf6b; border:1px solid rgba(230,180,34,.4); border-radius:20px; padding:3px 11px; cursor:pointer; font-family:inherit; font-size:11.5px; font-variant-numeric:tabular-nums;}
+  #msBar .mschip:hover{filter:brightness(1.12);}
+  .msrow{display:flex; align-items:center; gap:10px; padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:7px;}
+  .msrow .msd{font-variant-numeric:tabular-nums; color:var(--muted); font-size:12.5px; white-space:nowrap;}
+  .msrow .msn{flex:1; font-weight:600;}
+  .msadd{display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  .msadd input[type=text]{flex:1; min-width:160px; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px;}
+  .msadd input[type=date]{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; color-scheme:dark;}
+  .msadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px;}
   /* バー：発光＋未達は暗く */
   .bar{box-shadow:0 1px 6px rgba(0,0,0,.4); outline:1px solid rgba(255,255,255,.08);}
   .bar.pend{background-image:linear-gradient(rgba(10,16,24,.60),rgba(10,16,24,.60))!important;}
@@ -599,6 +613,7 @@
 </header>
 
 <div class="kpibar" id="kpibar"></div>
+<div id="msBar"></div>
 
 <div class="wrap">
   <table id="grid"></table>
@@ -621,8 +636,9 @@
   <button id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
   <button id="depToggle" title="依存関係の矢印を表示／非表示（詳細パネルの「依存」に先行No.を入力）">🔗 依存線 ▷</button>
   <div class="mrow">📅 期間 <input type="date" id="pStart"><span>〜</span><input type="date" id="pEnd"></div>
-  <div class="mlabel">メンバー</div>
+  <div class="mlabel">メンバー・予定</div>
   <button id="memBtn" title="アプリにログインした人の一覧（打合せの招待先候補）">👥 ログイン済みメンバー</button>
+  <button id="msBtn" title="申請日・納期などの締切をガントに縦線で表示">🚩 マイルストーン</button>
   <div class="mlabel">データ（管理者向け）</div>
   <button id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む（管理者向け）">📊 ベース取込</button>
   <button id="exportBtn">💾 書き出し（保存）</button>
@@ -674,6 +690,12 @@
   <div class="mh"><div class="t">👥 ログイン済みメンバー</div><div class="s">このアプリにログインした人の一覧です。打合せ予定のカレンダー登録では、この人たちが招待先になります。</div></div>
   <div class="mb" id="memberBody"></div>
   <div class="mf"><button class="ghost" id="memberClose">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="msModal"><div class="m">
+  <div class="mh"><div class="t">🚩 マイルストーン</div><div class="s">申請日・納期・審査など「締切の日」を登録すると、ガント上に縦線とKPI下の帯で表示されます。</div></div>
+  <div class="mb" id="msBody"></div>
+  <div class="mf"><button class="ghost" id="msClose">閉じる</button></div>
 </div></div>
 
 <script>
@@ -833,7 +855,7 @@ function seedData(){
     });
   });
   const big={ id:nid(), kind:'big', name:'制作物', children: order.map(a=>mids[a]) };
-  return { view:'month', projectStart:'2026-06-01', projectEnd:'2027-04-30', tree:[big], seq, meetings:[], topics:[], members:[] };
+  return { view:'month', projectStart:'2026-06-01', projectEnd:'2027-04-30', tree:[big], seq, meetings:[], topics:[], members:[], milestones:[] };
 }
 
 // ===== 状態 =====
@@ -921,6 +943,7 @@ window.__mergeBoards=function(remote, local){
   out.meetings=__mergeList(remote.meetings, local.meetings); // 定例も同時編集で消えないようマージ
   out.topics=__mergeList(remote.topics, local.topics);       // お題も同時編集で消えないようマージ
   out.members=__mergeList(remote.members, local.members);    // メンバー名簿(ログイン者)もマージ
+  out.milestones=__mergeList(remote.milestones, local.milestones); // マイルストーンもマージ
   return out; };
 // マージ結果を反映（入力中はUI再描画を控える）
 window.__applyMerged=function(merged){
@@ -983,11 +1006,13 @@ function runs(cols, keyfn, metafn){
 // ===== レンダリング =====
 const grid=document.getElementById('grid');
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
-let COLS=[]; let _todayCol=-1;
+let COLS=[]; let _todayCol=-1; let _msByCol={};
 
 function render(){
   COLS=buildColumns();
   { const _t=new Date(); _t.setHours(0,0,0,0); _todayCol=COLS.findIndex(c=> c.start<=_t && _t<=c.end); }
+  _msByCol={}; (state.milestones||[]).forEach(ms=>{ if(!ms||!ms.date) return; const d=parse(ms.date);
+    const ci=COLS.findIndex(c=> c.start<=d && d<=c.end); if(ci>=0){ (_msByCol[ci]=_msByCol[ci]||[]).push(ms); } });
   const view=state.view;
   const headerRows = (view==='month')?2:3;
   let h='<thead>';
@@ -1014,7 +1039,9 @@ function render(){
   // --- 単位ラベル行 ---
   h+='<tr>';
   COLS.forEach((c,i)=>{ const cls=['unit']; if(c.mend)cls.push('mend'); if(i===_todayCol)cls.push('today');
-    h+=`<th class="${cls.join(' ')}">${esc(c.label)}</th>`; });
+    const ms=_msByCol[i]; if(ms)cls.push('mstone');
+    const tt=ms?` title="🚩 ${esc(ms.map(x=>(x.label||'')+'('+x.date+')').join(' / '))}"`:'';
+    h+=`<th class="${cls.join(' ')}"${tt}>${ms?'<span class="msmark">◆</span>':''}${esc(c.label)}</th>`; });
   h+='</tr></thead><tbody>';
 
   let counter={n:0};
@@ -1023,6 +1050,7 @@ function render(){
   grid.innerHTML=h;
   autoSizeColumns();
   computeKPIs();
+  renderMsBar();
   // sticky オフセットの調整（上端・左固定列）
   requestAnimationFrame(()=>{ setStickyTops(); fixStickyLefts(); renderDeps(); });
 }
@@ -1217,7 +1245,7 @@ function barCellsHTML(node, es, ee, pct, editable, group){
   const spanLen = cr ? (cr.hi-cr.lo+1) : 0;
   const doneCells = cr ? Math.round(spanLen*pct/100) : 0;
   let h='';
-  COLS.forEach((c,ci)=>{ const cls=['tl']; if(c.mend)cls.push('mend'); if(c.weekend)cls.push('weekend'); if(ci===_todayCol)cls.push('today');
+  COLS.forEach((c,ci)=>{ const cls=['tl']; if(c.mend)cls.push('mend'); if(c.weekend)cls.push('weekend'); if(ci===_todayCol)cls.push('today'); if(_msByCol[ci])cls.push('mstone');
     let bar='';
     if(hasBar && a<=c.end && b>=c.start){
       let col = phaseOfDate(c.start)?phaseOfDate(c.start).color:'var(--navy)';
@@ -1680,6 +1708,7 @@ function ensureBoards(){
   if(!Array.isArray(state.meetings)) state.meetings=[];
   if(!Array.isArray(state.topics)) state.topics=[];
   if(!Array.isArray(state.members)) state.members=[];
+  if(!Array.isArray(state.milestones)) state.milestones=[];
   state.topics.forEach(t=>{ if(t && t.text!=null && t.todo==null){ t.todo=t.text; delete t.text; } });  // 旧リスト形式を「やること」へ移行
   return true; }
 // ログインした人を参加者候補（メンバー名簿）に自動登録。全員のメールを事前に知らなくても、ログインが進むほど招待先が揃う。
@@ -1828,6 +1857,39 @@ function renderMembers(){ ensureBoards(); const box=document.getElementById('mem
   box.innerHTML=h; }
 document.getElementById('memBtn').addEventListener('click', ()=>{ closeMore(); renderMembers(); document.getElementById('memberModal').classList.add('on'); });
 document.getElementById('memberModal').addEventListener('click', e=>{ if(e.target.id==='memberModal'||e.target.id==='memberClose') document.getElementById('memberModal').classList.remove('on'); });
+
+// マイルストーン（申請日・納期など。ガントに縦線＋KPI下の帯で表示）
+function renderMsBar(){ const bar=document.getElementById('msBar'); if(!bar) return; ensureBoards();
+  const list=(state.milestones||[]).filter(m=>m&&m.date).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!list.length){ bar.style.display='none'; bar.innerHTML=''; return; }
+  bar.style.display='flex';
+  bar.innerHTML='<span class="mslab">🚩 マイルストーン</span>'+list.map(m=>`<button class="mschip" data-ms-date="${esca(m.date)}" title="${esc(m.label||'')}（この位置へスクロール）">${esc(mdNum(parse(m.date)))} ${esc(m.label||'')}</button>`).join(''); }
+function renderMilestones(){ ensureBoards(); const box=document.getElementById('msBody'); if(!box) return;
+  const list=(state.milestones||[]).slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  let h=`<div class="msadd"><input type="text" id="msName" placeholder="名称（例：申請日／納期／審査）"><input type="date" id="msDate"><button id="msAddBtn">＋ 追加</button></div>`;
+  h+= list.length ? list.map(m=>`<div class="msrow"><span class="msd">${esc(m.date||'')}</span><span class="msn">${esc(m.label||'(無題)')}</span><button class="del" data-del-ms="${esca(m.id)}" title="削除">✕</button></div>`).join('')
+    : `<div class="tpempty">まだマイルストーンがありません。名称と日付を入れて追加してください。</div>`;
+  box.innerHTML=h; }
+function addMilestone(){ const n=document.getElementById('msName'), d=document.getElementById('msDate');
+  const label=(n&&n.value.trim())||'', date=(d&&d.value)||'';
+  if(!date){ alert('日付を入れてください。'); return; }
+  ensureBoards(); state.milestones.push({ id:uid('ms'), label:label||'マイルストーン', date, _u:Date.now() });
+  save(); renderMilestones(); render(); }
+function delMilestone(id){ ensureBoards(); const m=state.milestones.find(x=>x&&x.id===id); if(!m) return;
+  if(!confirm('「'+(m.label||'')+' '+(m.date||'')+'」を削除しますか？')) return;
+  state.milestones=state.milestones.filter(x=>x&&x.id!==id); save(); renderMilestones(); render(); }
+function scrollToCol(ci){ const wrap=grid.parentElement; if(!wrap||ci==null||ci<0) return;
+  const units=grid.querySelectorAll('thead tr:last-child th.unit'); const cell=units[ci]; if(!cell) return;
+  const stickyW=units[0]?units[0].offsetLeft:0;
+  wrap.scrollTo({ left:Math.max(0, cell.offsetLeft - stickyW - 24), behavior:'smooth' }); }
+function scrollToDate(ds){ const d=parse(ds); const ci=COLS.findIndex(c=> c.start<=d && d<=c.end); scrollToCol(ci); }
+document.getElementById('msBtn').addEventListener('click', ()=>{ closeMore(); renderMilestones(); document.getElementById('msModal').classList.add('on'); });
+document.getElementById('msModal').addEventListener('click', e=>{
+  if(e.target.id==='msModal'||e.target.id==='msClose'){ document.getElementById('msModal').classList.remove('on'); return; }
+  if(e.target.closest('#msAddBtn')){ addMilestone(); return; }
+  const dm=e.target.closest('[data-del-ms]'); if(dm){ delMilestone(dm.dataset.delMs); return; }
+});
+document.getElementById('msBar').addEventListener('click', e=>{ const c=e.target.closest('[data-ms-date]'); if(c) scrollToDate(c.dataset.msDate); });
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(!confirm('⚠️ 初期化（1/2）\n\n今のデータ（進捗・サブタスク・レポート・リンク等）をすべて破棄し、初期サンプル(34件)に置き換えます。\n通常この操作は不要です。続けますか？')) return;
