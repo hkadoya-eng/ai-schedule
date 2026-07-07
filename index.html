@@ -299,6 +299,13 @@
   /* マイルストーン（締切の縦線・◆・帯） */
   td.tl.mstone::before{content:""; position:absolute; left:-1px; top:0; bottom:0; border-left:2px dashed #e6b422; pointer-events:none; z-index:1;}
   th.unit.mstone{color:#f0cf6b;} .msmark{color:#e6b422; font-size:9px; margin-right:1px;}
+  th.unit{cursor:pointer;} th.unit:hover{color:#e6b422;}
+  /* マイルストーン行（Lychee風：◆＋名称をタイムラインに） */
+  tr.ms-row td{height:24px; background:#0e1822; border-bottom:1px solid var(--line);}
+  tr.ms-row td.c-item .msrowlab{color:#e6b422; font-weight:700; font-size:11.5px;}
+  td.ms-cell{position:relative; overflow:visible;}
+  .msdia{color:#e6b422; font-size:12px; position:relative; z-index:3; text-shadow:0 0 6px rgba(230,180,34,.6);}
+  .mslabel{position:absolute; left:14px; top:50%; transform:translateY(-50%); white-space:nowrap; color:#f3d576; font-size:11px; font-weight:700; z-index:3; pointer-events:none; padding:1px 5px 1px 3px;}
   #msBar{display:none; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 16px; background:#0d1620; border-bottom:1px solid var(--line); font-size:12px;}
   #msBar .mslab{color:#e6b422; font-weight:700; letter-spacing:.04em;}
   #msBar .mschip{background:rgba(230,180,34,.14); color:#f0cf6b; border:1px solid rgba(230,180,34,.4); border-radius:20px; padding:3px 11px; cursor:pointer; font-family:inherit; font-size:11.5px; font-variant-numeric:tabular-nums;}
@@ -1040,11 +1047,12 @@ function render(){
   h+='<tr>';
   COLS.forEach((c,i)=>{ const cls=['unit']; if(c.mend)cls.push('mend'); if(i===_todayCol)cls.push('today');
     const ms=_msByCol[i]; if(ms)cls.push('mstone');
-    const tt=ms?` title="🚩 ${esc(ms.map(x=>(x.label||'')+'('+x.date+')').join(' / '))}"`:'';
-    h+=`<th class="${cls.join(' ')}"${tt}>${ms?'<span class="msmark">◆</span>':''}${esc(c.label)}</th>`; });
+    const base=ms?('🚩 '+esc(ms.map(x=>(x.label||'')+'('+x.date+')').join(' / '))+' ／ '):'';
+    h+=`<th class="${cls.join(' ')}" data-ci="${i}" title="${base}ダブルクリック/右クリックでマイルストーン設定">${ms?'<span class="msmark">◆</span>':''}${esc(c.label)}</th>`; });
   h+='</tr></thead><tbody>';
 
   let counter={n:0};
+  h+=milestoneRowHTML();
   state.tree.forEach(big=>{ h+=nodeHTML(big,counter); });
   h+='</tbody>';
   grid.innerHTML=h;
@@ -1262,6 +1270,22 @@ function barCellsHTML(node, es, ee, pct, editable, group){
   return h;
 }
 
+// マイルストーン行（Lychee Redmine風：タイムライン上に◆＋名称）。定義があるときだけ最上部に表示。
+function milestoneRowHTML(){
+  const list=(state.milestones||[]);
+  if(!list.length) return '';
+  let h='<tr class="ms-row">';
+  h+='<td class="sl c-no"></td>';
+  h+='<td class="sl c-item"><div class="item-cell" style="padding-left:12px"><span class="msrowlab">🚩 マイルストーン</span></div></td>';
+  h+='<td class="sl c-role"></td><td class="sl c-prog"></td><td class="sl c-date"></td><td class="sl c-note"></td>';
+  COLS.forEach((c,ci)=>{ const cls=['tl','ms-cell']; if(ci===_todayCol)cls.push('today'); if(_msByCol[ci])cls.push('mstone');
+    let mk='';
+    if(_msByCol[ci]){ const lab=_msByCol[ci].map(m=>esc(m.label||'')).join('・');
+      mk=`<span class="msdia">◆</span><span class="mslabel">${lab}</span>`; }
+    h+=`<td class="${cls.join(' ')}" data-ci="${ci}">${mk}</td>`; });
+  h+='</tr>';
+  return h;
+}
 function smallRowHTML(t, counter){
   if(!passSmall(t)) return '';
   counter.n++;
@@ -1890,6 +1914,19 @@ document.getElementById('msModal').addEventListener('click', e=>{
   const dm=e.target.closest('[data-del-ms]'); if(dm){ delMilestone(dm.dataset.delMs); return; }
 });
 document.getElementById('msBar').addEventListener('click', e=>{ const c=e.target.closest('[data-ms-date]'); if(c) scrollToDate(c.dataset.msDate); });
+// ガントの日付をダブルクリック/右クリック → マイルストーンをその場で設定・解除
+function quickMilestone(ci){ if(ci==null||ci<0||ci>=COLS.length) return; ensureBoards();
+  const col=COLS[ci];
+  const existing=(state.milestones||[]).filter(m=>{ if(!m||!m.date) return false; const d=parse(m.date); return d>=col.start && d<=col.end; });
+  if(existing.length){
+    if(confirm('この日付のマイルストーン「'+existing.map(m=>m.label).join('・')+'」を削除しますか？')){
+      const ids=existing.map(m=>m.id); state.milestones=state.milestones.filter(m=>ids.indexOf(m.id)<0); save(); render(); }
+    return; }
+  const date=ymd(col.start);
+  const name=window.prompt('マイルストーン名を入力（申請日・納期など）\n日付: '+date, ''); if(name===null) return;
+  state.milestones.push({ id:uid('ms'), label:(name.trim()||'マイルストーン'), date, _u:Date.now() }); save(); render(); }
+grid.addEventListener('dblclick', e=>{ const u=e.target.closest('th.unit'); if(u && u.dataset.ci!=null){ e.preventDefault(); e.stopPropagation(); quickMilestone(+u.dataset.ci); } });
+grid.addEventListener('contextmenu', e=>{ const u=e.target.closest('th.unit'); if(u && u.dataset.ci!=null){ e.preventDefault(); e.stopPropagation(); quickMilestone(+u.dataset.ci); } });
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(!confirm('⚠️ 初期化（1/2）\n\n今のデータ（進捗・サブタスク・レポート・リンク等）をすべて破棄し、初期サンプル(34件)に置き換えます。\n通常この操作は不要です。続けますか？')) return;
