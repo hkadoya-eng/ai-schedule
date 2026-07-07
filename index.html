@@ -329,6 +329,14 @@
   tr.overdue  .iname{color:#ff9ba1; font-weight:600;} /* 期限超過（未完）＝赤 */
   tr.prio-hi  .iname{font-weight:700;}                /* 優先度 高＝太字 */
   tr.done.overdue .iname{color:#6f8093; font-weight:400;} /* 完了は超過扱いにしない */
+  /* スケジュール遅延（バー基準）：late=期限超過(赤) / behind=遅れ気味(黄) */
+  .latemark{font-size:11px; margin-right:3px; vertical-align:-1px;}
+  .latemark.late{color:#ff5b5b;} .latemark.behind{color:#f2b13d;}
+  tr.late  .iname{color:#ff9ba1; font-weight:600;}
+  tr.behind .iname{color:#f2c760;}
+  tr.done.late .iname, tr.done.behind .iname{color:#6f8093; font-weight:400;}
+  tr.late  td.c-no{box-shadow:inset 4px 0 0 #ff5b5b;}
+  tr.behind td.c-no{box-shadow:inset 4px 0 0 #f2b13d;}
   td.tl.preview{background:rgba(47,182,176,.22)!important;}
   .foot{color:var(--dim);}
   .pop{background:var(--panel2); border-color:var(--line); box-shadow:0 12px 40px rgba(0,0,0,.55);}
@@ -598,6 +606,7 @@
       <span class="datectl">👤 <input id="userName" list="userList" placeholder="氏名" title="進捗更新時にこの名前が記録されます"><datalist id="userList"></datalist></span>
       <button class="btn flt" id="fMine" title="自分が担当の作業だけ表示">自分のみ</button>
       <button class="btn flt" id="fOpen" title="未完（完了以外）だけ表示">未完のみ</button>
+      <button class="btn flt" id="fLate" title="遅延（期限超過・予定より遅れ）だけ表示">⚠ 遅延</button>
     </span>
     <span class="tsep"></span>
     <!-- 操作（元に戻す・モード）-->
@@ -765,6 +774,24 @@ function caretHTML(n){ return hasKids(n)
   : `<span class="caret blank"></span>`; }
 function dueChip(t){ const d=dueStatus(t.due); if(!d||!d.soon||getStage(t)==='完了') return '';
   return ` <span class="duetag ${d.over?'over':'soon'}">${d.over?'超過':'期限近'}</span>`; }
+// スケジュール遅延判定（末端・進捗対象・normalのみ）：'overdue'=バー終了を過ぎて未完了 / 'behind'=予定進捗より遅い
+function schedStatus(t){
+  if(!isLeaf(t) || getStage(t)==='完了') return null;
+  if(t.status && t.status!=='normal') return null;
+  if(!t.start || !t.end) return null;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const s=parse(t.start), e=parse(t.end);
+  if(today>e) return 'overdue';
+  if(today<=s) return null;
+  const span=e-s; if(span<=0) return null;
+  const expected=Math.max(0, Math.min(100,(today-s)/span*100));
+  if(getProgress(t) < expected - 15) return 'behind';
+  return null;
+}
+function hasLate(node){ let f=false; eachLeaf(node, s=>{ if(!f && schedStatus(s)) f=true; }); return f; }
+function lateMark(ss){ if(!ss) return ''; return ss==='overdue'
+  ? '<span class="latemark late" title="期限超過（終了日を過ぎて未完了）">⚠</span>'
+  : '<span class="latemark behind" title="予定より遅れ気味">⚠</span>'; }
 function hasKids(n){ return !!(n && n.children && n.children.length); }
 // 末端（進捗を直接編集できる）：子を持たない作業／サブタスク
 function isLeaf(n){ return (n.kind==='task' || n.kind==='small') && !hasKids(n); }
@@ -802,11 +829,12 @@ function rollupProgress(node){ let total=0, sum=0, done=0;
   eachLeaf(node, s=>{ total++; sum+=getProgress(s); if(getStage(s)==='完了') done++; });
   return total ? { total, done, pct: Math.round(sum/total) } : null; }
 // フィルタ状態（同期しない一時プレファレンス）
-let fMine=false, fOpen=false;
-function filterActive(){ return fMine || fOpen; }
+let fMine=false, fOpen=false, fLate=false;
+function filterActive(){ return fMine || fOpen || fLate; }
 function passSmall(t){
   if(fOpen && isTracked(t) && getStage(t)==='完了') return false;
   if(fMine){ const u=currentUser(); if(u && String(t.role||'').indexOf(u)<0) return false; }
+  if(fLate && !hasLate(t)) return false;
   return true;
 }
 
@@ -1105,13 +1133,15 @@ function setDepsMode(on){
 // ===== KPI サマリー =====
 function computeKPIs(){
   const box=document.getElementById('kpibar'); if(!box) return;
-  let total=0, done=0, sum=0, hOld=0, hNew=0, dueSoon=0, over=0;
+  let total=0, done=0, sum=0, hOld=0, hNew=0, dueSoon=0, over=0, lateOver=0, behind=0;
   state.tree.forEach(n=> eachLeaf(n, s=>{
     if(s.kind==='small' && s.status && s.status!=='normal') return;  // AI対象外/未割当/TBD は集計外
     total++; sum+=getProgress(s); if(getStage(s)==='完了') done++;
     if(s.hoursOld!=null){ hOld+=(+s.hoursOld||0); hNew+=(s.hoursNew!=null?(+s.hoursNew||0):(+s.hoursOld||0)); }
     if(getStage(s)!=='完了'){ const d=dueStatus(s.due); if(d&&d.soon){ dueSoon++; if(d.over) over++; } }
+    const _ss=schedStatus(s); if(_ss==='overdue') lateOver++; else if(_ss==='behind') behind++;
   }));
+  const late=lateOver+behind;
   const pct = total ? Math.round(sum/total) : 0;
   const donePct = total ? Math.round(done/total*100) : 0;
   const cut = hOld>0 ? Math.round((1-hNew/hOld)*100) : null;
@@ -1134,8 +1164,8 @@ function computeKPIs(){
     `<div class="kpi ${cut!=null?'accent':''}"><div class="lab">AI工数削減</div>`+
       `<div class="val">${cut!=null?cut:'—'}${cut!=null?'<small>%</small>':''}</div>`+
       `<div class="meta">${hOld>0?`見込 ${hOld}h → ${hNew}h`:'工数を入力すると表示'}</div></div>`+
-    `<div class="kpi"><div class="lab">期限が近い</div><div class="val" style="${dueSoon?'color:#f2b13d':''}">${dueSoon}<small> 件</small></div>`+
-      `<div class="meta">${over?`<span style="color:#f2585f">超過 ${over}</span> ／ `:''}7日以内 ${dueSoon-over}</div></div>`;
+    `<div class="kpi"><div class="lab">遅延・期限</div><div class="val" style="${late?'color:#ff6b6b':(dueSoon?'color:#f2b13d':'')}">${late}<small> 件</small></div>`+
+      `<div class="meta">超過 ${lateOver}・遅れ ${behind}${dueSoon?` ／ 期限7日内 ${dueSoon}`:''}</div></div>`;
 }
 
 // ===== 列幅：ユーザー手動調整＋自動幅の共存 =====
@@ -1296,15 +1326,16 @@ function smallRowHTML(t, counter){
   const stg=getStage(t), sp=stageInfo(stg), pct=getProgress(t);
   const editable=canEditProgress(t);   // 子タスクがある作業は編集不可
   const _d=dueStatus(t.due), dOver=!!(_d&&_d.over&&stg!=='完了');
+  const ss=schedStatus(t);
   const rowcls='row-small'+(stg==='完了'?' done':'')+(stg==='保留'?' hold':'')+(group?' has-kids':'')
-    +(t.status==='excluded'?' excluded':'')+(dOver?' overdue':'')+(t.priority==='high'?' prio-hi':'');
+    +(t.status==='excluded'?' excluded':'')+(dOver?' overdue':'')+(ss==='behind'?' behind':'')+(ss==='overdue'?' late':'')+(t.priority==='high'?' prio-hi':'');
   let h=`<tr class="${rowcls}" data-id="${t.id}">`;
   h+=`<td class="sl c-no no" title="${t.no?('マスターNo.'+esc(normNo(t.no))):'マスター未登録'}">${t.no?esc(normNo(t.no)):'—'}</td>`;
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:40px">`+
      caretHTML(t)+
      `<span class="statusdot" data-status="${t.id}" title="状態: ${st.label}（クリックで変更）" style="background:${st.color}"></span>`+
      (apt?`<span class="apt ${apt.cls}" title="AI適性: ${esc(t.aptitude)}">${apt.ch}</span>`:'')+
-     pdotHTML(t)+
+     pdotHTML(t)+ lateMark(ss)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls">`+
@@ -1333,20 +1364,22 @@ function smallRowHTML(t, counter){
 }
 
 function taskRowHTML(t, counter, depth, stepNo){
+  if(fLate && !hasLate(t)) return '';
   const group=hasKids(t);
   const stg=getStage(t), sp=stageInfo(stg), pct=getProgress(t);
   const editable=canEditProgress(t);      // 子タスクがあると編集不可
   const hasLink=(t.tools&&t.tools.trim())||(t.deps&&t.deps.trim())||(t.report&&t.report.trim());
   const indent=64+(depth||0)*18;
   const _d=dueStatus(t.due), dOver=!!(_d&&_d.over&&stg!=='完了');
+  const ss=schedStatus(t);
   const rowcls='row-task'+(stg==='完了'?' done':'')+(stg==='保留'?' hold':'')+(group?' has-kids':'')
-    +(dOver?' overdue':'')+(t.priority==='high'?' prio-hi':'');
+    +(dOver?' overdue':'')+(ss==='behind'?' behind':'')+(ss==='overdue'?' late':'')+(t.priority==='high'?' prio-hi':'');
   let h=`<tr class="${rowcls}" data-id="${t.id}">`;
   h+=`<td class="sl c-no no"></td>`;
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:${indent}px">`+
      caretHTML(t)+
      ((stepNo && !(depth||0)) ? `<span class="stepno" title="段取り ${stepNo} 番目">${stepNo}</span>` : `<span class="tasktick">└</span>`)+
-     pdotHTML(t)+
+     pdotHTML(t)+ lateMark(ss)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls"><button class="mini add" data-addchild="${t.id}" title="＋タスク（さらに下の階層）">＋</button></span>`+
@@ -2619,6 +2652,8 @@ fMineBtn.addEventListener('click', ()=>{ fMine=!fMine; fMineBtn.classList.toggle
   if(fMine && !currentUser()) alert('先に「更新者」に自分の氏名を入れてください。担当名と一致する部分で絞り込みます。');
   render(); });
 fOpenBtn.addEventListener('click', ()=>{ fOpen=!fOpen; fOpenBtn.classList.toggle('on',fOpen); render(); });
+const fLateBtn=document.getElementById('fLate');
+if(fLateBtn) fLateBtn.addEventListener('click', ()=>{ fLate=!fLate; fLateBtn.classList.toggle('on',fLate); render(); });
 // 備考カラムの折りたたみ（表示プレファレンス）
 const NOTE_KEY='ai_sched_notecol';
 const noteToggle=document.getElementById('noteToggle');
