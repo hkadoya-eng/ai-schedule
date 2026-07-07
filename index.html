@@ -472,6 +472,9 @@
   .difftag.del{background:rgba(242,88,95,.16); color:#f2585f;}
   /* お題・議題ボード（定例ごと → Excel風テーブル）*/
   #topicModal .m{width:min(900px,96vw);}
+  .tphint{font-size:12px; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px 11px; margin-bottom:12px; line-height:1.6;}
+  .tpgcal{background:linear-gradient(180deg,#5b8def,#3f6fd6); color:#fff; font-weight:700; border:none; border-radius:8px; padding:7px 13px; cursor:pointer; font-family:inherit; font-size:12.5px; margin-left:auto; white-space:nowrap;}
+  .tpgcal:hover{filter:brightness(1.08);}
   .mtadd{display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
   .mtadd input{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px;}
   .mtadd input.tt{flex:1; min-width:180px;}
@@ -807,7 +810,7 @@ function seedData(){
     });
   });
   const big={ id:nid(), kind:'big', name:'制作物', children: order.map(a=>mids[a]) };
-  return { view:'month', projectStart:'2026-06-01', projectEnd:'2027-04-30', tree:[big], seq, meetings:[], topics:[] };
+  return { view:'month', projectStart:'2026-06-01', projectEnd:'2027-04-30', tree:[big], seq, meetings:[], topics:[], members:[] };
 }
 
 // ===== 状態 =====
@@ -894,6 +897,7 @@ window.__mergeBoards=function(remote, local){
   out.tree=__mergeSiblings(remote.tree, local.tree);
   out.meetings=__mergeList(remote.meetings, local.meetings); // 定例も同時編集で消えないようマージ
   out.topics=__mergeList(remote.topics, local.topics);       // お題も同時編集で消えないようマージ
+  out.members=__mergeList(remote.members, local.members);    // メンバー名簿(ログイン者)もマージ
   return out; };
 // マージ結果を反映（入力中はUI再描画を控える）
 window.__applyMerged=function(merged){
@@ -1643,8 +1647,17 @@ document.getElementById('helpModal').addEventListener('click', e=>{ if(e.target.
 function ensureBoards(){
   if(!Array.isArray(state.meetings)) state.meetings=[];
   if(!Array.isArray(state.topics)) state.topics=[];
+  if(!Array.isArray(state.members)) state.members=[];
   state.topics.forEach(t=>{ if(t && t.text!=null && t.todo==null){ t.todo=t.text; delete t.text; } });  // 旧リスト形式を「やること」へ移行
   return true; }
+// ログインした人を参加者候補（メンバー名簿）に自動登録。全員のメールを事前に知らなくても、ログインが進むほど招待先が揃う。
+window.__registerMember=function(email, name){
+  if(!email) return; ensureBoards();
+  const now=Date.now(); let m=state.members.find(x=>x&&x.id===email);
+  if(m){ if(name && !m.name) m.name=name; m.lastSeen=now; m._u=now; }
+  else { state.members.push({ id:email, name:name||String(email).split('@')[0], lastSeen:now, _u:now }); }
+  persist();   // 履歴に乗せず共有(Supabase)へ反映（マージで他者のメンバーも保持）
+};
 function uid(p){ return p+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7); }
 function meAuthor(){ return currentUser() || (window.__user? String(window.__user).split('@')[0] : ''); }
 let _openMeeting=null;   // null=定例一覧／会議id=その会議のお題テーブル
@@ -1659,8 +1672,10 @@ function renderTopics(){
 }
 function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  const mem=state.members||[];
   let h=`<div class="mtadd"><input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）">`+
         `<input id="mtDate" type="date"><button id="mtAddBtn">＋ 定例を追加</button></div>`;
+  h+=`<div class="tphint">👥 ログイン済みメンバー ${mem.length}名${mem.length?'：'+mem.map(x=>esc(x.name||x.id)).join('、'):'（まだいません。各自がログインすると、ここに参加者候補として自動で貯まります）'}</div>`;
   h+=`<div class="tpsec">定例一覧（クリックでお題を記入）</div>`;
   h+= list.length ? list.map(m=>{ const c=mtCounts(m.id);
       return `<div class="mtrow" data-open-mt="${esca(m.id)}">`+
@@ -1674,8 +1689,11 @@ function renderMeetingList(box){
 function renderMeetingTable(box){
   const m=state.meetings.find(x=>x.id===_openMeeting);
   const rows=state.topics.filter(t=>t&&t.meetingId===_openMeeting);
+  const mem=state.members||[];
   let h=`<div class="tphd"><button class="tpback" id="tpBack">← 定例一覧</button>`+
-        `<div><div class="tpttl">${esc(m.title||'(無題の定例)')}</div><div class="tpsub">${esc(m.date||'日付未設定')}</div></div></div>`;
+        `<div><div class="tpttl">${esc(m.title||'(無題の定例)')}</div><div class="tpsub">${esc(m.date||'日付未設定')}</div></div>`+
+        `<button class="tpgcal" id="tpGcal" title="Googleカレンダーに予定を作成（お題を説明欄に、ログイン済みメンバーを招待先に自動セット）">📅 Googleカレンダーに登録</button></div>`;
+  h+=`<div class="tphint">📅 招待先＝ログイン済みメンバー ${mem.length}名${mem.length?'（'+mem.map(x=>esc(x.name||x.id)).join('、')+'）':'（まだ0名）'}。不足分はGoogleカレンダー画面で追加できます。時間は既定14:00〜15:00で開きます。</div>`;
   h+=`<table class="tptbl"><thead><tr><th></th><th>名前</th><th>やること</th><th>詳細</th><th></th></tr></thead><tbody>`;
   h+= rows.length ? rows.map(t=>`<tr class="${t.done?'done':''}" data-tid="${esca(t.id)}">`+
       `<td class="c-chk"><button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'未対応に戻す':'対応済みにする'}">${t.done?'✓':''}</button></td>`+
@@ -1709,11 +1727,21 @@ function delTopic(id){ const t=state.topics.find(x=>x&&x.id===id); if(!t) return
 function editCell(id, field, text){ const t=state.topics.find(x=>x&&x.id===id); if(!t||!field) return;
   const v=String(text==null?'':text), cur=(t[field]==null?'':String(t[field]));
   if(v===cur) return; t[field]=v; t._u=Date.now(); save(); }
+function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレートURL（認証不要・入力済みで開く）
+  const rows=state.topics.filter(t=>t&&t.meetingId===m.id);
+  const det='■お題\n'+(rows.length? rows.map(t=>`・[${t.name||''}] ${t.todo||''}${t.detail?' — '+t.detail:''}`).join('\n') : '（お題未記入）');
+  const p=new URLSearchParams(); p.set('action','TEMPLATE'); p.set('text', m.title||'定例');
+  if(m.date){ const d=String(m.date).replace(/-/g,''); p.set('dates', d+'T140000/'+d+'T150000'); p.set('ctz','Asia/Tokyo'); }
+  p.set('details', det);
+  const guests=(state.members||[]).map(x=>x&&x.id).filter(Boolean).join(',');
+  if(guests) p.set('add', guests);
+  return 'https://calendar.google.com/calendar/render?'+p.toString(); }
 { const _kb=document.getElementById('kpibar'); if(_kb) _kb.addEventListener('click', e=>{ if(e.target.closest('#kpiMeet')) openTopics(); }); }
 document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.id==='topicModal'||e.target.id==='topicClose') document.getElementById('topicModal').classList.remove('on'); });
 document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#tpBack')){ _openMeeting=null; renderTopics(); return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
+  if(e.target.closest('#tpGcal')){ const m=state.meetings.find(x=>x.id===_openMeeting); if(m) window.open(gcalUrl(m),'_blank','noopener'); return; }
   if(e.target.closest('#tpAddRow')){ addRow(); return; }
   const dmt=e.target.closest('[data-del-mt]'); if(dmt){ e.stopPropagation(); delMeeting(dmt.dataset.delMt); return; }
   const omt=e.target.closest('[data-open-mt]'); if(omt){ _openMeeting=omt.dataset.openMt; renderTopics(); return; }
@@ -2510,6 +2538,8 @@ async function afterLogin(session){
   gate.style.display='none';
   setStatus('● '+myEmail.split('@')[0]+'（共有中）','#8fe7b4');
   if(!started){ started=true; window.__initApp(board); } else if(board) window.__applyRemote(board);
+  // ログインした本人を参加者候補（メンバー名簿）に登録
+  try{ const md=session.user.user_metadata||{}; const nm=md.full_name||md.name||''; if(window.__registerMember) window.__registerMember(myEmail, nm); }catch(e){}
   sb.channel('board').on('postgres_changes', {event:'UPDATE',schema:'public',table:'schedule_board',filter:'id=eq.main'}, (p)=>{
     if(!p.new || p.new.updated_by===myEmail) return;             // 自分の更新は無視
     if(p.new.data && p.new.data.tree){
