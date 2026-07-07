@@ -1163,10 +1163,10 @@ function smallRowHTML(t, counter){
        `<button class="mini add" data-addchild="${t.id}" title="＋タスク（サブタスク追加）">＋</button>`+
      `</span></div></td>`;
   h+=`<td class="sl c-role role${t.status==='unassigned'?' unassigned':''}" data-f="role" contenteditable="${isEdit()}">${esc(t.role)}</td>`;
-  // 集計作業はロールアップ期間、末端は自分の期間
+  // 集計作業はロールアップ期間、末端は自分の期間。子に日付が無ければ親自身の日付で表示
   const rr = group ? rollupRange(t) : null;
-  const es = group ? (rr?ymd(rr.lo):null) : t.start;
-  const ee = group ? (rr?ymd(rr.hi):null) : t.end;
+  const es = group ? (rr?ymd(rr.lo):t.start) : t.start;
+  const ee = group ? (rr?ymd(rr.hi):t.end) : t.end;
   const dtxt = (es&&ee) ? `${mdNum(parse(es))}〜${mdNum(parse(ee))}` : '';
   let pill;
   if(group){ const r=rollupProgress(t);
@@ -1204,9 +1204,9 @@ function taskRowHTML(t, counter, depth, stepNo){
      `<span class="ctrls"><button class="mini add" data-addchild="${t.id}" title="＋タスク（さらに下の階層）">＋</button></span>`+
      `</div></td>`;
   h+=`<td class="sl c-role"></td>`;
-  const rr = group ? rollupRange(t) : null;
-  const es = group ? (rr?ymd(rr.lo):null) : t.start;
-  const ee = group ? (rr?ymd(rr.hi):null) : t.end;
+  const rr = group ? rollupRange(t) : null;   // 子に日付が無ければ親自身の日付で表示
+  const es = group ? (rr?ymd(rr.lo):t.start) : t.start;
+  const ee = group ? (rr?ymd(rr.hi):t.end) : t.end;
   const dtxt = (es&&ee) ? `${mdNum(parse(es))}〜${mdNum(parse(ee))}` : '';
   let pill;
   if(group){ const r=rollupProgress(t);
