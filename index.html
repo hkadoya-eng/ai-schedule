@@ -478,7 +478,7 @@
   .mtadd{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:11px 12px;}
   .mtadd .rm{width:150px;} .mtadd .mtsep{color:var(--dim);}
   .tsel{background:var(--panel3); color:var(--text); border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-family:inherit; font-size:12.5px; color-scheme:dark; cursor:pointer;}
-  .tsel:hover{border-color:var(--teal);}
+  .tsel:hover{border-color:var(--teal);} .tsel.rmsel{min-width:130px;}
   .mtrow .mtgcal{flex:none; background:rgba(91,141,239,.16); color:#9dbbf5; border:1px solid rgba(91,141,239,.45); border-radius:7px; padding:4px 10px; cursor:pointer; font-size:13px;}
   .mtrow .mtgcal:hover{filter:brightness(1.12);}
   .tphd .tpmeta{flex:1; min-width:0;}
@@ -1694,11 +1694,24 @@ function mtWhen(m){ return `${esc(m.date||'日付未設定')}${m.start?' '+esc(m
 function timeOpts(sel, ph){ let o=`<option value=""${sel?'':' selected'}>${ph||'--:--'}</option>`;   // 15分刻みの時刻オプション（8:00〜21:45）
   for(let h=8;h<=21;h++) for(const mm of ['00','15','30','45']){ const v=String(h).padStart(2,'0')+':'+mm; o+=`<option value="${v}"${v===sel?' selected':''}>${v}</option>`; }
   return o; }
+// 会議室（Googleカレンダーのリソース）。res=リソースのメール。カレンダー登録時に招待するとその部屋が予約される。
+const ROOMS=[
+  {k:'会議室S', res:'key-cre.co.jp_35323634303331313730@resource.calendar.google.com'},
+  {k:'会議室L', res:'key-cre.co.jp_3638343532353334353638@resource.calendar.google.com'},
+  {k:'B1会議室', res:'c_1884ub5i3imc2ibmhnci82snrf8ds@resource.calendar.google.com'},
+  {k:'防音室', res:'key-cre.co.jp_1880rb49enmpkiudk4qq55c65i20i@resource.calendar.google.com'},
+  {k:'オンライン(Zoom)', res:'key-cre.co.jp_1880duaanlq32ie9ioa4khgv59sdo@resource.calendar.google.com'},
+];
+function roomOpts(sel){ let o='<option value="">（会議室なし）</option>'; let found=false;
+  o+=ROOMS.map(r=>{ if(r.k===sel) found=true; return `<option value="${esca(r.k)}"${r.k===sel?' selected':''}>${esc(r.k)}</option>`; }).join('');
+  if(sel && !found) o+=`<option value="${esca(sel)}" selected>${esc(sel)}（その他）</option>`;
+  return o; }
+function roomRes(name){ const r=ROOMS.find(x=>x.k===name); return r?r.res:''; }
 function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
   let h=`<div class="mtadd"><input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）">`+
         `<input id="mtDate" type="date" title="日付"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts('','開始')}</select><span class="mtsep">〜</span>`+
-        `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts('','終了')}</select><input id="mtRoom" type="text" class="rm" placeholder="会議室/オンライン" title="場所">`+
+        `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts('','終了')}</select><select id="mtRoom" class="tsel rmsel" title="会議室">${roomOpts('')}</select>`+
         `<button id="mtAddBtn">＋ 定例を追加</button></div>`;
   h+=`<div class="tpsec">定例一覧（クリックでお題を記入／📅でカレンダー登録）</div>`;
   h+= list.length ? list.map(m=>{ const c=mtCounts(m.id);
@@ -1719,7 +1732,7 @@ function renderMeetingTable(box){
           `<div class="mtline"><input class="mtedit" type="date" data-mt="date" value="${esca(m.date||'')}">`+
           `<select class="mtedit tsel" data-mt="start" title="開始">${timeOpts(m.start||'','開始')}</select><span class="mtsep">〜</span>`+
           `<select class="mtedit tsel" data-mt="end" title="終了">${timeOpts(m.end||'','終了')}</select>`+
-          `<input class="mtedit rm" type="text" data-mt="room" value="${esca(m.room||'')}" placeholder="会議室/オンライン"></div></div>`+
+          `<select class="mtedit tsel rmsel" data-mt="room" title="会議室">${roomOpts(m.room||'')}</select></div></div>`+
         `<button class="tpgcal" id="tpGcal" title="Googleカレンダーに予定を作成（お題を説明欄に、ログイン済みメンバーを招待先に自動セット）">📅 Googleカレンダーに登録</button></div>`;
   h+=`<div class="tphint">📅 「登録」で日時・会議室・お題・招待先（ログイン済みメンバー）が入った状態でGoogleカレンダーが開きます。不足分はその画面で追加できます。</div>`;
   h+=`<table class="tptbl"><thead><tr><th></th><th>名前</th><th>やること</th><th>詳細</th><th></th></tr></thead><tbody>`;
@@ -1768,8 +1781,9 @@ function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレー
     p.set('dates', d+'T'+st.replace(':','')+'00/'+d+'T'+en.replace(':','')+'00'); p.set('ctz','Asia/Tokyo'); }
   p.set('details', det);
   if(m.room) p.set('location', m.room);
-  const guests=(state.members||[]).map(x=>x&&x.id).filter(Boolean).join(',');
-  if(guests) p.set('add', guests);
+  const guestArr=(state.members||[]).map(x=>x&&x.id).filter(Boolean);
+  const rr=roomRes(m.room); if(rr) guestArr.push(rr);   // 会議室リソースを招待＝その部屋を予約
+  if(guestArr.length) p.set('add', guestArr.join(','));
   return 'https://calendar.google.com/calendar/render?'+p.toString(); }
 { const _kb=document.getElementById('kpibar'); if(_kb) _kb.addEventListener('click', e=>{ if(e.target.closest('#kpiMeet')) openTopics(); }); }
 document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.id==='topicModal'||e.target.id==='topicClose') document.getElementById('topicModal').classList.remove('on'); });
