@@ -327,6 +327,21 @@
   .smrow .smn{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .smrow .smmeta{color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap;}
   .smrow.overdue .smn{color:#ff9ba1; font-weight:600;} .smrow.behind .smn{color:#f2c760;}
+  .smrow.done .smn{text-decoration:line-through; color:#6f8093;}
+  /* 印刷／PDF：サマリーだけを白地で出す（会議配布用） */
+  @media print {
+    body * { visibility:hidden !important; }
+    #summaryModal, #summaryModal * { visibility:visible !important; }
+    #summaryModal{ position:absolute !important; inset:0 !important; display:block !important; background:#fff !important; }
+    #summaryModal .m{ width:100% !important; max-height:none !important; box-shadow:none !important; border:none !important; background:#fff !important; }
+    #summaryModal .mh, #summaryModal .mb{ background:#fff !important; }
+    #summaryModal .mf{ display:none !important; }
+    #summaryModal *{ color:#111 !important; }
+    #summaryModal .smstat>div{ border:1px solid #bbb !important; background:#fff !important; }
+    #summaryModal .smrow{ border-bottom:1px solid #ccc !important; }
+    #summaryModal .smrow.overdue .smn{ color:#c62828 !important; font-weight:700 !important; }
+    #summaryModal .tpsec{ color:#333 !important; }
+  }
   /* バー：発光＋未達は暗く */
   .bar{box-shadow:0 1px 6px rgba(0,0,0,.4); outline:1px solid rgba(255,255,255,.08);}
   .bar.pend{background-image:linear-gradient(rgba(10,16,24,.60),rgba(10,16,24,.60))!important;}
@@ -663,6 +678,9 @@
   <button id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
   <button id="depToggle" title="依存関係の矢印を表示／非表示（詳細パネルの「依存」に先行No.を入力）">🔗 依存線 ▷</button>
   <div class="mrow">📅 期間 <input type="date" id="pStart"><span>〜</span><input type="date" id="pEnd"></div>
+  <div class="mlabel">ビュー・履歴</div>
+  <button id="myBtn" title="自分が担当の作業だけをまとめて表示">👤 自分の作業</button>
+  <button id="histBtn" title="誰がいつ何を変えたかの履歴">📜 変更履歴</button>
   <div class="mlabel">メンバー・予定</div>
   <button id="memBtn" title="アプリにログインした人の一覧（打合せの招待先候補）">👥 ログイン済みメンバー</button>
   <button id="msBtn" title="申請日・納期などの締切をガントに縦線で表示">🚩 マイルストーン</button>
@@ -728,7 +746,19 @@
 <div class="modal" id="summaryModal"><div class="m">
   <div class="mh"><div class="t">📊 今週のサマリー</div><div class="s">全体進捗・遅延・今週やること・直近マイルストーン。会議でそのまま共有できます。</div></div>
   <div class="mb" id="summaryBody"></div>
-  <div class="mf"><button class="ghost" id="sumCopy">📋 テキストでコピー</button><button class="big" id="summaryClose">閉じる</button></div>
+  <div class="mf"><button class="ghost" id="sumCopy">📋 テキストでコピー</button><button class="ghost" id="sumPrint">🖨 印刷／PDF</button><button class="big" id="summaryClose">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="myModal"><div class="m">
+  <div class="mh"><div class="t">👤 自分の作業</div><div class="s">ヘッダーの「👤 氏名」に入れた名前と担当が一致する作業を、急ぎ順に表示します。</div></div>
+  <div class="mb" id="myBody"></div>
+  <div class="mf"><button class="ghost" id="myClose">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="histModal"><div class="m">
+  <div class="mh"><div class="t">📜 変更履歴</div><div class="s">最近更新された項目（新しい順）。誰がいつ変えたかを確認できます。</div></div>
+  <div class="mb" id="histBody"></div>
+  <div class="mf"><button class="ghost" id="histClose">閉じる</button></div>
 </div></div>
 
 <script>
@@ -2016,8 +2046,38 @@ function summaryText(){ const d=summaryData(); const L=[];
 document.getElementById('sumBtn').addEventListener('click', ()=>{ renderSummary(); document.getElementById('summaryModal').classList.add('on'); });
 document.getElementById('summaryModal').addEventListener('click', e=>{
   if(e.target.id==='summaryModal'||e.target.id==='summaryClose'){ document.getElementById('summaryModal').classList.remove('on'); return; }
-  const cp=e.target.closest('#sumCopy'); if(cp){ try{ navigator.clipboard.writeText(summaryText()); const o=cp.textContent; cp.textContent='✓ コピーしました'; setTimeout(()=>{cp.textContent=o;},1500); }catch(err){ alert('コピーできませんでした'); } }
+  const cp=e.target.closest('#sumCopy'); if(cp){ try{ navigator.clipboard.writeText(summaryText()); const o=cp.textContent; cp.textContent='✓ コピーしました'; setTimeout(()=>{cp.textContent=o;},1500); }catch(err){ alert('コピーできませんでした'); } return; }
+  if(e.target.closest('#sumPrint')){ window.print(); return; }
 });
+
+// ===== 自分の作業ビュー =====
+function renderMyTasks(){ const box=document.getElementById('myBody'); if(!box) return;
+  const u=currentUser();
+  if(!u){ box.innerHTML='<div class="tpempty">先にヘッダーの「👤 氏名」に自分の名前を入れてください。担当名と一致する作業を集めます。</div>'; return; }
+  const mine=collectLeafInfo().filter(x=> String(x.role||'').indexOf(u)>=0);
+  const ord=x=>{ const ss=schedStatus(x.n); if(ss==='overdue')return 0; if(ss==='behind')return 1; const st=getStage(x.n);
+    if(st==='完了')return 5; if(st==='保留')return 4; if(st==='着手'||st==='レビュー中')return 2; return 3; };
+  mine.sort((a,b)=>ord(a)-ord(b));
+  const done=mine.filter(x=>getStage(x.n)==='完了').length;
+  let h=`<div class="tpsec">${esc(u)} の担当作業（${mine.length}件・完了 ${done}）</div>`;
+  h+= mine.length? mine.map(x=>{ const ss=schedStatus(x.n),st=getStage(x.n);
+    return `<div class="smrow ${ss||''} ${st==='完了'?'done':''}"><span class="smn">${lateMark(ss)}${esc(x.n.name)}</span><span class="smmeta">${st} ${getProgress(x.n)}% ／ ${x.n.start?mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):'日付未設定'}</span></div>`; }).join('')
+    : '<div class="tpempty">担当の作業が見つかりません。担当欄の表記が氏名と一致しているか確認してください。</div>';
+  box.innerHTML=h; }
+document.getElementById('myBtn').addEventListener('click', ()=>{ closeMore(); renderMyTasks(); document.getElementById('myModal').classList.add('on'); });
+document.getElementById('myModal').addEventListener('click', e=>{ if(e.target.id==='myModal'||e.target.id==='myClose') document.getElementById('myModal').classList.remove('on'); });
+
+// ===== 変更履歴 =====
+function renderHistory(){ const box=document.getElementById('histBody'); if(!box) return;
+  const arr=[]; walkAll(state.tree, n=>{ if(n&&n._u) arr.push(n); });
+  arr.sort((a,b)=>(+b._u||0)-(+a._u||0));
+  const top=arr.slice(0,60);
+  let h=`<div class="tpsec">最近の変更（${top.length}）</div>`;
+  h+= top.length? top.map(n=>`<div class="smrow"><span class="smn">${esc(n.name||'(無題)')}</span><span class="smmeta">${esc((String(n._by||'').split('@')[0])||'—')} ／ ${fmtBkTime(+n._u)}</span></div>`).join('')
+    : '<div class="tpempty">変更履歴はまだありません（編集すると記録されます）。</div>';
+  box.innerHTML=h; }
+document.getElementById('histBtn').addEventListener('click', ()=>{ closeMore(); renderHistory(); document.getElementById('histModal').classList.add('on'); });
+document.getElementById('histModal').addEventListener('click', e=>{ if(e.target.id==='histModal'||e.target.id==='histClose') document.getElementById('histModal').classList.remove('on'); });
 
 document.getElementById('resetBtn').addEventListener('click', ()=>{
   if(!confirm('⚠️ 初期化（1/2）\n\n今のデータ（進捗・サブタスク・レポート・リンク等）をすべて破棄し、初期サンプル(34件)に置き換えます。\n通常この操作は不要です。続けますか？')) return;
