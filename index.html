@@ -350,8 +350,10 @@
   }
   /* バー：発光＋未達は暗く */
   .bar{box-shadow:0 1px 6px rgba(0,0,0,.4); outline:1px solid rgba(255,255,255,.08);}
-  .bar.pend{background-image:linear-gradient(rgba(10,16,24,.60),rgba(10,16,24,.60))!important;}
-  .bar.edge{box-shadow:inset -2px 0 0 rgba(0,0,0,.4);}
+  /* 進捗：済み=はっきり色／残り=ミュート＋ハッチのトラック。境界は明るい線で明確化 */
+  .bar.pend{background-image:linear-gradient(rgba(10,16,24,.48),rgba(10,16,24,.48)),repeating-linear-gradient(45deg,rgba(255,255,255,.11) 0 3px,transparent 3px 7px)!important; outline:1px solid rgba(255,255,255,.13);}
+  .bar.edge{box-shadow:inset -3px 0 0 rgba(255,255,255,.6);}
+  .bl-over{color:#ffb3b3; font-weight:700;}
   .roll{background:rgba(146,164,186,.28);}
   tr.hold td.tl .bar{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.16) 0 3px,transparent 3px 6px)!important;}
   tr.done .iname{color:#6f8093; text-decoration-color:#3a4a5c;}
@@ -583,7 +585,8 @@
   .tpaddrow button:hover{border-color:var(--teal);}
   /* 右クリックメニュー */
   #ctxMenu button{width:196px; display:flex; align-items:center; gap:9px;}
-  #moreMenu button{width:184px; display:flex; align-items:center; gap:9px;}
+  #moreMenu button{width:230px; display:flex; align-items:center; gap:9px; white-space:nowrap;}
+  #moreMenu .minfo{width:230px; font-size:11px; color:var(--muted); padding:2px 10px 7px; word-break:break-all; line-height:1.5;}
   #ctxMenu button.danger{color:#e78a93;}
   .ctxsep{height:1px; background:var(--line2); margin:5px 4px;}
   /* モード表示トースト */
@@ -692,6 +695,7 @@
   <button id="memBtn" title="アプリにログインした人の一覧（打合せの招待先候補）">👥 ログイン済みメンバー</button>
   <button id="msBtn" title="申請日・納期などの締切をガントに縦線で表示">🚩 マイルストーン</button>
   <div class="mlabel">データ（管理者向け）</div>
+  <div class="minfo" id="baseInfo"></div>
   <button id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む（管理者向け）">📊 ベース取込</button>
   <button id="exportBtn">💾 書き出し（保存）</button>
   <button id="importBtn">📂 読み込み</button>
@@ -1338,6 +1342,15 @@ function barCellsHTML(node, es, ee, pct, editable, group){
   const doneCells = cr ? Math.round(spanLen*pct/100) : 0;
   let h='';
   const labelable = (node.kind==='small'||node.kind==='task');
+  const _today=new Date(); _today.setHours(0,0,0,0);
+  let labelMeta='';
+  if(labelable && !group){
+    if(pct>0 && pct<100) labelMeta+=' '+pct+'%';
+    if(getStage(node)!=='完了' && node.end){ const dl=Math.round((parse(node.end)-_today)/86400000);
+      labelMeta += dl<0 ? ' ・<span class="bl-over">超過'+(-dl)+'日</span>' : (dl<=14 ? ' ・あと'+dl+'日' : ''); }
+  } else if(labelable && group){
+    if(pct>0 && pct<100) labelMeta+=' '+pct+'%';
+  }
   COLS.forEach((c,ci)=>{ const cls=['tl']; if(c.mend)cls.push('mend'); if(c.weekend)cls.push('weekend'); if(ci===_todayCol)cls.push('today'); if(_msByCol[ci])cls.push('mstone');
     let bar='', isStart=false;
     if(hasBar && a<=c.end && b>=c.start){
@@ -1353,7 +1366,7 @@ function barCellsHTML(node, es, ee, pct, editable, group){
     }
     let label='';
     if(isStart && labelable){ cls.push('labelcell');
-      label=`<span class="bar-label">${esc(node.name||'')}${(!group&&pct>0&&pct<100)?' '+pct+'%':''}</span>`; }
+      label=`<span class="bar-label">${esc(node.name||'')}${labelMeta}</span>`; }
     const leafAttr = editable ? ` data-leaf="${node.id}" data-ci="${ci}"` : '';
     h+=`<td class="${cls.join(' ')}"${leafAttr}>${bar}${label}</td>`; });
   return h;
@@ -1474,9 +1487,9 @@ function renderLegend(){
 }
 function renderSubtitle(){
   const v={month:'マンスリー',week:'ウィークリー',day:'デイリー'}[state.view];
-  let s=`${v}ガント（${state.projectStart} 〜 ${state.projectEnd}）`;
-  if(state.baseFile){ const nm=String(state.baseFile).split(/[\\/]/).pop(); s+=` ／ ベース: ${nm}`; }
-  document.getElementById('subtitle').textContent=s;
+  document.getElementById('subtitle').textContent=`${v}ガント（${state.projectStart} 〜 ${state.projectEnd}）`;
+  const bi=document.getElementById('baseInfo');   // ベースファイル名は⚙管理の中に表示
+  if(bi){ const nm=state.baseFile?String(state.baseFile).split(/[\\/]/).pop():'（未取込）'; bi.textContent='ベース: '+nm; }
 }
 
 // ===== テキスト編集（blur保存）=====
