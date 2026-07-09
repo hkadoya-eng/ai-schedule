@@ -848,7 +848,7 @@ function chargeInfo(k){ return CHARGES.find(c=>c.k===k)||null; }
 function chargeColor(ch){ return ch==='ai'?'var(--teal)':ch==='collab'?'#49c98a':ch==='human'?'#e8a15e':'var(--navy)'; }  // バー色＝担い手
 // 行に置く担い手バッジ（クリックで 未設定→AI→協働→人 と循環）。末端タスクのみ。
 function chgTagHTML(t){ if(!isLeaf(t)) return '';
-  const map={ai:['AI','ch-ai'],collab:['協','ch-collab'],human:['人','ch-human']}, m=map[t.charge]||['ー','ch-none'];
+  const map={ai:['AI','ch-ai'],collab:['共','ch-collab'],human:['人','ch-human']}, m=map[t.charge]||['ー','ch-none'];
   const lbl=chargeInfo(t.charge)?chargeInfo(t.charge).label:'未設定';
   return `<span class="chgtag ${m[1]}" data-chgcycle="${t.id}" title="担い手: ${lbl}（クリックで 未設定→AI主体→人＋AI→人主体 と切替。バー色に反映）">${m[0]}</span>`; }
 function dueStatus(due){ if(!due) return null; const d=parse(due); const now=new Date(); now.setHours(0,0,0,0);
