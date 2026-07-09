@@ -299,7 +299,7 @@
     font-size:10px; line-height:1.35; color:#f4f8ff; font-weight:600;
     background:rgba(8,13,20,.55); padding:1px 5px; border-radius:4px;
     text-shadow:0 1px 1px rgba(0,0,0,.75); pointer-events:none; z-index:2;}
-  td.tl.labelcell{z-index:4;}
+  td.tl.labelcell{z-index:2;}   /* バーラベルは後続バーの上・ただし左固定列(.sl=z-index:3)より下＝スクロールで固定列が隠す */
   body.show-barlabel .bar-label{display:block;}
   td.tl.today{box-shadow:inset 2px 0 0 #ff8a5c; background:rgba(255,138,92,.06);}
   th.unit.today{box-shadow:inset 2px 0 0 #ff8a5c; color:#ffb98c;}
