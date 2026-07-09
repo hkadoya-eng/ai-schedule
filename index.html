@@ -342,6 +342,13 @@
   #legendBar .lgchip i{width:12px; height:12px; border-radius:3px; display:inline-block;}
   #legendBar .lgsep{width:1px; height:14px; background:var(--line);}
   #legendBar .lghint{color:var(--dim); font-size:10.5px;}
+  /* 行内の担い手バッジ（クリックで循環） */
+  .chgtag{display:inline-flex; align-items:center; justify-content:center; min-width:17px; height:15px; padding:0 4px; margin-right:5px; border-radius:4px; font-size:9.5px; font-weight:700; cursor:pointer; border:1px solid transparent; vertical-align:middle;}
+  .chgtag.ch-ai{background:rgba(47,182,176,.2); color:var(--teal); border-color:rgba(47,182,176,.5);}
+  .chgtag.ch-collab{background:rgba(73,201,138,.2); color:#7fe0ab; border-color:rgba(73,201,138,.5);}
+  .chgtag.ch-human{background:rgba(232,161,94,.22); color:#e8a15e; border-color:rgba(232,161,94,.5);}
+  .chgtag.ch-none{background:var(--panel3); color:var(--dim); border-color:var(--line);}
+  .chgtag:hover{filter:brightness(1.18);}
   /* 印刷／PDF：サマリーだけを白地で出す（会議配布用） */
   @media print {
     body * { visibility:hidden !important; }
@@ -838,6 +845,11 @@ const CHARGES=[{k:'ai',label:'AI主体',cls:'ch-ai',who:'ai'},{k:'collab',label:
 const PRIOS=[{k:'high',label:'高',cls:'pr-high'},{k:'mid',label:'中',cls:'pr-mid'},{k:'low',label:'低',cls:'pr-low'}];
 function chargeInfo(k){ return CHARGES.find(c=>c.k===k)||null; }
 function chargeColor(ch){ return ch==='ai'?'var(--teal)':ch==='collab'?'#49c98a':ch==='human'?'#e8a15e':'var(--navy)'; }  // バー色＝担い手
+// 行に置く担い手バッジ（クリックで 未設定→AI→協働→人 と循環）。末端タスクのみ。
+function chgTagHTML(t){ if(!isLeaf(t)) return '';
+  const map={ai:['AI','ch-ai'],collab:['協','ch-collab'],human:['人','ch-human']}, m=map[t.charge]||['ー','ch-none'];
+  const lbl=chargeInfo(t.charge)?chargeInfo(t.charge).label:'未設定';
+  return `<span class="chgtag ${m[1]}" data-chgcycle="${t.id}" title="担い手: ${lbl}（クリックで 未設定→AI主体→人＋AI→人主体 と切替。バー色に反映）">${m[0]}</span>`; }
 function dueStatus(due){ if(!due) return null; const d=parse(due); const now=new Date(); now.setHours(0,0,0,0);
   const diff=Math.round((d-now)/86400000);
   if(diff<0) return {cls:'over', label:`期限超過 ${-diff}日`, soon:true, over:true};
@@ -1431,7 +1443,7 @@ function smallRowHTML(t, counter){
      caretHTML(t)+
      `<span class="statusdot" data-status="${t.id}" title="状態: ${st.label}（クリックで変更）" style="background:${st.color}"></span>`+
      (apt?`<span class="apt ${apt.cls}" title="AI適性: ${esc(t.aptitude)}">${apt.ch}</span>`:'')+
-     pdotHTML(t)+ lateMark(ss)+
+     pdotHTML(t)+ lateMark(ss)+ chgTagHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls">`+
@@ -1475,7 +1487,7 @@ function taskRowHTML(t, counter, depth, stepNo){
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:${indent}px">`+
      caretHTML(t)+
      ((stepNo && !(depth||0)) ? `<span class="stepno" title="段取り ${stepNo} 番目">${stepNo}</span>` : `<span class="tasktick">└</span>`)+
-     pdotHTML(t)+ lateMark(ss)+
+     pdotHTML(t)+ lateMark(ss)+ chgTagHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls"><button class="mini add" data-addchild="${t.id}" title="＋タスク（さらに下の階層）">＋</button></span>`+
@@ -1530,6 +1542,8 @@ document.addEventListener('click', e=>{
   const cc=e.target.closest('[data-collapse]'); if(cc){ const r=findNode(cc.dataset.collapse);
     if(r){ r.node.collapsed=!r.node.collapsed; persist(); render(); } return; }
   const dot=e.target.closest('.statusdot'); if(dot){ openStatusPop(dot,dot.dataset.status); return; }
+  const chc=e.target.closest('[data-chgcycle]'); if(chc){ const r=findNode(chc.dataset.chgcycle);
+    if(r){ const n=r.node, CY=['','ai','collab','human']; n.charge=CY[(CY.indexOf(n.charge||'')+1)%CY.length]; touch(n); save(); render(); } return; }
   const pg=e.target.closest('[data-prog]'); if(pg){ openProgPop(pg,pg.dataset.prog); return; }
   const dbtn=e.target.closest('[data-detail]'); if(dbtn){ openDetail(dbtn.dataset.detail); return; }
   const ob=e.target.closest('[data-open]'); if(ob){ openViaPath(ob.dataset.open); return; }
