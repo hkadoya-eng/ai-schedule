@@ -136,7 +136,7 @@
   body.editing td.tl[data-leaf] .bar{cursor:move;}       /* バー中央は移動 */
   body.editing td.tl[data-leaf] .bar.s,
   body.editing td.tl[data-leaf] .bar.e{cursor:ew-resize;} /* 端は伸縮 */
-  body.editing td.tl[data-leaf] .bar.s.e{cursor:move;}    /* 1コマは移動 */
+  body.editing td.tl[data-leaf] .bar.s.e{cursor:ew-resize;}    /* 1コマ：左右で伸縮・中央で移動 */
   body.panning, body.panning *{cursor:grabbing!important; user-select:none;}
   .bar{position:absolute; left:-1px; right:-1px; top:5px; bottom:5px;}
   .bar.s{left:2px; border-top-left-radius:5px; border-bottom-left-radius:5px;}
@@ -1695,6 +1695,10 @@ grid.addEventListener('pointerdown', e=>{
       const onBar = cr && ci>=cr.lo && ci<=cr.hi;
       if(onBar){ let mode='move';
         if(cr.lo!==cr.hi){ if(ci===cr.lo) mode='resize-s'; else if(ci===cr.hi) mode='resize-e'; }  // 端は伸縮
+        else { // 1マス：セル内の左右をつかむと伸縮（左＝開始側へ／右＝終了側へ）、中央は移動
+          const barEl=e.target.closest('.bar'); const rct=(barEl||cell).getBoundingClientRect();
+          const rel=(e.clientX-rct.left)/Math.max(1,rct.width);
+          if(rel>0.6) mode='resize-e'; else if(rel<0.4) mode='resize-s'; }
         drag={ mode, id, startCi:ci, origLo:cr.lo, origHi:cr.hi, lo:cr.lo, hi:cr.hi, moved:false, x0:e.clientX, y0:e.clientY };
         paintPreview(); return; }
       // 編集ON・空きの末端セル → ドラッグでバー作成（ビーッと引ける）
