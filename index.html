@@ -335,6 +335,13 @@
   .smrow.overdue .smn{color:#ff9ba1; font-weight:600;} .smrow.behind .smn{color:#f2c760;}
   .smrow.done .smn{text-decoration:line-through; color:#6f8093;}
   .daterange{display:flex; gap:6px; align-items:center;} .daterange input{flex:1; min-width:0;} .daterange span{color:var(--dim);}
+  /* 担い手の凡例バー */
+  #legendBar{display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:5px 16px; background:#0d1620; border-bottom:1px solid var(--line); font-size:11px; color:var(--muted); flex:0 0 auto;}
+  #legendBar .lgttl{font-weight:700; color:var(--text);}
+  #legendBar .lgchip{display:inline-flex; align-items:center; gap:5px;}
+  #legendBar .lgchip i{width:12px; height:12px; border-radius:3px; display:inline-block;}
+  #legendBar .lgsep{width:1px; height:14px; background:var(--line);}
+  #legendBar .lghint{color:var(--dim); font-size:10.5px;}
   /* 印刷／PDF：サマリーだけを白地で出す（会議配布用） */
   @media print {
     body * { visibility:hidden !important; }
@@ -666,6 +673,17 @@
 
 <div class="kpibar" id="kpibar"></div>
 <div id="msBar"></div>
+<div id="legendBar">
+  <span class="lgttl">🎨 バー色＝担い手</span>
+  <span class="lgchip"><i style="background:var(--teal)"></i>AI主体</span>
+  <span class="lgchip"><i style="background:#49c98a"></i>人＋AI</span>
+  <span class="lgchip"><i style="background:#e8a15e"></i>人主体</span>
+  <span class="lgchip"><i style="background:var(--navy)"></i>未設定</span>
+  <span class="lgsep"></span>
+  <span class="lgchip"><i style="background:var(--crimson)"></i>AI対象外</span>
+  <span class="lgchip"><i style="background:var(--purple)"></i>出玉TBD</span>
+  <span class="lghint">（フェーズ α版／公開版 … は上の帯で表示）</span>
+</div>
 
 <div class="wrap">
   <table id="grid"></table>
@@ -819,6 +837,7 @@ function stageInfo(k){ return STAGES.find(s=>s.key===k) || STAGES[0]; }
 const CHARGES=[{k:'ai',label:'AI主体',cls:'ch-ai',who:'ai'},{k:'collab',label:'人＋AI',cls:'ch-collab',who:'collab'},{k:'human',label:'人主体',cls:'ch-human',who:'human'}];
 const PRIOS=[{k:'high',label:'高',cls:'pr-high'},{k:'mid',label:'中',cls:'pr-mid'},{k:'low',label:'低',cls:'pr-low'}];
 function chargeInfo(k){ return CHARGES.find(c=>c.k===k)||null; }
+function chargeColor(ch){ return ch==='ai'?'var(--teal)':ch==='collab'?'#49c98a':ch==='human'?'#e8a15e':'var(--navy)'; }  // バー色＝担い手
 function dueStatus(due){ if(!due) return null; const d=parse(due); const now=new Date(); now.setHours(0,0,0,0);
   const diff=Math.round((d-now)/86400000);
   if(diff<0) return {cls:'over', label:`期限超過 ${-diff}日`, soon:true, over:true};
@@ -1355,10 +1374,11 @@ function barCellsHTML(node, es, ee, pct, editable, group){
   } else if(labelable && group){
     if(pct>0 && pct<100) labelMeta+=' '+pct+'%';
   }
+  const _chg=chargeInfo(node.charge); const _chgTitle=_chg?('担い手: '+_chg.label):'担い手: 未設定';
   COLS.forEach((c,ci)=>{ const cls=['tl']; if(c.mend)cls.push('mend'); if(c.weekend)cls.push('weekend'); if(ci===_todayCol)cls.push('today'); if(_msByCol[ci])cls.push('mstone');
     let bar='', isStart=false;
     if(hasBar && a<=c.end && b>=c.start){
-      let col = phaseOfDate(c.start)?phaseOfDate(c.start).color:'var(--navy)';
+      let col = chargeColor(node.charge);       // バー色＝担い手（人/AI/協働）※フェーズは上の帯で表現
       if(node.status==='excluded') col='var(--crimson)';
       else if(node.status==='tbd') col='var(--purple)';
       const s=(c.start<=a && a<=c.end)?' s':''; const e=(c.start<=b && b<=c.end)?' e':'';
@@ -1366,7 +1386,7 @@ function barCellsHTML(node, es, ee, pct, editable, group){
       const pos = cr ? ci-cr.lo : 0;
       const pend = pos>=doneCells ? ' pend' : '';
       const edge = (doneCells>0 && doneCells<spanLen && pos===doneCells-1) ? ' edge' : '';
-      bar=`<div class="bar${s}${e}${pend}${edge}${group?' grp':''}" style="background:${col}"></div>`;
+      bar=`<div class="bar${s}${e}${pend}${edge}${group?' grp':''}" style="background:${col}" title="${_chgTitle}"></div>`;
     }
     let label='';
     if(isStart && labelable){ cls.push('labelcell');
