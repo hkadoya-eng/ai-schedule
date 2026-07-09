@@ -334,6 +334,7 @@
   .smrow .smmeta{color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap;}
   .smrow.overdue .smn{color:#ff9ba1; font-weight:600;} .smrow.behind .smn{color:#f2c760;}
   .smrow.done .smn{text-decoration:line-through; color:#6f8093;}
+  .daterange{display:flex; gap:6px; align-items:center;} .daterange input{flex:1; min-width:0;} .daterange span{color:var(--dim);}
   /* 印刷／PDF：サマリーだけを白地で出す（会議配布用） */
   @media print {
     body * { visibility:hidden !important; }
@@ -832,6 +833,7 @@ function caretHTML(n){ return hasKids(n)
   : `<span class="caret blank"></span>`; }
 // 期限＝バーの終了日（集計作業は子のロールアップ終了、無ければ自身のend）。手動の期限は廃止し常にこれを使う。
 function effEnd(t){ if((t.kind==='small'||t.kind==='task') && hasKids(t)){ const rr=rollupRange(t); if(rr) return ymd(rr.hi); } return t.end||''; }
+function effStart(t){ if((t.kind==='small'||t.kind==='task') && hasKids(t)){ const rr=rollupRange(t); if(rr) return ymd(rr.lo); } return t.start||''; }
 function dueChip(t){ const d=dueStatus(effEnd(t)); if(!d||!d.soon||getStage(t)==='完了') return '';
   return ` <span class="duetag ${d.over?'over':'soon'}">${d.over?'超過':'期限近'}</span>`; }
 // スケジュール遅延判定（末端・進捗対象・normalのみ）：'overdue'=バー終了を過ぎて未完了 / 'behind'=予定進捗より遅い
@@ -2556,7 +2558,12 @@ function openDetail(id){
     html+=`<div class="row2">
       <div class="fld"><label>優先度</label><div class="pickrow" id="dtPrio">`+
         PRIOS.map(p=>`<button data-prio="${p.k}" class="${p.cls}${t.priority===p.k?' on':''}">${p.label}</button>`).join('')+`</div></div>
-      <div class="fld"><label>期限${leaf?'（＝バー終了日）':'（子タスクの集計・自動）'}</label><input type="date" id="dtDue" value="${esca(effEnd(t))}"${leaf?'':' readonly'} title="${leaf?'ここを変えるとガントのバー終了日も動きます（バー＝期限で完全同期）':'子タスクの終了日から自動計算されます（子側で変更してください）'}"></div></div>`;
+      <div class="fld"><label>期間（開始〜終了＝期限）${leaf?'':'・集計自動'}</label>
+        <div class="daterange">
+          <input type="date" id="dtStart" value="${esca(effStart(t))}"${leaf?'':' readonly'} title="${leaf?'開始日（変更でガントのバーが動く）':'子タスクの集計（子側で変更）'}">
+          <span>〜</span>
+          <input type="date" id="dtEnd" value="${esca(effEnd(t))}"${leaf?'':' readonly'} title="${leaf?'終了日＝期限（変更でガントのバーが動く）':'子タスクの集計（子側で変更）'}">
+        </div></div></div>`;
     html+=`<div class="fld"><label>工数（AI効果）</label><div class="khours">
         <div class="h"><div class="l">見込 旧(h)</div><input id="dtHoursOld" type="number" min="0" placeholder="0" value="${t.hoursOld!=null?t.hoursOld:''}"></div>
         <div class="h"><div class="l">見込 新(h)</div><input id="dtHoursNew" type="number" min="0" placeholder="0" value="${t.hoursNew!=null?t.hoursNew:''}"></div>
@@ -2656,11 +2663,16 @@ function openDetail(id){
     t.priority=(t.priority===b.dataset.prio)?'':b.dataset.prio; save();
     pE.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.prio===t.priority)); render(); });
   // 期限
-  // 期限＝バー終了日で双方向同期：末端タスクは期限を編集するとバー終了日も動く（集計作業は子から自動＝readonly）。
-  const dE=document.getElementById('dtDue');
-  if(dE && !dE.readOnly) dE.addEventListener('change', ()=>{
-    t.end = dE.value || null;
-    if(t.end && !t.start) t.start = t.end;                                   // 開始未設定ならその日にバーを立てる
+  // 期間＝ガントのバーと双方向同期：末端タスクは開始/終了を編集するとバーも動く（集計作業は子から自動＝readonly）。
+  const sE=document.getElementById('dtStart'), eE=document.getElementById('dtEnd');
+  if(sE && !sE.readOnly) sE.addEventListener('change', ()=>{
+    t.start = sE.value || null;
+    if(t.start && !t.end) t.end = t.start;
+    if(t.start && t.end && parse(t.start) > parse(t.end)) t.end = t.start;   // 逆転防止
+    save(); render(); });
+  if(eE && !eE.readOnly) eE.addEventListener('change', ()=>{
+    t.end = eE.value || null;
+    if(t.end && !t.start) t.start = t.end;
     if(t.end && t.start && parse(t.start) > parse(t.end)) t.start = t.end;   // 逆転防止
     save(); render(); });
   // 工数
