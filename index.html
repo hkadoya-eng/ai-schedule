@@ -830,7 +830,9 @@ function pdotHTML(t){ return t.priority ? `<span class="pdot p-${t.priority}" ti
 function caretHTML(n){ return hasKids(n)
   ? `<span class="caret" data-collapse="${n.id}" title="折りたたみ／展開">${n.collapsed?'▶':'▼'}</span>`
   : `<span class="caret blank"></span>`; }
-function dueChip(t){ const d=dueStatus(t.due); if(!d||!d.soon||getStage(t)==='完了') return '';
+// 期限＝バーの終了日（集計作業は子のロールアップ終了、無ければ自身のend）。手動の期限は廃止し常にこれを使う。
+function effEnd(t){ if((t.kind==='small'||t.kind==='task') && hasKids(t)){ const rr=rollupRange(t); if(rr) return ymd(rr.hi); } return t.end||''; }
+function dueChip(t){ const d=dueStatus(effEnd(t)); if(!d||!d.soon||getStage(t)==='完了') return '';
   return ` <span class="duetag ${d.over?'over':'soon'}">${d.over?'超過':'期限近'}</span>`; }
 // スケジュール遅延判定（末端・進捗対象・normalのみ）：'overdue'=バー終了を過ぎて未完了 / 'behind'=予定進捗より遅い
 function schedStatus(t){
@@ -1196,7 +1198,7 @@ function computeKPIs(){
     if(s.kind==='small' && s.status && s.status!=='normal') return;  // AI対象外/未割当/TBD は集計外
     total++; sum+=getProgress(s); if(getStage(s)==='完了') done++;
     if(s.hoursOld!=null){ hOld+=(+s.hoursOld||0); hNew+=(s.hoursNew!=null?(+s.hoursNew||0):(+s.hoursOld||0)); }
-    if(getStage(s)!=='完了'){ const d=dueStatus(s.due); if(d&&d.soon){ dueSoon++; if(d.over) over++; } }
+    if(getStage(s)!=='完了'){ const d=dueStatus(effEnd(s)); if(d&&d.soon){ dueSoon++; if(d.over) over++; } }
     const _ss=schedStatus(s); if(_ss==='overdue') lateOver++; else if(_ss==='behind') behind++;
   }));
   const late=lateOver+behind;
@@ -1397,7 +1399,7 @@ function smallRowHTML(t, counter){
   const hasLink=(t.tools&&t.tools.trim())||(t.deps&&t.deps.trim())||(t.report&&t.report.trim());
   const stg=getStage(t), sp=stageInfo(stg), pct=getProgress(t);
   const editable=canEditProgress(t);   // 子タスクがある作業は編集不可
-  const _d=dueStatus(t.due), dOver=!!(_d&&_d.over&&stg!=='完了');
+  const _d=dueStatus(effEnd(t)), dOver=!!(_d&&_d.over&&stg!=='完了');
   const ss=schedStatus(t);
   const rowcls='row-small'+(stg==='完了'?' done':'')+(stg==='保留'?' hold':'')+(group?' has-kids':'')
     +(t.status==='excluded'?' excluded':'')+(dOver?' overdue':'')+(ss==='behind'?' behind':'')+(ss==='overdue'?' late':'')+(t.priority==='high'?' prio-hi':'');
@@ -1442,7 +1444,7 @@ function taskRowHTML(t, counter, depth, stepNo){
   const editable=canEditProgress(t);      // 子タスクがあると編集不可
   const hasLink=(t.tools&&t.tools.trim())||(t.deps&&t.deps.trim())||(t.report&&t.report.trim());
   const indent=64+(depth||0)*18;
-  const _d=dueStatus(t.due), dOver=!!(_d&&_d.over&&stg!=='完了');
+  const _d=dueStatus(effEnd(t)), dOver=!!(_d&&_d.over&&stg!=='完了');
   const ss=schedStatus(t);
   const rowcls='row-task'+(stg==='完了'?' done':'')+(stg==='保留'?' hold':'')+(group?' has-kids':'')
     +(dOver?' overdue':'')+(ss==='behind'?' behind':'')+(ss==='overdue'?' late':'')+(t.priority==='high'?' prio-hi':'');
@@ -2535,7 +2537,7 @@ function openDetail(id){
   // 旧・単一レポート → 週報配列へ移行
   if(isLeafReport && t.report && !t.reports){ t.reports=[{id:nextId(), date:'', author:t.updatedBy||'', text:t.report}]; delete t.report; }
   // バッジ（担い手・優先度・期限）
-  const chg=chargeInfo(t.charge), pr=PRIOS.find(p=>p.k===t.priority), dSt=dueStatus(t.due);
+  const chg=chargeInfo(t.charge), pr=PRIOS.find(p=>p.k===t.priority), dSt=dueStatus(effEnd(t));
   if(isLeafReport && (chg||pr||dSt)){
     html+=`<div class="dt-badges">`+
       (chg?`<span class="dbadge charge-${chg.k}">${chg.label}</span>`:'')+
@@ -2554,7 +2556,7 @@ function openDetail(id){
     html+=`<div class="row2">
       <div class="fld"><label>優先度</label><div class="pickrow" id="dtPrio">`+
         PRIOS.map(p=>`<button data-prio="${p.k}" class="${p.cls}${t.priority===p.k?' on':''}">${p.label}</button>`).join('')+`</div></div>
-      <div class="fld"><label>期限</label><input type="date" id="dtDue" value="${esca(t.due||'')}"></div></div>`;
+      <div class="fld"><label>期限${leaf?'（＝バー終了日）':'（子タスクの集計・自動）'}</label><input type="date" id="dtDue" value="${esca(effEnd(t))}"${leaf?'':' readonly'} title="${leaf?'ここを変えるとガントのバー終了日も動きます（バー＝期限で完全同期）':'子タスクの終了日から自動計算されます（子側で変更してください）'}"></div></div>`;
     html+=`<div class="fld"><label>工数（AI効果）</label><div class="khours">
         <div class="h"><div class="l">見込 旧(h)</div><input id="dtHoursOld" type="number" min="0" placeholder="0" value="${t.hoursOld!=null?t.hoursOld:''}"></div>
         <div class="h"><div class="l">見込 新(h)</div><input id="dtHoursNew" type="number" min="0" placeholder="0" value="${t.hoursNew!=null?t.hoursNew:''}"></div>
@@ -2654,8 +2656,13 @@ function openDetail(id){
     t.priority=(t.priority===b.dataset.prio)?'':b.dataset.prio; save();
     pE.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.prio===t.priority)); render(); });
   // 期限
+  // 期限＝バー終了日で双方向同期：末端タスクは期限を編集するとバー終了日も動く（集計作業は子から自動＝readonly）。
   const dE=document.getElementById('dtDue');
-  if(dE) dE.addEventListener('change', ()=>{ t.due=dE.value||''; save(); render(); });
+  if(dE && !dE.readOnly) dE.addEventListener('change', ()=>{
+    t.end = dE.value || null;
+    if(t.end && !t.start) t.start = t.end;                                   // 開始未設定ならその日にバーを立てる
+    if(t.end && t.start && parse(t.start) > parse(t.end)) t.start = t.end;   // 逆転防止
+    save(); render(); });
   // 工数
   const hoO=document.getElementById('dtHoursOld'), hoN=document.getElementById('dtHoursNew');
   const hoursChg=()=>{ t.hoursOld = hoO.value!==''?+hoO.value:null; t.hoursNew = hoN.value!==''?+hoN.value:null;
