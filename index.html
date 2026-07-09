@@ -295,11 +295,12 @@
   body.view-day tr:hover td.tl.weekend{background:rgba(255,255,255,.05);}
   /* 今日ライン（今日を含む列の左端に縦線） */
   /* バーに作業名（バー始点セルから右へ流す。後続セルの上に出すため z-index を上げる）*/
-  .bar-label{position:absolute; left:4px; top:0; bottom:0; display:none; align-items:center; white-space:nowrap;
-    font-size:10px; line-height:1; color:#eef4ff; text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 2px rgba(0,0,0,.7);
-    pointer-events:none; z-index:2;}
+  .bar-label{position:absolute; left:3px; top:50%; transform:translateY(-50%); display:none; white-space:nowrap;
+    font-size:10px; line-height:1.35; color:#f4f8ff; font-weight:600;
+    background:rgba(8,13,20,.55); padding:1px 5px; border-radius:4px;
+    text-shadow:0 1px 1px rgba(0,0,0,.75); pointer-events:none; z-index:2;}
   td.tl.labelcell{z-index:4;}
-  body.show-barlabel .bar-label{display:flex;}
+  body.show-barlabel .bar-label{display:block;}
   td.tl.today{box-shadow:inset 2px 0 0 #ff8a5c; background:rgba(255,138,92,.06);}
   th.unit.today{box-shadow:inset 2px 0 0 #ff8a5c; color:#ffb98c;}
   /* マイルストーン（締切の縦線・◆・帯） */
