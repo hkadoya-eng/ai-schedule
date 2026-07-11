@@ -751,7 +751,14 @@
   <span class="lgsep"></span>
   <span class="lgchip"><i style="background:var(--crimson)"></i>AI対象外</span>
   <span class="lgchip"><i style="background:var(--purple)"></i>出玉TBD</span>
-  <span class="lghint">（フェーズ α版／公開版 … は上の帯で表示）</span>
+  <span class="lgsep"></span>
+  <span class="lgttl">行の印</span>
+  <span class="lgchip"><span class="apt a-opt">◎</span>最適</span>
+  <span class="lgchip"><span class="apt a-good">〇</span>向く</span>
+  <span class="lgchip"><span class="apt a-part">▲</span>一部</span>
+  <span class="lgchip"><span class="apt a-no">×</span>不向き</span>
+  <span class="lghint">＝AI適性</span>
+  <span class="lgchip"><span class="latemark late">⚠</span>遅延</span>
 </div>
 
 <div class="wrap">
@@ -1505,7 +1512,7 @@ function smallRowHTML(t, counter){
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:40px">`+
      caretHTML(t)+
      `<span class="statusdot" data-status="${t.id}" title="状態: ${st.label}（クリックで変更）" style="background:${st.color}"></span>`+
-     (apt?`<span class="apt ${apt.cls}" title="AI適性: ${esc(t.aptitude)}">${apt.ch}</span>`:'')+
+     (apt?`<span class="apt ${apt.cls}" title="AI適性: ${apt.ch}（${apt.lbl}）">${apt.ch}</span>`:'')+
      pdotHTML(t)+ lateMark(ss)+ chgTagHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
@@ -2259,10 +2266,10 @@ function syncToolbar(){
 
 // ===== 共通ヘルパー（AI適性・ツリー走査・No.正規化）=====
 function aptInfo(a){ a=String(a||'').trim();
-  if(a==='◎') return {cls:'a-opt', ch:'◎'};
-  if(a==='〇'||a==='○'||a==='◯'||a==='◯') return {cls:'a-good', ch:'〇'};
-  if(a==='▲') return {cls:'a-part', ch:'▲'};
-  if(a==='×'||a==='✕'||a==='☓') return {cls:'a-no', ch:'×'};
+  if(a==='◎') return {cls:'a-opt', ch:'◎', lbl:'AI最適'};
+  if(a==='〇'||a==='○'||a==='◯'||a==='◯') return {cls:'a-good', ch:'〇', lbl:'AIに向く'};
+  if(a==='▲') return {cls:'a-part', ch:'▲', lbl:'一部AI'};
+  if(a==='×'||a==='✕'||a==='☓') return {cls:'a-no', ch:'×', lbl:'AI不向き'};
   return null; }
 function walkAll(nodes, fn){ (nodes||[]).forEach(n=>{ fn(n); if(n.children) walkAll(n.children, fn); }); }
 function mdNum(d){ return (d.getMonth()+1)+'/'+d.getDate(); }
