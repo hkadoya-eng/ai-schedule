@@ -1505,7 +1505,7 @@ function smallRowHTML(t, counter){
      `<span class="ctrls">`+
        `<button class="mini add" data-addchild="${t.id}" title="＋タスク（サブタスク追加）">＋</button>`+
      `</span></div></td>`;
-  h+=`<td class="sl c-role role${t.status==='unassigned'?' unassigned':''}" data-f="role" contenteditable="${isEdit()}">${esc(t.role)}</td>`;
+  h+=`<td class="sl c-role role${t.status==='unassigned'?' unassigned':''}" data-f="role" contenteditable="true">${esc(t.role)}</td>`;
   // 集計作業はロールアップ期間、末端は自分の期間。子に日付が無ければ親自身の日付で表示
   const rr = group ? rollupRange(t) : null;
   const es = group ? (rr?ymd(rr.lo):t.start) : t.start;
@@ -1517,8 +1517,8 @@ function smallRowHTML(t, counter){
          (r?`<span class="agg" style="margin-left:5px" title="完了 ${r.done}/${r.total}">${r.done}/${r.total}</span>`:''); }
   else { pill=`<span class="stage ${sp.cls}" data-prog="${t.id}" title="進捗: ${stg} ${pct}%（クリックで更新）">${stg}<span class="pct">${pct}%</span></span>`; }
   h+=`<td class="sl c-prog prog">${pill}</td>`;
-  h+=`<td class="sl c-date datecell${dtxt?'':' none'}" title="開始〜終了">${dtxt||'—'}${dueChip(t)}</td>`;
-  h+=`<td class="sl c-note note" data-f="note" contenteditable="${isEdit()}">${esc(t.note)}</td>`;
+  h+=`<td class="sl c-date datecell${dtxt?'':' none'}" data-detail="${t.id}" style="cursor:pointer" title="クリックで期間（開始〜終了）を編集">${dtxt||'—'}${dueChip(t)}</td>`;
+  h+=`<td class="sl c-note note" data-f="note" contenteditable="true">${esc(t.note)}</td>`;
   h+=barCellsHTML(t, es, ee, pct, editable, group);
   h+='</tr>';
   // サブタスク（折りたたみ時は出さない）
@@ -1548,7 +1548,7 @@ function taskRowHTML(t, counter, depth, stepNo){
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls"><button class="mini add" data-addchild="${t.id}" title="＋タスク（さらに下の階層）">＋</button></span>`+
      `</div></td>`;
-  h+=`<td class="sl c-role role" data-f="role" contenteditable="${isEdit()}" title="担当（✏編集モードでクリックして入力）">${esc(t.role||'')}</td>`;
+  h+=`<td class="sl c-role role" data-f="role" contenteditable="true" title="担当（クリックして入力）">${esc(t.role||'')}</td>`;
   const rr = group ? rollupRange(t) : null;   // 子に日付が無ければ親自身の日付で表示
   const es = group ? (rr?ymd(rr.lo):t.start) : t.start;
   const ee = group ? (rr?ymd(rr.hi):t.end) : t.end;
@@ -1559,8 +1559,8 @@ function taskRowHTML(t, counter, depth, stepNo){
          (r?`<span class="agg" style="margin-left:5px" title="完了 ${r.done}/${r.total}">${r.done}/${r.total}</span>`:''); }
   else pill=`<span class="stage ${sp.cls}" data-prog="${t.id}" title="進捗: ${stg} ${pct}%（クリックで更新）">${stg}<span class="pct">${pct}%</span></span>`;
   h+=`<td class="sl c-prog prog">${pill}</td>`;
-  h+=`<td class="sl c-date datecell${dtxt?'':' none'}" title="開始〜終了">${dtxt||'—'}${dueChip(t)}</td>`;
-  h+=`<td class="sl c-note note" data-f="note" contenteditable="${isEdit()}">${esc(t.note||'')}</td>`;
+  h+=`<td class="sl c-date datecell${dtxt?'':' none'}" data-detail="${t.id}" style="cursor:pointer" title="クリックで期間（開始〜終了）を編集">${dtxt||'—'}${dueChip(t)}</td>`;
+  h+=`<td class="sl c-note note" data-f="note" contenteditable="true">${esc(t.note||'')}</td>`;
   h+=barCellsHTML(t, es, ee, pct, editable, group);
   h+='</tr>';
   let childHtml='';
