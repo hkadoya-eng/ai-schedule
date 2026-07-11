@@ -632,6 +632,45 @@
   #loginGate .gbtn:hover{filter:brightness(1.06);}
   #loginGate .gmsg{color:#ff9ba1; font-size:12.5px; margin-top:14px; min-height:16px;}
   #sbStatus{font-size:11px; color:var(--dim); display:flex; align-items:center; gap:6px;}
+  /* ═══════════════ ライトテーマ（body.theme-light）：白基調・Notion/Linear風 ═══════════════ */
+  body.theme-light{
+    --bg:#f6f8fb; --bg2:#eef2f7; --panel:#ffffff; --panel2:#f3f5f9; --panel3:#e8edf3;
+    --text:#20293a; --muted:#5a6672; --dim:#8a94a3;
+    --line:#e2e7ee; --line2:#eef1f6; --hd:#eef2f7; --rowhover:#eff5fd;
+    --navy:#3f83c9;
+    --band-navy:#cfe0f2; --band-teal:#cdeeeb; --band-cream:#f0e4c4; --band-crimson:#f3d4d8;
+  }
+  body.theme-light header{background:linear-gradient(180deg,#ffffff,#eef2f7); box-shadow:0 1px 0 rgba(0,0,0,.05);}
+  body.theme-light header h1{color:#1b2432;}
+  body.theme-light .band-navy,body.theme-light .band-teal,body.theme-light .band-cream,body.theme-light .band-crimson{color:#28405f!important; background-image:linear-gradient(180deg,rgba(0,0,0,.03),transparent);}
+  body.theme-light .row-big .item-cell, body.theme-light .row-big .sl{background:#e9eef5!important; color:var(--text);}
+  body.theme-light .row-mid{background:rgba(0,0,0,.022);}
+  body.theme-light .row-mid .item-cell{color:#2f4d78;}
+  body.theme-light .row-task td, body.theme-light .row-task>td{background:#f6f9fc;}
+  body.theme-light .row-task .iname{color:#4a5666;}
+  body.theme-light .row-small.has-kids>td, body.theme-light .row-small.has-kids .sl{background:#eaf2fb;}
+  body.theme-light .kpibar{background:#edf1f6;}
+  body.theme-light #msBar, body.theme-light #legendBar{background:#edf1f6;}
+  body.theme-light tr.ms-row td{background:#eef2f8;}
+  body.theme-light.view-day td.tl.weekend{background:rgba(0,0,0,.035);}
+  body.theme-light.view-day tr:hover td.tl.weekend{background:rgba(0,0,0,.06);}
+  body.theme-light input[type=date], body.theme-light .msadd input[type=date]{color-scheme:light;}
+  body.theme-light .mini{background:var(--panel3); color:#3c4a5c;} body.theme-light .mini:hover{background:#dbe3ec;}
+  body.theme-light .linkbtn{background:var(--panel3); color:#3c4a5c;} body.theme-light .linkbtn:hover{background:#dbe3ec;}
+  body.theme-light .agg{color:#56637a;} body.theme-light .dbadge.prio-low{color:#56637a;}
+  body.theme-light .statusdot{border-color:rgba(0,0,0,.2);}
+  body.theme-light .bar{box-shadow:0 1px 4px rgba(0,0,0,.18); outline:1px solid rgba(0,0,0,.08);}
+  body.theme-light .bar.pend{background-image:linear-gradient(rgba(255,255,255,.58),rgba(255,255,255,.58)),repeating-linear-gradient(45deg,rgba(0,0,0,.07) 0 3px,transparent 3px 7px)!important; outline:1px solid rgba(0,0,0,.1);}
+  body.theme-light .bar.edge{box-shadow:inset -3px 0 0 rgba(0,0,0,.38);}
+  body.theme-light .kpi.meet{background:linear-gradient(180deg,rgba(47,182,176,.16),rgba(47,182,176,.05));}
+  body.theme-light .kpi.meet .val{color:#0d4f4a;}
+  body.theme-light .kpi .ring{background:conic-gradient(var(--teal) calc(var(--p,0)*1%), rgba(0,0,0,.09) 0);}
+  body.theme-light .kpi .barmini{background:rgba(0,0,0,.08);}
+  body.theme-light .pop{box-shadow:0 12px 34px rgba(0,0,0,.18);}
+  body.theme-light .detail{box-shadow:8px 0 40px rgba(0,0,0,.22);}
+  body.theme-light #modeToast{background:rgba(255,255,255,.98); color:var(--text); box-shadow:0 10px 34px rgba(0,0,0,.25);}
+  body.theme-light .detail header{color:var(--text);}
+  body.theme-light .detail .close{background:rgba(0,0,0,.08); color:var(--text);}
 </style>
 </head>
 <body class="view-month">
@@ -679,6 +718,7 @@
     <!-- 右：ヘルプ・管理・状態 -->
     <button class="btn" id="helpBtn" title="使い方を見る">❓ 使い方</button>
     <button class="btn" id="moreBtn" title="表示オプション・データ管理">⚙ 管理 ▾</button>
+    <button class="btn" id="themeBtn" title="ライト⇄ダーク切替">🌙</button>
     <span id="sbStatus" title="共有状態"></span>
     <button class="btn" id="signOut" title="ログアウト">⏻</button>
   </div>
@@ -2887,6 +2927,14 @@ if(barLabelToggle){
   barLabelToggle.addEventListener('click', ()=> setBarLabel(!document.body.classList.contains('show-barlabel')));
   setBarLabel(localStorage.getItem('ai_sched_barlabel')!=='0');   // 既定ON（'0'のときだけOFF）
 }
+// ライト⇄ダーク テーマ切替（既定ライト・端末ごとにlocalStorage記憶）
+function setTheme(light){ document.body.classList.toggle('theme-light', light);
+  try{ localStorage.setItem('ai_sched_theme', light?'light':'dark'); }catch(e){}
+  const b=document.getElementById('themeBtn'); if(b){ b.textContent=light?'🌙':'☀'; b.title=light?'ダークに切替':'ライトに切替'; } }
+(function(){ const b=document.getElementById('themeBtn');
+  if(b) b.addEventListener('click', ()=> setTheme(!document.body.classList.contains('theme-light')));
+  setTheme(localStorage.getItem('ai_sched_theme')!=='dark');   // 既定ライト（'dark'保存時のみダーク）
+})();
 // スクロールしても矢印は内容と一緒に動く（座標は内容基準）。リサイズ時のみ再計算。
 window.addEventListener('resize', ()=>{ clearTimeout(_rzTimer2); _rzTimer2=setTimeout(renderDeps, 140); });
 let _rzTimer2=null;
