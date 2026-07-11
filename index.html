@@ -742,24 +742,6 @@
 
 <div class="kpibar" id="kpibar"></div>
 <div id="msBar"></div>
-<div id="legendBar">
-  <span class="lgttl">🎨 バー色＝担い手</span>
-  <span class="lgchip"><i style="background:var(--teal)"></i>AI主体</span>
-  <span class="lgchip"><i style="background:#49c98a"></i>人＋AI</span>
-  <span class="lgchip"><i style="background:#e8a15e"></i>人主体</span>
-  <span class="lgchip"><i style="background:var(--navy)"></i>未設定</span>
-  <span class="lgsep"></span>
-  <span class="lgchip"><i style="background:var(--crimson)"></i>AI対象外</span>
-  <span class="lgchip"><i style="background:var(--purple)"></i>出玉TBD</span>
-  <span class="lgsep"></span>
-  <span class="lgttl">行の印</span>
-  <span class="lgchip"><span class="apt a-opt">◎</span>最適</span>
-  <span class="lgchip"><span class="apt a-good">〇</span>向く</span>
-  <span class="lgchip"><span class="apt a-part">▲</span>一部</span>
-  <span class="lgchip"><span class="apt a-no">×</span>不向き</span>
-  <span class="lghint">＝AI適性</span>
-  <span class="lgchip"><span class="latemark late">⚠</span>遅延</span>
-</div>
 
 <div class="wrap">
   <table id="grid"></table>
@@ -1513,7 +1495,7 @@ function smallRowHTML(t, counter){
      caretHTML(t)+
      `<span class="statusdot" data-status="${t.id}" title="状態: ${st.label}（クリックで変更）" style="background:${st.color}"></span>`+
      (apt?`<span class="apt ${apt.cls}" title="AI適性: ${apt.ch}（${apt.lbl}）">${apt.ch}</span>`:'')+
-     pdotHTML(t)+ lateMark(ss)+ chgTagHTML(t)+
+     pdotHTML(t)+ chgTagHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls">`+
@@ -1557,7 +1539,7 @@ function taskRowHTML(t, counter, depth, stepNo){
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:${indent}px">`+
      caretHTML(t)+
      ((stepNo && !(depth||0)) ? `<span class="stepno" title="段取り ${stepNo} 番目">${stepNo}</span>` : `<span class="tasktick">└</span>`)+
-     pdotHTML(t)+ lateMark(ss)+ chgTagHTML(t)+
+     pdotHTML(t)+ chgTagHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls"><button class="mini add" data-addchild="${t.id}" title="＋タスク（さらに下の階層）">＋</button></span>`+
