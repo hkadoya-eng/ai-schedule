@@ -568,6 +568,10 @@
   .mtedit.rm{width:160px;}
   .mtline{display:flex; gap:6px; align-items:center; flex-wrap:wrap;} .mtline .mtsep{color:var(--dim);}
   .mtadd{display:flex; gap:8px; align-items:center; margin-bottom:14px; flex-wrap:wrap;}
+  .mtaddwrap{margin-top:14px;}
+  .mtaddbtn{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:9px 16px; cursor:pointer; font-family:inherit; font-size:13px;}
+  .mtaddbtn:hover{filter:brightness(1.06);}
+  .mtaddwrap .mtadd{margin-top:10px; margin-bottom:0;}
   .mtadd input{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px;}
   .mtadd input.tt{flex:1; min-width:180px;}
   .mtadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px; white-space:nowrap;}
@@ -634,24 +638,24 @@
   #sbStatus{font-size:11px; color:var(--dim); display:flex; align-items:center; gap:6px;}
   /* ═══════════════ ライトテーマ（body.theme-light）：白基調・Notion/Linear風 ═══════════════ */
   body.theme-light{
-    --bg:#f6f8fb; --bg2:#eef2f7; --panel:#ffffff; --panel2:#f3f5f9; --panel3:#e8edf3;
-    --text:#20293a; --muted:#5a6672; --dim:#8a94a3;
-    --line:#e2e7ee; --line2:#eef1f6; --hd:#eef2f7; --rowhover:#eff5fd;
+    --bg:#e9edf2; --bg2:#e2e6ec; --panel:#f6f7f9; --panel2:#edf0f4; --panel3:#e3e7ee;
+    --text:#28313f; --muted:#616b78; --dim:#939da8;
+    --line:#d8dde5; --line2:#e5e9ef; --hd:#e6eaf0; --rowhover:#e8edf4;
     --navy:#3f83c9;
-    --band-navy:#cfe0f2; --band-teal:#cdeeeb; --band-cream:#f0e4c4; --band-crimson:#f3d4d8;
+    --band-navy:#c8d8ec; --band-teal:#c7e6e2; --band-cream:#ecdfc0; --band-crimson:#eecdd2;
   }
-  body.theme-light header{background:linear-gradient(180deg,#ffffff,#eef2f7); box-shadow:0 1px 0 rgba(0,0,0,.05);}
+  body.theme-light header{background:linear-gradient(180deg,#f2f4f8,#e6eaf0); box-shadow:0 1px 0 rgba(0,0,0,.05);}
   body.theme-light header h1{color:#1b2432;}
   body.theme-light .band-navy,body.theme-light .band-teal,body.theme-light .band-cream,body.theme-light .band-crimson{color:#28405f!important; background-image:linear-gradient(180deg,rgba(0,0,0,.03),transparent);}
-  body.theme-light .row-big .item-cell, body.theme-light .row-big .sl{background:#e9eef5!important; color:var(--text);}
-  body.theme-light .row-mid{background:rgba(0,0,0,.022);}
-  body.theme-light .row-mid .item-cell{color:#2f4d78;}
-  body.theme-light .row-task td, body.theme-light .row-task>td{background:#f6f9fc;}
+  body.theme-light .row-big .item-cell, body.theme-light .row-big .sl{background:#e0e5ee!important; color:var(--text);}
+  body.theme-light .row-mid{background:rgba(0,0,0,.02);}
+  body.theme-light .row-mid .item-cell{color:#345178;}
+  body.theme-light .row-task td, body.theme-light .row-task>td{background:#eef1f5;}
   body.theme-light .row-task .iname{color:#4a5666;}
-  body.theme-light .row-small.has-kids>td, body.theme-light .row-small.has-kids .sl{background:#eaf2fb;}
-  body.theme-light .kpibar{background:#edf1f6;}
-  body.theme-light #msBar, body.theme-light #legendBar{background:#edf1f6;}
-  body.theme-light tr.ms-row td{background:#eef2f8;}
+  body.theme-light .row-small.has-kids>td, body.theme-light .row-small.has-kids .sl{background:#e6ecf4;}
+  body.theme-light .kpibar{background:#e6eaf0;}
+  body.theme-light #msBar, body.theme-light #legendBar{background:#e6eaf0;}
+  body.theme-light tr.ms-row td{background:#e9edf3;}
   body.theme-light.view-day td.tl.weekend{background:rgba(0,0,0,.035);}
   body.theme-light.view-day tr:hover td.tl.weekend{background:rgba(0,0,0,.06);}
   body.theme-light input[type=date], body.theme-light .msadd input[type=date]{color-scheme:light;}
@@ -1538,7 +1542,7 @@ function taskRowHTML(t, counter, depth, stepNo){
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
      `<span class="ctrls"><button class="mini add" data-addchild="${t.id}" title="＋タスク（さらに下の階層）">＋</button></span>`+
      `</div></td>`;
-  h+=`<td class="sl c-role"></td>`;
+  h+=`<td class="sl c-role role" data-f="role" contenteditable="${isEdit()}" title="担当（✏編集モードでクリックして入力）">${esc(t.role||'')}</td>`;
   const rr = group ? rollupRange(t) : null;   // 子に日付が無ければ親自身の日付で表示
   const es = group ? (rr?ymd(rr.lo):t.start) : t.start;
   const ee = group ? (rr?ymd(rr.hi):t.end) : t.end;
@@ -1967,11 +1971,7 @@ function roomOpts(sel){ let o='<option value="">（会議室なし）</option>';
 function roomRes(name){ const r=ROOMS.find(x=>x.k===name); return r?r.res:''; }
 function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
-  let h=`<div class="mtadd"><input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）">`+
-        `<input id="mtDate" type="date" title="日付"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts('','開始')}</select><span class="mtsep">〜</span>`+
-        `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts('','終了')}</select><select id="mtRoom" class="tsel rmsel" title="会議室">${roomOpts('')}</select>`+
-        `<button id="mtAddBtn">＋ 定例を追加</button></div>`;
-  h+=`<div class="tpsec">定例一覧（クリックでお題を記入／📅でカレンダー登録）</div>`;
+  let h=`<div class="tpsec">定例一覧（クリックでお題を記入／📅でカレンダー登録）</div>`;
   h+= list.length ? list.map(m=>{ const c=mtCounts(m.id);
       return `<div class="mtrow" data-open-mt="${esca(m.id)}">`+
         `<span class="mtt">${esc(m.title||'(無題の定例)')}</span>`+
@@ -1979,7 +1979,16 @@ function renderMeetingList(box){
         `<span class="mtc">お題 ${c.total}件${c.open?'（未対応 '+c.open+'）':''}</span>`+
         `<button class="mtgcal" data-gcal-mt="${esca(m.id)}" title="Googleカレンダーに登録">📅</button>`+
         `<button class="del" data-del-mt="${esca(m.id)}" title="この定例を削除">✕</button></div>`;
-    }).join('') : `<div class="tpempty">定例がまだありません。上で定例名・日付・時間・会議室を入れて「＋ 定例を追加」してください。</div>`;
+    }).join('') : `<div class="tpempty">定例がまだありません。下の「＋ 定例を追加」から登録してください。</div>`;
+  // 追加はボタン → 押すとフォームが開く
+  h+=`<div class="mtaddwrap">`+
+     `<button id="mtAddToggle" class="mtaddbtn">＋ 定例を追加</button>`+
+     `<div class="mtadd" id="mtAddForm" style="display:none">`+
+       `<input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）">`+
+       `<input id="mtDate" type="date" title="日付"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts('','開始')}</select><span class="mtsep">〜</span>`+
+       `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts('','終了')}</select><select id="mtRoom" class="tsel rmsel" title="会議室">${roomOpts('')}</select>`+
+       `<button id="mtAddBtn">追加</button>`+
+     `</div></div>`;
   box.innerHTML=h;
 }
 function renderMeetingTable(box){
@@ -2047,6 +2056,9 @@ function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレー
 document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.id==='topicModal'||e.target.id==='topicClose') document.getElementById('topicModal').classList.remove('on'); });
 document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#tpBack')){ _openMeeting=null; renderTopics(); return; }
+  if(e.target.closest('#mtAddToggle')){ const f=document.getElementById('mtAddForm');
+    if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
+      if(show){ const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
   if(e.target.closest('#tpGcal')){ const m=state.meetings.find(x=>x.id===_openMeeting); if(m) window.open(gcalUrl(m),'_blank','noopener'); return; }
   if(e.target.closest('#tpAddRow')){ addRow(); return; }
@@ -2997,17 +3009,17 @@ window.__saveBoard=function(){
       const { data, error }=await sb.from('schedule_board')
         .upsert({ id:'main', data:st, updated_at:new Date().toISOString(), updated_by:myEmail }, { onConflict:'id' })
         .select('id');
-      if(error){ setStatus('保存失敗: '+error.message,'#ff9ba1'); console.error('[save]', error); return; }
-      if(!data || !data.length){ setStatus('保存不可（権限RLS？0行）','#ff9ba1'); console.error('[save] 0 rows written — RLS拒否かログイン切れの可能性'); return; }
-      setStatus('● 同期済み','#8fe7b4');
-    }catch(e){ setStatus('保存失敗: '+(e&&e.message||e),'#ff9ba1'); console.error('[save]', e); }
+      if(error){ setStatus('保存失敗: '+error.message,'#d64550'); console.error('[save]', error); return; }
+      if(!data || !data.length){ setStatus('保存不可（権限RLS？0行）','#d64550'); console.error('[save] 0 rows written — RLS拒否かログイン切れの可能性'); return; }
+      setStatus('● 同期済み','#12a06a');
+    }catch(e){ setStatus('保存失敗: '+(e&&e.message||e),'#d64550'); console.error('[save]', e); }
   }, 700);
 };
 async function afterLogin(session){
   myEmail=session.user.email; window.__user=myEmail;
   const board=await loadBoard();
   gate.style.display='none';
-  setStatus('● '+myEmail.split('@')[0]+'（共有中）','#8fe7b4');
+  setStatus('● '+myEmail.split('@')[0]+'（共有中）','#12a06a');
   if(!started){ started=true; window.__initApp(board); } else if(board) window.__applyRemote(board);
   // ログインした本人を参加者候補（メンバー名簿）に登録
   try{ const md=session.user.user_metadata||{}; const nm=md.full_name||md.name||''; if(window.__registerMember) window.__registerMember(myEmail, nm); }catch(e){}
@@ -3017,7 +3029,7 @@ async function afterLogin(session){
       // 他者の更新をID単位でマージ（自分の未保存編集を残したまま反映）
       const merged=(window.__mergeBoards&&window.__getState)?window.__mergeBoards(p.new.data, window.__getState()):p.new.data;
       window.__applyMerged?window.__applyMerged(merged):window.__applyRemote(merged);
-      setStatus('● 更新を受信','#8fe7b4');
+      setStatus('● 更新を受信','#12a06a');
     }
   }).subscribe();
 }
