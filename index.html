@@ -675,6 +675,12 @@
   body.theme-light #modeToast{background:rgba(255,255,255,.98); color:var(--text); box-shadow:0 10px 34px rgba(0,0,0,.25);}
   body.theme-light .detail header{color:var(--text);}
   body.theme-light .detail .close{background:rgba(0,0,0,.08); color:var(--text);}
+  /* ライトで遅延の赤/オレンジ文字を読める濃さに */
+  body.theme-light tr.behind .iname, body.theme-light .smrow.behind .smn{color:#b26a06;}
+  body.theme-light tr.late .iname, body.theme-light tr.overdue .iname, body.theme-light .smrow.overdue .smn{color:#cc2f2f;}
+  body.theme-light .latemark.behind{color:#c07a00;} body.theme-light .latemark.late{color:#d13636;}
+  body.theme-light .smstat .bad b{color:#cc2f2f;}
+  body.theme-light .bl-over{color:#ffd9d9;}
 </style>
 </head>
 <body class="view-month">
@@ -1307,7 +1313,7 @@ function computeKPIs(){
     `<div class="kpi ${cut!=null?'accent':''}"><div class="lab">AI工数削減</div>`+
       `<div class="val">${cut!=null?cut:'—'}${cut!=null?'<small>%</small>':''}</div>`+
       `<div class="meta">${hOld>0?`見込 ${hOld}h → ${hNew}h`:'工数を入力すると表示'}</div></div>`+
-    `<div class="kpi"><div class="lab">遅延・期限</div><div class="val" style="${late?'color:#ff6b6b':(dueSoon?'color:#f2b13d':'')}">${late}<small> 件</small></div>`+
+    `<div class="kpi"><div class="lab">遅延・期限</div><div class="val" style="${late?'color:#dc3b3b':(dueSoon?'color:#d99413':'')}">${late}<small> 件</small></div>`+
       `<div class="meta">超過 ${lateOver}・遅れ ${behind}${dueSoon?` ／ 期限7日内 ${dueSoon}`:''}</div></div>`;
 }
 
