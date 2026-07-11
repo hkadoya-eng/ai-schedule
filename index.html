@@ -223,6 +223,12 @@
   .detail input[type=range]{padding:0;}
   /* 進捗ポップ（ピルから直接） */
   #progPop{padding:9px;}
+  #datePop{padding:11px 12px; min-width:210px;}
+  #datePop .dpttl{font-size:11px; color:var(--muted); font-weight:700; margin-bottom:8px;}
+  #datePop .dprow{display:flex; align-items:center; gap:8px; margin-bottom:7px;}
+  #datePop .dprow label{width:38px; font-size:12px; color:var(--muted);}
+  #datePop .dprow input{flex:1; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 7px; font-family:inherit; font-size:12.5px;}
+  #datePop .dphint{font-size:10.5px; color:var(--dim); margin-top:2px;}
   #progPop .stagebtns button{display:inline-block; width:auto;}
   #progPop button:hover{background:#fff;}
   #progPop .stagebtns button:hover{background:#eef3f9;}
@@ -763,6 +769,7 @@
 
 <div class="pop" id="statusPop"></div>
 <div class="pop" id="progPop"></div>
+<div class="pop" id="datePop"></div>
 <div class="pop" id="ctxMenu"></div>
 <div class="pop" id="moreMenu">
   <div class="mlabel">表示オプション</div>
@@ -1517,7 +1524,7 @@ function smallRowHTML(t, counter){
          (r?`<span class="agg" style="margin-left:5px" title="完了 ${r.done}/${r.total}">${r.done}/${r.total}</span>`:''); }
   else { pill=`<span class="stage ${sp.cls}" data-prog="${t.id}" title="進捗: ${stg} ${pct}%（クリックで更新）">${stg}<span class="pct">${pct}%</span></span>`; }
   h+=`<td class="sl c-prog prog">${pill}</td>`;
-  h+=`<td class="sl c-date datecell${dtxt?'':' none'}" data-detail="${t.id}" style="cursor:pointer" title="クリックで期間（開始〜終了）を編集">${dtxt||'—'}${dueChip(t)}</td>`;
+  h+=`<td class="sl c-date datecell${dtxt?'':' none'}" ${isLeaf(t)?`data-date="${t.id}"`:`data-detail="${t.id}"`} style="cursor:pointer" title="クリックで期間（開始〜終了）を設定">${dtxt||'—'}${dueChip(t)}</td>`;
   h+=`<td class="sl c-note note" data-f="note" contenteditable="true">${esc(t.note)}</td>`;
   h+=barCellsHTML(t, es, ee, pct, editable, group);
   h+='</tr>';
@@ -1559,7 +1566,7 @@ function taskRowHTML(t, counter, depth, stepNo){
          (r?`<span class="agg" style="margin-left:5px" title="完了 ${r.done}/${r.total}">${r.done}/${r.total}</span>`:''); }
   else pill=`<span class="stage ${sp.cls}" data-prog="${t.id}" title="進捗: ${stg} ${pct}%（クリックで更新）">${stg}<span class="pct">${pct}%</span></span>`;
   h+=`<td class="sl c-prog prog">${pill}</td>`;
-  h+=`<td class="sl c-date datecell${dtxt?'':' none'}" data-detail="${t.id}" style="cursor:pointer" title="クリックで期間（開始〜終了）を編集">${dtxt||'—'}${dueChip(t)}</td>`;
+  h+=`<td class="sl c-date datecell${dtxt?'':' none'}" ${isLeaf(t)?`data-date="${t.id}"`:`data-detail="${t.id}"`} style="cursor:pointer" title="クリックで期間（開始〜終了）を設定">${dtxt||'—'}${dueChip(t)}</td>`;
   h+=`<td class="sl c-note note" data-f="note" contenteditable="true">${esc(t.note||'')}</td>`;
   h+=barCellsHTML(t, es, ee, pct, editable, group);
   h+='</tr>';
@@ -1601,6 +1608,7 @@ document.addEventListener('click', e=>{
   const chc=e.target.closest('[data-chgcycle]'); if(chc){ const r=findNode(chc.dataset.chgcycle);
     if(r){ const n=r.node, CY=['','ai','collab','human']; n.charge=CY[(CY.indexOf(n.charge||'')+1)%CY.length]; touch(n); save(); render(); } return; }
   const pg=e.target.closest('[data-prog]'); if(pg){ openProgPop(pg,pg.dataset.prog); return; }
+  const dc=e.target.closest('[data-date]'); if(dc){ openDatePop(dc, dc.dataset.date); return; }
   const dbtn=e.target.closest('[data-detail]'); if(dbtn){ openDetail(dbtn.dataset.detail); return; }
   const ob=e.target.closest('[data-open]'); if(ob){ openViaPath(ob.dataset.open); return; }
   const ac=e.target.closest('[data-addchild]'); if(ac){ addChild(ac.dataset.addchild); return; }
@@ -1609,14 +1617,14 @@ document.addEventListener('click', e=>{
   const del=e.target.closest('[data-del]'); if(del){ delNode(del.dataset.del); return; }
   // タスク表の外をクリックしたら閉じる（保存してから）
   if(detailId!=null && !e.target.closest('#detail') && !e.target.closest('[data-detail]')) closeDetail();
-  if(!e.target.closest('#statusPop') && !e.target.closest('#progPop') && !e.target.closest('#moreMenu') && !e.target.closest('#moreBtn')) closeAllPops();
+  if(!e.target.closest('#statusPop') && !e.target.closest('#progPop') && !e.target.closest('#datePop') && !e.target.closest('[data-date]') && !e.target.closest('#moreMenu') && !e.target.closest('#moreBtn')) closeAllPops();
 });
 // 押した瞬間（pointerdown）でも外側なら閉じる。
 // ※ガントの空きはドラッグ開始のpreventDefaultでclickが出ないため、こちらで確実に閉じる
 document.addEventListener('pointerdown', e=>{
   const t=e.target;
-  if(!t.closest('#statusPop') && !t.closest('#progPop') && !t.closest('#ctxMenu') && !t.closest('#moreMenu') && !t.closest('#moreBtn')
-     && !t.closest('.statusdot') && !t.closest('[data-prog]')) closeAllPops();
+  if(!t.closest('#statusPop') && !t.closest('#progPop') && !t.closest('#datePop') && !t.closest('#ctxMenu') && !t.closest('#moreMenu') && !t.closest('#moreBtn')
+     && !t.closest('.statusdot') && !t.closest('[data-prog]') && !t.closest('[data-date]')) closeAllPops();
   if(detailId!=null && !t.closest('#detail') && !t.closest('[data-detail]')) closeDetail();
 });
 
@@ -1650,6 +1658,31 @@ pop.addEventListener('click', e=>{ const b=e.target.closest('button[data-k]'); i
 
 // ===== 進捗ポップ（ピルから直接編集）=====
 const ppop=document.getElementById('progPop'); let ppId=null;
+// 日付ポップ（進捗と同じ流儀の専用ダイアログ：開始・終了を入力＝バーが動く）
+const dpop=document.getElementById('datePop'); let dpId=null;
+function openDatePop(anchor, id){ const r=findNode(id); if(!r) return; const n=r.node; dpId=id;
+  const leaf=isLeaf(n), s=esca(effStart(n)), e=esca(effEnd(n));
+  dpop.innerHTML=`<div class="dpttl">期間（＝ガントのバー）</div>`+
+    (leaf
+      ? `<div class="dprow"><label>開始</label><input type="date" id="dpStart" value="${s}"></div>`+
+        `<div class="dprow"><label>終了</label><input type="date" id="dpEnd" value="${e}"></div>`+
+        `<div class="dphint">変更するとバーが動きます</div>`
+      : `<div class="dprow"><label>開始</label><b>${s||'—'}</b></div>`+
+        `<div class="dprow"><label>終了</label><b>${e||'—'}</b></div>`+
+        `<div class="dphint">子タスクの集計（子側で変更）</div>`);
+  dpop.style.display='block';
+  const rc=anchor.getBoundingClientRect();
+  dpop.style.left=Math.min(rc.left, window.innerWidth-230)+'px';
+  dpop.style.top=(rc.bottom+5)+'px';
+}
+dpop.addEventListener('change', e=>{ const r=findNode(dpId); if(!r) return; const n=r.node; if(!isLeaf(n)) return;
+  const sE=dpop.querySelector('#dpStart'), eE=dpop.querySelector('#dpEnd');
+  if(e.target===sE){ n.start=sE.value||null; if(n.start&&!n.end)n.end=n.start; if(n.start&&n.end&&parse(n.start)>parse(n.end))n.end=n.start; }
+  else if(e.target===eE){ n.end=eE.value||null; if(n.end&&!n.start)n.start=n.end; if(n.end&&n.start&&parse(n.start)>parse(n.end))n.start=n.end; }
+  else return;
+  touch(n); save(); render();
+  if(sE) sE.value=n.start||''; if(eE) eE.value=n.end||''; });   // 逆転補完を入力にも反映
+function closeDatePop(){ const wasOpen=(dpId!=null); dpop.style.display='none'; dpId=null; if(wasOpen) render(); }
 function drawProgPop(t){
   ppop.innerHTML=`<div class="stagebtns">`+
     STAGES.map(s=>`<button class="${s.cls}${getStage(t)===s.key?' on':''}" data-stage="${s.key}">${s.key}</button>`).join('')+
@@ -1686,7 +1719,7 @@ ppop.addEventListener('click', e=>{
 });
 function closeProgPop(){ const wasOpen=(ppId!=null); ppop.style.display='none'; ppId=null;
   if(wasOpen) render(); }  // 集計（中/大項目の%）を反映
-function closeAllPops(){ closePop(); closeProgPop(); closeCtx(); closeMore(); }
+function closeAllPops(){ closePop(); closeProgPop(); closeDatePop(); closeCtx(); closeMore(); }
 // ⚙ 管理メニュー（普段使わない：ベース取込・書き出し・読み込み・復元）
 function closeMore(){ const m=document.getElementById('moreMenu'); if(m) m.style.display='none'; }
 (function(){ const btn=document.getElementById('moreBtn'), menu=document.getElementById('moreMenu'); if(!btn||!menu) return;
