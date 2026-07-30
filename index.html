@@ -433,6 +433,14 @@
   .kpi.meet .lab{color:var(--teal);}
   .kpi.meet .val{color:#eafbfa;}
   .kpi.meet .go{position:absolute; right:12px; top:12px; font-size:11px; color:var(--teal); font-weight:700;}
+  /* 次回が未登録（＝前回の日程が過ぎた）状態は色を落として「終わっている」と分かるようにする */
+  .kpi.meet.past{background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(255,255,255,.02));
+    border-color:var(--line); box-shadow:none;}
+  .kpi.meet.past .lab, .kpi.meet.past .go{color:var(--muted);}
+  .kpi.meet.past .val{color:var(--dim);}
+  .kpi .mtnext{margin-top:7px; background:var(--teal); color:#04222b; font-weight:700; border:none;
+    border-radius:7px; padding:5px 11px; cursor:pointer; font-family:inherit; font-size:11.5px;}
+  .kpi .mtnext:hover{filter:brightness(1.08);}
   .kpi{position:relative; background:linear-gradient(180deg,var(--panel),var(--bg2));
     border:1px solid var(--line); border-radius:12px; padding:11px 14px; overflow:hidden;}
   .kpi .lab{font-size:10.5px; letter-spacing:1.2px; text-transform:uppercase; color:var(--muted);}
@@ -588,6 +596,11 @@
   .mtrow .mtt{font-weight:700; font-size:14px;}
   .mtrow .mtd{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;}
   .mtrow .mtc{margin-left:auto; font-size:11.5px; color:var(--dim); white-space:nowrap;}
+  .mtrow.past{opacity:.62;}                                   /* 日程が過ぎた定例 */
+  .mtrow.next{border-color:rgba(47,182,176,.65); background:rgba(47,182,176,.08);}  /* 次回 */
+  .mtrow .mttag{flex:none; font-size:10.5px; font-weight:700; border-radius:5px; padding:2px 7px;}
+  .mtrow .mttag.done{background:rgba(255,255,255,.08); color:var(--muted);}
+  .mtrow .mttag.now{background:rgba(47,182,176,.22); color:var(--teal);}
   .mtrow .del{flex:none; background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:2px 6px;}
   .mtrow .del:hover{color:#f2585f;}
   .tpback{background:none; border:1px solid var(--line); color:var(--text); border-radius:7px; padding:5px 13px; cursor:pointer; font-family:inherit; font-size:12px;}
@@ -674,6 +687,8 @@
   body.theme-light .bar.edge{box-shadow:inset -3px 0 0 rgba(0,0,0,.38);}
   body.theme-light .kpi.meet{background:linear-gradient(180deg,rgba(47,182,176,.16),rgba(47,182,176,.05));}
   body.theme-light .kpi.meet .val{color:#0d4f4a;}
+  body.theme-light .kpi.meet.past{background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.02));}
+  body.theme-light .kpi.meet.past .val{color:var(--dim);}
   body.theme-light .kpi .ring{background:conic-gradient(var(--teal) calc(var(--p,0)*1%), rgba(0,0,0,.09) 0);}
   body.theme-light .kpi .barmini{background:rgba(0,0,0,.08);}
   body.theme-light .pop{box-shadow:0 12px 34px rgba(0,0,0,.18);}
@@ -1294,13 +1309,20 @@ function computeKPIs(){
   ensureBoards();
   const mts=(state.meetings||[]).filter(m=>m&&m.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const todayY=ymd(new Date());
-  const nextMt=mts.find(m=>m.date>=todayY)||mts[mts.length-1]||null;
-  const openTp=(state.topics||[]).filter(t=>t&&!t.done).length;
+  // 日程が過ぎたら自動で繰り越す：当日を含む先の定例だけを「次回」とし、未来が無ければ「前回（済）」扱いにする
+  const nextMt=mts.find(m=>m.date>=todayY)||null;
+  const lastMt=nextMt?null:(mts.length?mts[mts.length-1]:null);
+  const curMt=nextMt||lastMt;
+  // お題の未対応件数は表示中の定例のぶんだけ数える（終わった定例の積み残しが残り続けないように）
+  const openTp=curMt?(state.topics||[]).filter(t=>t&&!t.done&&t.meetingId===curMt.id).length:0;
   box.innerHTML =
-    `<div class="kpi meet" id="kpiMeet" title="クリックで打合せ予定・お題を開く"><div class="go">開く ▸</div>`+
+    `<div class="kpi meet${nextMt?'':' past'}" id="kpiMeet" title="クリックで打合せ予定・お題を開く"><div class="go">開く ▸</div>`+
       `<div class="lab">📝 打合せ予定</div>`+
-      `<div class="val">${nextMt?mdNum(parse(nextMt.date))+(nextMt.start?' <small>'+esc(nextMt.start)+(nextMt.end?'〜'+esc(nextMt.end):'')+'</small>':''):'—'}</div>`+
-      `<div class="meta">${nextMt?esc((nextMt.title||'定例'))+(nextMt.room?'／'+esc(nextMt.room):'')+' ／ ':(mts.length?'':'定例を登録 ／ ')}お題 未対応 ${openTp}件</div></div>`+
+      `<div class="val">${nextMt?mdNum(parse(nextMt.date))+(nextMt.start?' <small>'+esc(nextMt.start)+(nextMt.end?'〜'+esc(nextMt.end):'')+'</small>':''):'未定'}</div>`+
+      `<div class="meta">${nextMt?esc((nextMt.title||'定例'))+(nextMt.room?'／'+esc(nextMt.room):'')+' ／ ':
+        (lastMt?'前回 '+mdNum(parse(lastMt.date))+' '+esc(lastMt.title||'定例')+'（済） ／ ':'定例を登録 ／ ')}お題 未対応 ${openTp}件</div>`+
+      (nextMt?'':`<button class="mtnext" id="kpiNextMt" title="${lastMt?'前回の内容（時刻・会議室）を引き継いだ次回の登録フォームを開きます':'定例の登録フォームを開きます'}">＋ ${lastMt?'次回':'定例'}を登録</button>`)+
+    `</div>`+
     `<div class="kpi accent"><div class="lab">全体進捗</div><div class="val">${pct}<small>%</small></div>`+
       `<div class="meta">対象 ${total} 件（AI対象外等は除外）</div>`+
       `<div class="ring" style="--p:${pct}"><span>${pct}</span></div></div>`+
@@ -1971,6 +1993,7 @@ window.__registerMember=function(email, name){
 function uid(p){ return p+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7); }
 function meAuthor(){ return currentUser() || (window.__user? String(window.__user).split('@')[0] : ''); }
 let _openMeeting=null;   // null=定例一覧／会議id=その会議のお題テーブル
+let _mtDraft=null;       // 「＋次回を登録」で開いたときの追加フォームのプリセット値（一度使ったら破棄）
 function updateTopicBtn(){ ensureBoards(); if(typeof computeKPIs==='function'){ try{ computeKPIs(); }catch(e){} } }  // KPIの打合せ予定タイルを更新
 function refreshTopicsIfOpen(){ const m=document.getElementById('topicModal'); if(m&&m.classList.contains('on')) renderTopics(); }
 function openTopics(){ ensureBoards(); _openMeeting=null; renderTopics(); document.getElementById('topicModal').classList.add('on'); }
@@ -1999,26 +2022,66 @@ function roomOpts(sel){ let o='<option value="">（会議室なし）</option>';
 function roomRes(name){ const r=ROOMS.find(x=>x.k===name); return r?r.res:''; }
 function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
+  const todayY=ymd(new Date());
+  const nextId=(list.find(m=>m.date&&m.date>=todayY)||{}).id;   // 当日を含む直近の1件が「次回」
   let h=`<div class="tpsec">定例一覧（クリックでお題を記入／📅でカレンダー登録）</div>`;
   h+= list.length ? list.map(m=>{ const c=mtCounts(m.id);
-      return `<div class="mtrow" data-open-mt="${esca(m.id)}">`+
+      const past=!!(m.date&&m.date<todayY), isNext=(m.id===nextId);
+      return `<div class="mtrow${past?' past':''}${isNext?' next':''}" data-open-mt="${esca(m.id)}">`+
         `<span class="mtt">${esc(m.title||'(無題の定例)')}</span>`+
+        (past?`<span class="mttag done">済</span>`:'')+(isNext?`<span class="mttag now">次回</span>`:'')+
         `<span class="mtd">${mtWhen(m)}</span>`+
         `<span class="mtc">お題 ${c.total}件${c.open?'（未対応 '+c.open+'）':''}</span>`+
         `<button class="mtgcal" data-gcal-mt="${esca(m.id)}" title="Googleカレンダーに登録">📅</button>`+
         `<button class="del" data-del-mt="${esca(m.id)}" title="この定例を削除">✕</button></div>`;
     }).join('') : `<div class="tpempty">定例がまだありません。下の「＋ 定例を追加」から登録してください。</div>`;
-  // 追加はボタン → 押すとフォームが開く
+  // 全部過ぎている＝次回が未登録。前回を引き継いだ登録を促す
+  if(list.length && !nextId) h+=`<div class="tpempty">直近の定例は終了しています。「＋ 定例を追加」で次回を登録してください（前回の時刻・会議室が入った状態で開きます）。</div>`;
+  // 追加はボタン → 押すとフォームが開く。_mtDraft があれば最初から開いてプリセット表示
+  const d=_mtDraft||{};
   h+=`<div class="mtaddwrap">`+
      `<button id="mtAddToggle" class="mtaddbtn">＋ 定例を追加</button>`+
-     `<div class="mtadd" id="mtAddForm" style="display:none">`+
-       `<input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）">`+
-       `<input id="mtDate" type="date" title="日付"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts('','開始')}</select><span class="mtsep">〜</span>`+
-       `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts('','終了')}</select><select id="mtRoom" class="tsel rmsel" title="会議室">${roomOpts('')}</select>`+
+     `<div class="mtadd" id="mtAddForm" style="display:${_mtDraft?'flex':'none'}">`+
+       `<input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）" value="${esca(d.title||'')}">`+
+       `<input id="mtDate" type="date" title="日付" value="${esca(d.date||'')}"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts(d.start||'','開始')}</select><span class="mtsep">〜</span>`+
+       `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts(d.end||'','終了')}</select><select id="mtRoom" class="tsel rmsel" title="会議室">${roomOpts(d.room||'')}</select>`+
        `<button id="mtAddBtn">追加</button>`+
      `</div></div>`;
   box.innerHTML=h;
+  _mtDraft=null;   // プリセットは一度きり（以降の再描画で入力を上書きしない）
 }
+// ===== 「次回を登録」プリセット（前回をひな形に：日付+4週／第N回を繰り上げ／時刻・会議室は引き継ぎ）=====
+const _KNUM='〇一二三四五六七八九';
+function _kan2num(s){ if(/^\d+$/.test(s)) return +s;                      // 「三」「十二」「12」→ 数値
+  const i=s.indexOf('十');
+  if(i<0){ const n=_KNUM.indexOf(s); return n>0?n:NaN; }
+  const hi=(i===0)?1:_KNUM.indexOf(s.slice(0,i)), lo=(i===s.length-1)?0:_KNUM.indexOf(s.slice(i+1));
+  return (hi>=1&&lo>=0)?hi*10+lo:NaN; }
+function _num2kan(n){ if(n<10) return _KNUM[n]; if(n>99) return String(n);  // 数値 →「十三」
+  const hi=Math.floor(n/10), lo=n%10; return (hi>1?_KNUM[hi]:'')+'十'+(lo?_KNUM[lo]:''); }
+function bumpMtTitle(t){ const s=String(t||''); const m=s.match(/第([0-9]+|[〇一二三四五六七八九十]+)回/);
+  if(!m) return s;
+  const n=_kan2num(m[1]); if(!isFinite(n)) return s;
+  const nx=/^\d+$/.test(m[1]) ? String(n+1) : _num2kan(n+1);
+  return s.slice(0,m.index)+'第'+nx+'回'+s.slice(m.index+m[0].length); }
+function nextMeetingDraft(){ ensureBoards();
+  const mts=state.meetings.filter(m=>m&&m.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+  const base=mts[mts.length-1]; if(!base) return {};
+  // 4週おきを想定して、今日以降になるまで送る（久しぶりに開いても過去日が入らないように）
+  const todayY=ymd(new Date()); let d=addDays(parse(base.date),28), guard=0;
+  while(ymd(d)<todayY && guard++<400) d=addDays(d,28);
+  return { title:bumpMtTitle(base.title), date:ymd(d),
+           start:base.start||'', end:base.end||'', room:base.room||'' }; }
+function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _openMeeting=null; renderTopics();
+  document.getElementById('topicModal').classList.add('on');
+  const t=document.getElementById('mtTitle'); if(t) t.focus(); }
+// 手動で「＋ 定例を追加」を開いたときも、未入力なら直近の定例から引き継いだ内容を入れておく（そのまま消して手入力も可）
+function prefillNextIfEmpty(){ const g=id=>document.getElementById(id);
+  if((g('mtTitle')&&g('mtTitle').value)||(g('mtDate')&&g('mtDate').value)) return;
+  const d=nextMeetingDraft(); if(!d.date&&!d.title) return;
+  if(g('mtTitle')) g('mtTitle').value=d.title||''; if(g('mtDate')) g('mtDate').value=d.date||'';
+  if(g('mtStart')) g('mtStart').value=d.start||''; if(g('mtEnd')) g('mtEnd').value=d.end||'';
+  if(g('mtRoom')) g('mtRoom').value=d.room||''; }
 function renderMeetingTable(box){
   const m=state.meetings.find(x=>x.id===_openMeeting);
   const rows=state.topics.filter(t=>t&&t.meetingId===_openMeeting);
@@ -2080,13 +2143,15 @@ function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレー
   const rr=roomRes(m.room); if(rr) guestArr.push(rr);   // 会議室リソースを招待＝その部屋を予約
   if(guestArr.length) p.set('add', guestArr.join(','));
   return 'https://calendar.google.com/calendar/render?'+p.toString(); }
-{ const _kb=document.getElementById('kpibar'); if(_kb) _kb.addEventListener('click', e=>{ if(e.target.closest('#kpiMeet')) openTopics(); }); }
+{ const _kb=document.getElementById('kpibar'); if(_kb) _kb.addEventListener('click', e=>{
+    if(e.target.closest('#kpiNextMt')){ e.stopPropagation(); openNextMeetingForm(); return; }   // 「＋次回を登録」＝プリセット付きで開く
+    if(e.target.closest('#kpiMeet')) openTopics(); }); }
 document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.id==='topicModal'||e.target.id==='topicClose') document.getElementById('topicModal').classList.remove('on'); });
 document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#tpBack')){ _openMeeting=null; renderTopics(); return; }
   if(e.target.closest('#mtAddToggle')){ const f=document.getElementById('mtAddForm');
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
-      if(show){ const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
+      if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
   if(e.target.closest('#tpGcal')){ const m=state.meetings.find(x=>x.id===_openMeeting); if(m) window.open(gcalUrl(m),'_blank','noopener'); return; }
   if(e.target.closest('#tpAddRow')){ addRow(); return; }
