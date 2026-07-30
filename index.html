@@ -2036,7 +2036,7 @@ function renderMeetingList(box){
         `<button class="del" data-del-mt="${esca(m.id)}" title="この定例を削除">✕</button></div>`;
     }).join('') : `<div class="tpempty">定例がまだありません。下の「＋ 定例を追加」から登録してください。</div>`;
   // 全部過ぎている＝次回が未登録。前回を引き継いだ登録を促す
-  if(list.length && !nextId) h+=`<div class="tpempty">直近の定例は終了しています。「＋ 定例を追加」で次回を登録してください（前回の時刻・会議室が入った状態で開きます）。</div>`;
+  if(list.length && !nextId) h+=`<div class="tpempty">直近の定例は終了しています。「＋ 定例を追加」で次回を登録してください。<b>日付は直近の開催間隔からの推定値</b>なので、招待メール・カレンダーで確認してから追加してください。</div>`;
   // 追加はボタン → 押すとフォームが開く。_mtDraft があれば最初から開いてプリセット表示
   const d=_mtDraft||{};
   h+=`<div class="mtaddwrap">`+
@@ -2064,12 +2064,21 @@ function bumpMtTitle(t){ const s=String(t||''); const m=s.match(/第([0-9]+|[〇
   const n=_kan2num(m[1]); if(!isFinite(n)) return s;
   const nx=/^\d+$/.test(m[1]) ? String(n+1) : _num2kan(n+1);
   return s.slice(0,m.index)+'第'+nx+'回'+s.slice(m.index+m[0].length); }
+// 開催間隔は「直近2回の間隔」から推定する（隔週・毎月などプロジェクトごとの実態に自動で合わせる）。
+// 履歴が1回だけ／間隔が不自然なときは隔週(14日)を既定にする。
+const MT_INTERVAL_DEFAULT=14;
+function mtInterval(mts){
+  if(mts.length<2) return MT_INTERVAL_DEFAULT;
+  const a=parse(mts[mts.length-2].date), b=parse(mts[mts.length-1].date);
+  const days=Math.round((b-a)/86400000);
+  return (days>=3 && days<=70) ? days : MT_INTERVAL_DEFAULT; }
 function nextMeetingDraft(){ ensureBoards();
   const mts=state.meetings.filter(m=>m&&m.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const base=mts[mts.length-1]; if(!base) return {};
-  // 4週おきを想定して、今日以降になるまで送る（久しぶりに開いても過去日が入らないように）
-  const todayY=ymd(new Date()); let d=addDays(parse(base.date),28), guard=0;
-  while(ymd(d)<todayY && guard++<400) d=addDays(d,28);
+  // 推定した間隔で、今日以降になるまで送る（久しぶりに開いても過去日が入らないように）
+  const step=mtInterval(mts), todayY=ymd(new Date());
+  let d=addDays(parse(base.date),step), guard=0;
+  while(ymd(d)<todayY && guard++<400) d=addDays(d,step);
   return { title:bumpMtTitle(base.title), date:ymd(d),
            start:base.start||'', end:base.end||'', room:base.room||'' }; }
 function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _openMeeting=null; renderTopics();
