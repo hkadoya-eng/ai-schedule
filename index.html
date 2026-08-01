@@ -2091,7 +2091,44 @@ function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _op
 // ブラウザのログインセッションでしか共有ボードに書けないため、確定済みの予定はここに書いて
 // 起動時に1回だけ入れる。適用済みIDを state.seeds に残すので、後で消しても復活しない。
 // 役目が終わった項目は SEEDS から削除してよい。
+// 定例1件＋そのお題をまとめて入れる。同じ日付の定例が既にあれば作り直さず内容だけ合わせる（idを保つ＝既存お題が残る）。
+// お題は「やること」が同じ行があればスキップするので、seedを取り消し忘れても二重登録にならない。
+function seedMeetingWithTopics(MT, rows){
+  let m=state.meetings.find(x=>x&&x.date===MT.date);
+  if(m){ Object.assign(m, MT); m._u=Date.now(); }
+  else { m=Object.assign({ id:uid('mt'), _u:Date.now() }, MT); state.meetings.push(m); }
+  (rows||[]).forEach(r=>{
+    if(state.topics.some(t=>t&&t.meetingId===m.id&&(t.todo||'')===r.todo)) return;
+    state.topics.push({ id:uid('tp'), meetingId:m.id, done:!!r.done,
+                        name:r.name||'', todo:r.todo||'', detail:r.detail||'', _u:Date.now() }); });
+}
 const SEEDS=[
+  // 第4回・第5回定例（実施済み）。日時はGoogleカレンダーの実物で確認（2026-07-13 / 07-27 16:00〜17:00 会議室Ｌ）。
+  // 中身は「企画AI定例シート」の議事録から書き起こし。済んだ話はチェック済み、次回に持ち越す宿題だけ未対応で残す。
+  { id:'mt_20260713_dai4_v1', apply(){
+      seedMeetingWithTopics(
+        { title:'第4回定例', date:'2026-07-13', start:'16:00', end:'17:00', room:'会議室L' },
+        [
+          { name:'議事録', done:true, todo:'担当の再確認・スケジュール',
+            detail:'角谷ツールのデモも兼ねて実施。以降の状況次第で期限決めを進める。' },
+          { name:'議事録', done:true, todo:'事前確認シートのFB・共有',
+            detail:'進行や更新があれば共有。進行管理ツール → https://ai-schedule-delta.vercel.app/' },
+          { name:'山根', done:true, todo:'出玉関連 今後の進め方',
+            detail:'企画と切り分けることで効率化／コスト最適化を図りたい。〈山根所感〉出玉全体のAI推進方針は企画でかかげた観点を参考にしてほしい／監修役・実行役の担当決め・すみ分けが必要。' },
+          { name:'議事録', done:true, todo:'関連リンクの共有',
+            detail:'GASツール → https://script.google.com/a/macros/key-cre.co.jp/s/AKfycbyWZxA_7X1Ykkxzf81jgRO7c5IF87hHMT-mbTU8rOvPXO0PhFfcevJ0O5BcL4bo2Qmk0Q/exec ／ 作業分担シート → https://docs.google.com/spreadsheets/d/1HZtuAqCQiMRR7xcgdWWvZS_ow3TkOItb/edit?gid=420048821' },
+          { name:'議事録', done:true, todo:'AI定例（全社）のFB',
+            detail:'各部門の取り組み共有が主体。取り立てて共有事項はナシ。' },
+        ]); } },
+  { id:'mt_20260727_dai5_v1', apply(){
+      seedMeetingWithTopics(
+        { title:'第5回定例', date:'2026-07-27', start:'16:00', end:'17:00', room:'会議室L' },
+        [
+          { name:'伊藤(真)', done:false, todo:'ツール化のネックを調査して報告',
+            detail:'次回定例でツール化の壁について調査・報告を実施。あわせて事前確認シートを作ってもらえると良さそう。' },
+          { name:'議事録', done:false, todo:'個別タスクの進捗報告・共有のやり方を決める',
+            detail:'次回以降、個別タスクに対する進捗報告・共有を活性化したい。要相談）角谷さんのツール活用＋しばらくはスプレッドシート併用が良いかも。狙い）それとなく進めると各自の都合が積み重なって全体の進捗が遅れる、を抑制して進捗を活発化する。' },
+        ]); } },
   // 第6回定例（＝【社内】企画AI委員会）2026-08-17(月) 16:00〜17:00 会議室L
   // Googleカレンダーで実物を確認済み。既存の行があれば作り直さず直す（idを保つ＝お題が残る）。
   { id:'mt_20260817_dai6_r2', apply(){
