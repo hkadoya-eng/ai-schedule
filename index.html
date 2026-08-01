@@ -2106,8 +2106,9 @@ function applySeeds(){ ensureBoards();
   if(!Array.isArray(state.seeds)) state.seeds=[];
   let changed=false;
   SEEDS.forEach(s=>{ if(state.seeds.indexOf(s.id)>=0) return;
-    state.seeds.push(s.id); changed=true;                 // 失敗しても再試行しない（毎回追加されるのを防ぐ）
-    try{ s.apply(); }catch(e){ console.error('[seed]', s.id, e); } });
+    // 成功したときだけ適用済みにする（途中で落ちたまま二度と入らなくなるのを防ぐ）
+    try{ s.apply(); state.seeds.push(s.id); changed=true; }
+    catch(e){ console.error('[seed]', s.id, e); } });
   if(changed) persist(); }                                 // 履歴に載せず共有(Supabase)へ反映
 // 手動で「＋ 定例を追加」を開いたときも、未入力なら直近の定例から引き継いだ内容を入れておく（そのまま消して手入力も可）
 function prefillNextIfEmpty(){ const g=id=>document.getElementById(id);
@@ -3093,7 +3094,9 @@ window.__applyRemote = function(board){          // 他の人の更新を反映�
   if(!board || !board.tree) return;
   const ae=document.activeElement;
   if(ae && (ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable)) return;
-  state=board; lastSnap=snap();
+  state=board;
+  try{ applySeeds(); }catch(e){ console.error('[seed]', e); }   // 受信データで巻き戻っても投入し直す
+  lastSnap=snap();
   try{ localStorage.setItem(STORAGE_KEY, snap()); }catch(e){}
   const dd=document.getElementById('detail'); if(dd) dd.classList.remove('open'); detailId=null;
   syncToolbar(); render(); refreshTopicsIfOpen();
@@ -3107,7 +3110,7 @@ const SUPA_URL = "https://vpzbtuucopucablwyqeq.supabase.co";
 const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZwemJ0dXVjb3B1Y2FibHd5cWVxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU2Mjk2MzEsImV4cCI6MjA5MTIwNTYzMX0.qry7pSzmm3lWK82Vnp7Wz-R9wHsDVwbj7ysy62xUhuA";
 const sb = createClient(SUPA_URL, SUPA_KEY);
 const gate=document.getElementById('loginGate'), gateMsg=document.getElementById('gateMsg'), statusEl=document.getElementById('sbStatus');
-let started=false, saveTimer=null, myEmail='';
+let started=false, loggingIn=false, saveTimer=null, myEmail='';
 function setStatus(t,c){ if(statusEl){ statusEl.textContent=t; statusEl.style.color=c||'var(--dim)'; } }
 function isKeycre(s){ return (s && s.user && s.user.email || '').endsWith('@key-cre.co.jp'); }
 document.getElementById('googleLogin').addEventListener('click', async ()=>{
@@ -3143,12 +3146,18 @@ window.__saveBoard=function(){
     }catch(e){ setStatus('保存失敗: '+(e&&e.message||e),'#d64550'); console.error('[save]', e); }
   }, 700);
 };
+// getSession() と onAuthStateChange() がほぼ同時に発火するため、await の前に同期フラグで塞ぐ。
+// 塞がないと afterLogin が二重に走り、①同じchannelへの再subscribeで例外、②2回目が取り直した
+// 古いボードで state を巻き戻す（起動直後に加えた変更が消える）という2つの不具合が出る。
 async function afterLogin(session){
+  if(loggingIn || started) return;
+  loggingIn=true;
+  try{
   myEmail=session.user.email; window.__user=myEmail;
   const board=await loadBoard();
   gate.style.display='none';
   setStatus('● '+myEmail.split('@')[0]+'（共有中）','#12a06a');
-  if(!started){ started=true; window.__initApp(board); } else if(board) window.__applyRemote(board);
+  started=true; window.__initApp(board);
   // ログインした本人を参加者候補（メンバー名簿）に登録
   try{ const md=session.user.user_metadata||{}; const nm=md.full_name||md.name||''; if(window.__registerMember) window.__registerMember(myEmail, nm); }catch(e){}
   sb.channel('board').on('postgres_changes', {event:'UPDATE',schema:'public',table:'schedule_board',filter:'id=eq.main'}, (p)=>{
@@ -3160,6 +3169,8 @@ async function afterLogin(session){
       setStatus('● 更新を受信','#12a06a');
     }
   }).subscribe();
+  }catch(e){ loggingIn=false;   // 失敗したら次のイベントで再試行できるように戻す
+    setStatus('起動に失敗: '+(e&&e.message||e),'#d64550'); console.error('[afterLogin]', e); }
 }
 sb.auth.getSession().then(({data:{session}})=>{
   if(session && isKeycre(session)) afterLogin(session);
