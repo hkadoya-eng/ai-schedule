@@ -2092,15 +2092,13 @@ function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _op
 // 起動時に1回だけ入れる。適用済みIDを state.seeds に残すので、後で消しても復活しない。
 // 役目が終わった項目は SEEDS から削除してよい。
 const SEEDS=[
-  // 【社内】企画AI委員会 2026-08-17(月) 16:00〜17:00 会議室L（Googleカレンダーで実物を確認済み）
-  { id:'mt_20260817_kikakuai', apply(){
-      if(state.meetings.some(m=>m&&m.date==='2026-08-17')) return;      // 既にあれば触らない
-      const dup=state.meetings.find(m=>m&&m.date==='2026-08-18');       // 誤って8/18が入っていたら移動（お題を保つ）
-      if(dup){ dup.date='2026-08-17'; dup.start='16:00'; dup.end='17:00'; dup.room='会議室L'; dup._u=Date.now(); return; }
-      const last=state.meetings.filter(m=>m&&m.date)
-        .sort((a,b)=>String(a.date).localeCompare(String(b.date))).pop();
-      state.meetings.push({ id:uid('mt'), title:bumpMtTitle(last&&last.title||'')||'企画AI委員会',
-        date:'2026-08-17', start:'16:00', end:'17:00', room:'会議室L', _u:Date.now() }); } },
+  // 第6回定例（＝【社内】企画AI委員会）2026-08-17(月) 16:00〜17:00 会議室L
+  // Googleカレンダーで実物を確認済み。既存の行があれば作り直さず直す（idを保つ＝お題が残る）。
+  { id:'mt_20260817_dai6_r2', apply(){
+      const MT={ title:'第6回定例', date:'2026-08-17', start:'16:00', end:'17:00', room:'会議室L' };
+      const cur=state.meetings.find(m=>m&&(m.date==='2026-08-17'||m.date==='2026-08-18'));
+      if(cur){ Object.assign(cur, MT); cur._u=Date.now(); return; }
+      state.meetings.push(Object.assign({ id:uid('mt'), _u:Date.now() }, MT)); } },
 ];
 function applySeeds(){ ensureBoards();
   if(!Array.isArray(state.seeds)) state.seeds=[];
