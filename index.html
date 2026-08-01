@@ -2059,11 +2059,14 @@ function _kan2num(s){ if(/^\d+$/.test(s)) return +s;                      // 「
   return (hi>=1&&lo>=0)?hi*10+lo:NaN; }
 function _num2kan(n){ if(n<10) return _KNUM[n]; if(n>99) return String(n);  // 数値 →「十三」
   const hi=Math.floor(n/10), lo=n%10; return (hi>1?_KNUM[hi]:'')+'十'+(lo?_KNUM[lo]:''); }
-function bumpMtTitle(t){ const s=String(t||''); const m=s.match(/第([0-9]+|[〇一二三四五六七八九十]+)回/);
+// 「第三回定例」「第3回」「次回定例5回目」など、回数の書き方が混在しているので両方に対応する
+function bumpMtTitle(t){ const s=String(t||'');
+  const NUM='[0-9]+|[〇一二三四五六七八九十]+';
+  const m=s.match(new RegExp('第('+NUM+')回')) || s.match(new RegExp('('+NUM+')回目'));
   if(!m) return s;
   const n=_kan2num(m[1]); if(!isFinite(n)) return s;
   const nx=/^\d+$/.test(m[1]) ? String(n+1) : _num2kan(n+1);
-  return s.slice(0,m.index)+'第'+nx+'回'+s.slice(m.index+m[0].length); }
+  return s.slice(0,m.index)+m[0].replace(m[1],nx)+s.slice(m.index+m[0].length); }
 // 開催間隔は「直近2回の間隔」から推定する（隔週・毎月などプロジェクトごとの実態に自動で合わせる）。
 // 履歴が1回だけ／間隔が不自然なときは隔週(14日)を既定にする。
 const MT_INTERVAL_DEFAULT=14;
@@ -2084,6 +2087,28 @@ function nextMeetingDraft(){ ensureBoards();
 function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _openMeeting=null; renderTopics();
   document.getElementById('topicModal').classList.add('on');
   const t=document.getElementById('mtTitle'); if(t) t.focus(); }
+// ===== 決まっている予定のワンタイム投入（seed）=====
+// ブラウザのログインセッションでしか共有ボードに書けないため、確定済みの予定はここに書いて
+// 起動時に1回だけ入れる。適用済みIDを state.seeds に残すので、後で消しても復活しない。
+// 役目が終わった項目は SEEDS から削除してよい。
+const SEEDS=[
+  // 【社内】企画AI委員会 2026-08-17(月) 16:00〜17:00 会議室L（Googleカレンダーで実物を確認済み）
+  { id:'mt_20260817_kikakuai', apply(){
+      if(state.meetings.some(m=>m&&m.date==='2026-08-17')) return;      // 既にあれば触らない
+      const dup=state.meetings.find(m=>m&&m.date==='2026-08-18');       // 誤って8/18が入っていたら移動（お題を保つ）
+      if(dup){ dup.date='2026-08-17'; dup.start='16:00'; dup.end='17:00'; dup.room='会議室L'; dup._u=Date.now(); return; }
+      const last=state.meetings.filter(m=>m&&m.date)
+        .sort((a,b)=>String(a.date).localeCompare(String(b.date))).pop();
+      state.meetings.push({ id:uid('mt'), title:bumpMtTitle(last&&last.title||'')||'企画AI委員会',
+        date:'2026-08-17', start:'16:00', end:'17:00', room:'会議室L', _u:Date.now() }); } },
+];
+function applySeeds(){ ensureBoards();
+  if(!Array.isArray(state.seeds)) state.seeds=[];
+  let changed=false;
+  SEEDS.forEach(s=>{ if(state.seeds.indexOf(s.id)>=0) return;
+    state.seeds.push(s.id); changed=true;                 // 失敗しても再試行しない（毎回追加されるのを防ぐ）
+    try{ s.apply(); }catch(e){ console.error('[seed]', s.id, e); } });
+  if(changed) persist(); }                                 // 履歴に載せず共有(Supabase)へ反映
 // 手動で「＋ 定例を追加」を開いたときも、未入力なら直近の定例から引き継いだ内容を入れておく（そのまま消して手入力も可）
 function prefillNextIfEmpty(){ const g=id=>document.getElementById(id);
   if((g('mtTitle')&&g('mtTitle').value)||(g('mtDate')&&g('mtDate').value)) return;
@@ -3061,6 +3086,7 @@ window.addEventListener('resize', ()=>{ clearTimeout(_rzTimer); _rzTimer=setTime
 window.__getState = ()=> state;
 window.__initApp = function(board){
   if(board && board.tree) state=board;          // Supabaseの保存内容で開始（無ければ現stateのまま）
+  try{ applySeeds(); }catch(e){ console.error('[seed]', e); }   // 確定済みの予定を1回だけ投入
   lastSnap=snap(); updateUndoUI(); syncToolbar(); render();
 };
 window.__applyRemote = function(board){          // 他の人の更新を反映（入力中は上書きしない）
