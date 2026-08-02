@@ -601,7 +601,10 @@
   .tphdr{flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:11px 14px;
     background:linear-gradient(180deg,var(--panel3),var(--panel2)); border-bottom:1px solid var(--line);}
   .tphdr .t{font-weight:700; font-size:14.5px;}
-  .tphdr .tpwhint{margin-left:auto; font-size:10.5px; color:var(--dim); white-space:nowrap; cursor:default;}
+  .tphdr .tpwgrp{margin-left:auto; display:inline-flex; gap:4px;}
+  .tphdr .tpwgrp button{background:var(--panel3); border:1px solid var(--line); color:var(--muted);
+    border-radius:6px; padding:3px 9px; cursor:pointer; font-family:inherit; font-size:11px; line-height:1.4;}
+  .tphdr .tpwgrp button:hover{border-color:var(--teal); color:var(--text);}
   .tphdr .tpx{ background:var(--panel3); border:1px solid var(--line); color:var(--text);
     width:28px; height:28px; border-radius:7px; cursor:pointer; font-size:16px; line-height:1;}
   .tphdr .tpx:hover{border-color:var(--teal);}
@@ -684,7 +687,8 @@
   .tpcard.done .cell.todo{text-decoration:line-through;}
   /* 開閉と、開いたときの記入欄 */
   .tpcard{cursor:pointer;} .tpcard.open{cursor:auto;} .tpcard .cell, .tpcard a{cursor:auto;}
-  .tpcard .exp{flex:none; background:none; border:none; color:var(--muted); cursor:pointer; font-size:12px; padding:2px 5px;}
+  .tpcard .exp{flex:none; background:none; border:1px solid transparent; color:var(--muted); cursor:pointer; font-size:11.5px; padding:2px 7px; border-radius:6px; white-space:nowrap;}
+  .tpcard.open .exp{background:var(--panel3); border-color:var(--line);}
   .tpcard .exp:hover{color:var(--teal);}
   .tpcard.open{border-color:var(--teal); box-shadow:0 2px 14px rgba(0,0,0,.06);}
   .memoprev{font-size:12.5px; color:var(--muted); line-height:1.6; padding:2px 8px;
@@ -936,7 +940,10 @@
 <div id="topicModal">
   <div class="tpresize" id="tpResize" title="左右にドラッグで幅を変える（ダブルクリックで既定の幅に戻す）"></div>
   <div class="tphdr"><div class="t">📝 打合せ予定</div>
-    <span class="tpwhint" title="左端のつまみを左右にドラッグ（ダブルクリックで画面半分に戻す）">⇔ 端をドラッグで幅調整</span>
+    <span class="tpwgrp" title="パネルの幅（左端のつまみをドラッグしても変えられます）">
+      <button data-tpw="narrow" title="狭くする">－</button>
+      <button data-tpw="half" title="画面の半分に戻す">半分</button>
+      <button data-tpw="wide" title="広くする">＋</button></span>
     <button class="tpx" id="topicClose" title="閉じる（ガントは開いたまま操作できます）">×</button></div>
   <div class="tpbody" id="topicBody"></div>
 </div>
@@ -2350,7 +2357,7 @@ function tpCard(t){
       `<div class="nm cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="名前">${esc(t.name||'')}</div>`+
       (t.from?`<button class="cotag" data-uncarry="${esca(t.id)}" title="${esca((src&&src.title)||'元の定例')}から持ち越し。クリックで元に戻す">🔁 前回から</button>`:'')+
       (t.done?'':`<button class="act carry" data-carry="${esca(t.id)}" title="このお題を次の定例に移す">▶ 次回へ</button>`)+
-      `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'開いて詳細を書く'}">${open?'▾':'▸'}</button>`+
+      `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'開いて詳細を書く'}">${open?'▾ とじる':'▸'}</button>`+
       `<button class="del" data-del="${esca(t.id)}" title="このお題を削除">✕</button>`+
     `</div>`+
     tpCell(t,'todo','todo','やること・話したいこと');
@@ -2559,19 +2566,25 @@ document.getElementById('kpiModal').addEventListener('click', e=>{
   if(r) document.getElementById('kpiModal').classList.remove('on');   // 開くのは data-detail を見ている既存ハンドラ
 });
 document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.closest('#topicClose')) closeTopics(); });
-// パネルの幅はドラッグで変更＋この端末に記憶（ダブルクリックで既定に戻す）
+// パネルの幅：ヘッダのボタン／左端のドラッグで変更。この端末に記憶する。
 (function(){ const h=document.getElementById('tpResize'); if(!h) return;
-  const KEY='aisch_tpw', MIN=420, MAX=1600;
-  const def=()=>Math.max(MIN, Math.min(MAX, Math.round(window.innerWidth*0.5)));   // 既定は画面の半分
+  const KEY='aisch_tpw', MIN=380, MAX=1600, STEP=160;
+  const half=()=>Math.max(MIN, Math.min(MAX, Math.round(window.innerWidth*0.5)));   // 既定は画面の半分
   const set=w=>{ w=Math.max(MIN,Math.min(MAX,Math.round(w))); document.documentElement.style.setProperty('--tpw', w+'px'); return w; };
-  let cur=set(def());
+  const store=w=>{ try{ localStorage.setItem(KEY, String(w)); }catch(e){} };
+  let cur=set(half());
   try{ const s=parseInt(localStorage.getItem(KEY)||'',10); if(isFinite(s)) cur=set(s); }catch(e){}
   let drag=false;
   h.addEventListener('mousedown', e=>{ drag=true; document.body.classList.add('tpdrag'); e.preventDefault(); });
   window.addEventListener('mousemove', e=>{ if(drag) cur=set(window.innerWidth-e.clientX); });
-  window.addEventListener('mouseup', ()=>{ if(!drag) return; drag=false; document.body.classList.remove('tpdrag');
-    try{ localStorage.setItem(KEY, String(cur)); }catch(e){} });
-  h.addEventListener('dblclick', ()=>{ cur=set(def()); try{ localStorage.removeItem(KEY); }catch(e){} });   // 画面半分に戻す
+  window.addEventListener('mouseup', ()=>{ if(!drag) return; drag=false; document.body.classList.remove('tpdrag'); store(cur); });
+  h.addEventListener('dblclick', ()=>{ cur=set(half()); try{ localStorage.removeItem(KEY); }catch(e){} });   // 画面半分に戻す
+  // ドラッグは細くて掴みにくいので、ボタンでも縮められるようにしておく
+  const bar=document.querySelector('.tphdr'); if(!bar) return;
+  bar.addEventListener('click', e=>{ const b=e.target.closest('[data-tpw]'); if(!b) return;
+    const k=b.dataset.tpw;
+    cur = set(k==='half' ? half() : k==='wide' ? cur+STEP : cur-STEP);
+    if(k==='half'){ try{ localStorage.removeItem(KEY); }catch(err){} } else store(cur); });
 })();
 document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#tpBack')){ _openMeeting=null; renderTopics(); return; }
@@ -2595,7 +2608,8 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   // カードの余白をクリックでも開閉（記入欄・ボタン・リンクの上は除く）
   const card=e.target.closest('.tpcard');
   // 開いている間は余白クリックでたたまない（記入中に閉じてしまうため。▾ボタンでたたむ）
-  if(card && !card.classList.contains('open') && !e.target.closest('[contenteditable],button,a,select,input,textarea')) toggleCard(card.dataset.tid);
+  if(card && !e.target.closest('[contenteditable],button,a,select,input,textarea')
+     && (!card.classList.contains('open') || e.target.closest('.r1'))) toggleCard(card.dataset.tid);
 });
 function toggleCard(id){ if(!id) return;
   if(_tpOpenCards.has(id)) _tpOpenCards.delete(id); else _tpOpenCards.add(id);
