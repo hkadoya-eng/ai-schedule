@@ -586,7 +586,7 @@
   .kprow.warn{border-color:rgba(217,148,19,.5);} .kprow.warn .rt{color:#c98a12;}
   .kprow.ok{opacity:.62;}
   /* お題・議題ボード（右サイドパネル：ガントを見ながら会議中に書ける）*/
-  :root{--tpw:720px;}
+  :root{--tpw:50vw;}   /* 既定は画面の半分。起動時にJSがpx値へ置き換える（ドラッグ幅は端末に記憶）*/
   #topicModal{position:fixed; z-index:58; right:0; top:0; height:100vh; width:var(--tpw);
     background:var(--panel); border-left:1px solid var(--line); box-shadow:-10px 0 40px rgba(0,0,0,.45);
     display:none; flex-direction:column;}
@@ -936,7 +936,7 @@
 <div id="topicModal">
   <div class="tpresize" id="tpResize" title="左右にドラッグで幅を変える（ダブルクリックで既定の幅に戻す）"></div>
   <div class="tphdr"><div class="t">📝 打合せ予定</div>
-    <span class="tpwhint" title="左端のつまみを左右にドラッグ（ダブルクリックで既定の幅）">⇔ 端をドラッグで幅調整</span>
+    <span class="tpwhint" title="左端のつまみを左右にドラッグ（ダブルクリックで画面半分に戻す）">⇔ 端をドラッグで幅調整</span>
     <button class="tpx" id="topicClose" title="閉じる（ガントは開いたまま操作できます）">×</button></div>
   <div class="tpbody" id="topicBody"></div>
 </div>
@@ -2561,15 +2561,17 @@ document.getElementById('kpiModal').addEventListener('click', e=>{
 document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.closest('#topicClose')) closeTopics(); });
 // パネルの幅はドラッグで変更＋この端末に記憶（ダブルクリックで既定に戻す）
 (function(){ const h=document.getElementById('tpResize'); if(!h) return;
-  const KEY='aisch_tpw', MIN=420, MAX=1200, DEF=720;
+  const KEY='aisch_tpw', MIN=420, MAX=1600;
+  const def=()=>Math.max(MIN, Math.min(MAX, Math.round(window.innerWidth*0.5)));   // 既定は画面の半分
   const set=w=>{ w=Math.max(MIN,Math.min(MAX,Math.round(w))); document.documentElement.style.setProperty('--tpw', w+'px'); return w; };
-  let cur=DEF; try{ const s=parseInt(localStorage.getItem(KEY)||'',10); if(isFinite(s)) cur=set(s); }catch(e){}
+  let cur=set(def());
+  try{ const s=parseInt(localStorage.getItem(KEY)||'',10); if(isFinite(s)) cur=set(s); }catch(e){}
   let drag=false;
   h.addEventListener('mousedown', e=>{ drag=true; document.body.classList.add('tpdrag'); e.preventDefault(); });
   window.addEventListener('mousemove', e=>{ if(drag) cur=set(window.innerWidth-e.clientX); });
   window.addEventListener('mouseup', ()=>{ if(!drag) return; drag=false; document.body.classList.remove('tpdrag');
     try{ localStorage.setItem(KEY, String(cur)); }catch(e){} });
-  h.addEventListener('dblclick', ()=>{ cur=set(DEF); try{ localStorage.setItem(KEY, String(DEF)); }catch(e){} });
+  h.addEventListener('dblclick', ()=>{ cur=set(def()); try{ localStorage.removeItem(KEY); }catch(e){} });   // 画面半分に戻す
 })();
 document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#tpBack')){ _openMeeting=null; renderTopics(); return; }
