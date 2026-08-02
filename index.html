@@ -565,9 +565,23 @@
   .difftag.chg{background:rgba(242,177,61,.16); color:#f2b13d;}
   .difftag.same{background:var(--panel3); color:var(--dim);}
   .difftag.del{background:rgba(242,88,95,.16); color:#f2585f;}
-  /* お題・議題ボード（定例ごと → Excel風テーブル）*/
-  #topicModal .m{width:min(900px,96vw);}
-  .tphint{font-size:12px; color:var(--muted); background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:8px 11px; margin-bottom:12px; line-height:1.6;}
+  /* お題・議題ボード（右サイドパネル：ガントを見ながら会議中に書ける）*/
+  :root{--tpw:520px;}
+  #topicModal{position:fixed; z-index:58; right:0; top:0; height:100vh; width:var(--tpw);
+    background:var(--panel); border-left:1px solid var(--line); box-shadow:-10px 0 40px rgba(0,0,0,.45);
+    display:none; flex-direction:column;}
+  #topicModal.on{display:flex;}
+  body.tpon{padding-right:var(--tpw);}         /* ガントを右パネルのぶん詰める＝重ならず両方見える */
+  .tpresize{position:absolute; left:-3px; top:0; width:7px; height:100%; cursor:col-resize; z-index:2;}
+  .tpresize:hover, body.tpdrag .tpresize{background:linear-gradient(90deg,transparent,rgba(47,182,176,.5),transparent);}
+  body.tpdrag{cursor:col-resize; user-select:none;}
+  .tphdr{flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:11px 14px;
+    background:linear-gradient(180deg,var(--panel3),var(--panel2)); border-bottom:1px solid var(--line);}
+  .tphdr .t{font-weight:700; font-size:14.5px;}
+  .tphdr .tpx{margin-left:auto; background:var(--panel3); border:1px solid var(--line); color:var(--text);
+    width:28px; height:28px; border-radius:7px; cursor:pointer; font-size:16px; line-height:1;}
+  .tphdr .tpx:hover{border-color:var(--teal);}
+  .tpbody{flex:1 1 auto; overflow:auto; padding:14px;}
   .tpgcal{background:linear-gradient(180deg,#5b8def,#3f6fd6); color:#fff; font-weight:700; border:none; border-radius:8px; padding:7px 13px; cursor:pointer; font-family:inherit; font-size:12.5px; margin-left:auto; white-space:nowrap;}
   .tpgcal:hover{filter:brightness(1.08);}
   .mtadd{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:11px 12px;}
@@ -576,7 +590,7 @@
   .tsel:hover{border-color:var(--teal);} .tsel.rmsel{min-width:130px;}
   .mtrow .mtgcal{flex:none; background:rgba(91,141,239,.16); color:#9dbbf5; border:1px solid rgba(91,141,239,.45); border-radius:7px; padding:4px 10px; cursor:pointer; font-size:13px;}
   .mtrow .mtgcal:hover{filter:brightness(1.12);}
-  .tphd .tpmeta{flex:1; min-width:0;}
+  .tpmeta{margin-bottom:12px;}
   .mtedit{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 8px; font-family:inherit; font-size:12.5px;}
   .mtedit.tpttl-in{font-size:15px; font-weight:700; width:100%; margin-bottom:7px;}
   .mtedit.rm{width:160px;}
@@ -591,11 +605,15 @@
   .mtadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px; white-space:nowrap;}
   .tpsec{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.8px; margin:4px 0 8px;}
   .tpempty{color:var(--muted); font-size:12.5px; padding:8px 2px;}
-  .mtrow{display:flex; align-items:center; gap:12px; padding:12px 13px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; background:var(--panel2); cursor:pointer;}
+  .mtrow{padding:11px 12px; border:1px solid var(--line); border-radius:10px; margin-bottom:8px; background:var(--panel2); cursor:pointer;}
   .mtrow:hover{border-color:var(--teal); background:var(--panel3);}
-  .mtrow .mtt{font-weight:700; font-size:14px;}
-  .mtrow .mtd{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;}
-  .mtrow .mtc{margin-left:auto; font-size:11.5px; color:var(--dim); white-space:nowrap;}
+  .mtrow .l1{display:flex; align-items:center; gap:7px;}
+  .mtrow .mtt{font-weight:700; font-size:14px; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .mtrow .mtd{display:block; color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; margin-top:3px;}
+  .mtrow .mtc{display:block; font-size:11.5px; color:var(--dim); margin-top:3px;}
+  .mtrow .mtc .co{color:#a8710a; font-weight:700;}
+  .mtrow .mtn{display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+    font-size:11.5px; color:var(--muted); line-height:1.6; margin-top:6px; padding-top:6px; border-top:1px dashed var(--line2); white-space:pre-wrap;}
   .mtrow.past{opacity:.62;}                                   /* 日程が過ぎた定例 */
   .mtrow.next{border-color:rgba(47,182,176,.65); background:rgba(47,182,176,.08);}  /* 次回 */
   .mtrow .mttag{flex:none; font-size:10.5px; font-weight:700; border-radius:5px; padding:2px 7px;}
@@ -605,23 +623,52 @@
   .mtrow .del:hover{color:#f2585f;}
   .tpback{background:none; border:1px solid var(--line); color:var(--text); border-radius:7px; padding:5px 13px; cursor:pointer; font-family:inherit; font-size:12px;}
   .tphd{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
-  .tphd .tpttl{font-weight:700; font-size:15px;} .tphd .tpsub{color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums;}
-  .tptbl{width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;}
-  .tptbl th{text-align:left; font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.6px; padding:6px 8px; border-bottom:1px solid var(--line);}
-  .tptbl td{padding:0; border-bottom:1px solid var(--line2); vertical-align:top;}
-  .tptbl td.c-chk{width:38px; text-align:center; padding-top:7px;}
-  .tptbl td.c-name{width:120px;} .tptbl td.c-del{width:34px; text-align:center; padding-top:6px;}
-  .tptbl .cell{padding:8px 8px; outline:none; min-height:20px; white-space:pre-wrap; word-break:break-word; line-height:1.5;}
-  .tptbl .cell:focus{background:var(--panel3); box-shadow:inset 0 0 0 1px var(--teal);}
-  .tptbl .cell:empty:before{content:attr(data-ph); color:var(--dim);}
-  .tptbl tr.done .cell{text-decoration:line-through; opacity:.58;}
-  .tptbl .chk{width:22px; height:22px; border-radius:6px; border:1px solid var(--line); background:var(--panel3); color:var(--teal); cursor:pointer; font-size:13px; display:inline-flex; align-items:center; justify-content:center;}
-  .tptbl tr.done .chk{background:var(--teal); color:#04222b; border-color:var(--teal);}
-  .tptbl .del{background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:2px 4px;}
-  .tptbl .del:hover{color:#f2585f;}
-  .tpaddrow{margin-top:12px;}
-  .tpaddrow button{background:var(--panel3); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 14px; cursor:pointer; font-family:inherit; font-size:12.5px;}
-  .tpaddrow button:hover{border-color:var(--teal);}
+  /* 会議の概要（会議中にそのまま書き換える欄）*/
+  .tpnote{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:14px;}
+  .tpnote label{display:block; font-size:11.5px; font-weight:700; color:var(--muted); margin-bottom:6px;}
+  .tpnote label .sm{font-weight:400; font-size:10.5px; color:var(--dim);}
+  .tpnote textarea{width:100%; min-height:74px; resize:vertical; background:var(--panel3); color:var(--text);
+    border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13.5px; line-height:1.7;}
+  .tpnote textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
+  /* お題＝1件1カード（狭いパネルでも書きやすいように表をやめてカードにした）*/
+  .tpgrp{margin-bottom:16px;}
+  .tpgrp .gh{display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:700; color:var(--muted); margin:0 0 8px;}
+  .tpgrp .gh .n{background:var(--panel3); border-radius:9px; padding:1px 8px; font-size:11px; color:var(--text);}
+  .tpgrp.carry .gh{color:#a8710a;}
+  .tpcard{border:1px solid var(--line); border-radius:10px; background:var(--panel2); padding:9px 10px; margin-bottom:8px;}
+  .tpcard:focus-within{border-color:var(--teal);}
+  .tpcard.done{opacity:.55;}
+  .tpcard.carried{border-left:3px solid #e0a12c;}
+  .tpcard .r1{display:flex; align-items:center; gap:8px; margin-bottom:5px;}
+  .tpcard .chk{flex:none; width:24px; height:24px; border-radius:7px; border:1px solid var(--line); background:var(--panel3);
+    color:var(--teal); cursor:pointer; font-size:14px; display:inline-flex; align-items:center; justify-content:center;}
+  .tpcard.done .chk{background:var(--teal); color:#04222b; border-color:var(--teal);}
+  .tpcard .nm{flex:1; min-width:0; font-size:12px; color:var(--muted); font-weight:700;}
+  .tpcard .cotag{flex:none; font-size:10px; font-weight:700; padding:2px 7px; border-radius:9px;
+    background:rgba(224,161,44,.20); color:#8a5b00; white-space:nowrap;}
+  .tpcard .act{flex:none; background:var(--panel3); border:1px solid var(--line); color:var(--muted);
+    border-radius:7px; padding:3px 8px; cursor:pointer; font-family:inherit; font-size:11px; white-space:nowrap;}
+  .tpcard .act:hover{border-color:var(--teal); color:var(--text);}
+  .tpcard .act.carry{color:#a8710a; border-color:rgba(224,161,44,.55);}
+  .tpcard .del{flex:none; background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:2px 5px;}
+  .tpcard .del:hover{color:#f2585f;}
+  .tpcard .cell{outline:none; white-space:pre-wrap; word-break:break-word; border-radius:7px; padding:6px 8px;}
+  .tpcard .cell:focus{background:var(--panel3); box-shadow:inset 0 0 0 1px var(--teal);}
+  .tpcard .cell:empty:before{content:attr(data-ph); color:var(--dim);}
+  .tpcard .cell.todo{font-size:14px; font-weight:600; line-height:1.6;}
+  .tpcard .cell.memo{font-size:12.5px; color:var(--muted); line-height:1.65; margin-top:1px;}   /* class名は memo。detail は左の詳細パネルが使っている */
+  .tpcard.done .cell.todo{text-decoration:line-through;}
+  .tpgrp.cand{margin-top:18px; border-top:1px dashed var(--line); padding-top:12px;}
+  .tpgrp.cand .gh{color:#a8710a;} .tpgrp .gh .sm{font-weight:400; color:var(--dim); font-size:11px;}
+  .candrow{display:flex; align-items:center; gap:9px; padding:8px 10px; border:1px dashed var(--line);
+    border-radius:9px; margin-bottom:7px; background:var(--panel2);}
+  .candrow .ct{flex:1; min-width:0; font-size:12.5px; line-height:1.5;}
+  .candrow .cs{display:block; font-size:10.5px; color:var(--dim); margin-top:2px;}
+  .tpmoved{font-size:11.5px; color:var(--dim); line-height:1.7; padding:2px 2px 0;}
+  .tpmoved .mv{display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .tpaddrow{margin-top:4px;}
+  .tpaddrow button{width:100%; background:var(--panel3); color:var(--text); border:1px dashed var(--line); border-radius:9px; padding:10px 14px; cursor:pointer; font-family:inherit; font-size:13px;}
+  .tpaddrow button:hover{border-color:var(--teal); border-style:solid;}
   /* 右クリックメニュー */
   #ctxMenu button{width:196px; display:flex; align-items:center; gap:9px;}
   #moreMenu button{width:230px; display:flex; align-items:center; gap:9px; white-space:nowrap;}
@@ -829,11 +876,12 @@
   <div class="mf"><button class="ghost" id="backupClose">閉じる</button></div>
 </div></div>
 
-<div class="modal" id="topicModal"><div class="m">
-  <div class="mh"><div class="t">📝 打合せ予定</div><div class="s">次回の打合せに向けて、各自が話したいこと・相談したいことを書き込めます。全員に共有され、対応済みはチェックで消し込めます。</div></div>
-  <div class="mb" id="topicBody"></div>
-  <div class="mf"><button class="ghost" id="topicClose">閉じる</button></div>
-</div></div>
+<div id="topicModal">
+  <div class="tpresize" id="tpResize" title="左右にドラッグで幅を変える（ダブルクリックで既定の幅に戻す）"></div>
+  <div class="tphdr"><div class="t">📝 打合せ予定</div>
+    <button class="tpx" id="topicClose" title="閉じる（ガントは開いたまま操作できます）">×</button></div>
+  <div class="tpbody" id="topicBody"></div>
+</div>
 
 <div class="modal" id="memberModal"><div class="m">
   <div class="mh"><div class="t">👥 ログイン済みメンバー</div><div class="s">このアプリにログインした人の一覧です。打合せ予定のカレンダー登録では、この人たちが招待先になります。</div></div>
@@ -1315,12 +1363,14 @@ function computeKPIs(){
   const curMt=nextMt||lastMt;
   // お題の未対応件数は表示中の定例のぶんだけ数える（終わった定例の積み残しが残り続けないように）
   const openTp=curMt?(state.topics||[]).filter(t=>t&&!t.done&&t.meetingId===curMt.id).length:0;
+  const candTp=curMt?carryCandidates(curMt).length:0;   // 前の回に残っている未対応＝持ち越し候補
   box.innerHTML =
     `<div class="kpi meet${nextMt?'':' past'}" id="kpiMeet" title="クリックで打合せ予定・お題を開く"><div class="go">開く ▸</div>`+
       `<div class="lab">📝 打合せ予定</div>`+
       `<div class="val">${nextMt?mdNum(parse(nextMt.date))+(nextMt.start?' <small>'+esc(nextMt.start)+(nextMt.end?'〜'+esc(nextMt.end):'')+'</small>':''):'未定'}</div>`+
       `<div class="meta">${nextMt?esc((nextMt.title||'定例'))+(nextMt.room?'／'+esc(nextMt.room):'')+' ／ ':
-        (lastMt?'前回 '+mdNum(parse(lastMt.date))+' '+esc(lastMt.title||'定例')+'（済） ／ ':'定例を登録 ／ ')}お題 未対応 ${openTp}件</div>`+
+        (lastMt?'前回 '+mdNum(parse(lastMt.date))+' '+esc(lastMt.title||'定例')+'（済） ／ ':'定例を登録 ／ ')}お題 未対応 ${openTp}件`+
+        (candTp?` ／ <b style="color:#c98a12;white-space:nowrap">🔁 持越 ${candTp}件</b>`:'')+`</div>`+
       (nextMt?'':`<button class="mtnext" id="kpiNextMt" title="${lastMt?'前回の内容（時刻・会議室）を引き継いだ次回の登録フォームを開きます':'定例の登録フォームを開きます'}">＋ ${lastMt?'次回':'定例'}を登録</button>`)+
     `</div>`+
     `<div class="kpi accent"><div class="lab">全体進捗</div><div class="val">${pct}<small>%</small></div>`+
@@ -1996,8 +2046,17 @@ let _openMeeting=null;   // null=定例一覧／会議id=その会議のお題�
 let _mtDraft=null;       // 「＋次回を登録」で開いたときの追加フォームのプリセット値（一度使ったら破棄）
 function updateTopicBtn(){ ensureBoards(); if(typeof computeKPIs==='function'){ try{ computeKPIs(); }catch(e){} } }  // KPIの打合せ予定タイルを更新
 function refreshTopicsIfOpen(){ const m=document.getElementById('topicModal'); if(m&&m.classList.contains('on')) renderTopics(); }
-function openTopics(){ ensureBoards(); _openMeeting=null; renderTopics(); document.getElementById('topicModal').classList.add('on'); }
+function mtSorted(){ return state.meetings.filter(m=>m).slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||''))); }
+// 会議中にすぐ書けるよう、既定では「次回（全部過ぎていれば直近）」の定例をいきなり開く
+function defaultMeetingId(){ const list=mtSorted(), todayY=ymd(new Date());
+  return (list.find(m=>m.date&&m.date>=todayY) || list[list.length-1] || {}).id || null; }
+function showTopicPanel(){ document.getElementById('topicModal').classList.add('on'); document.body.classList.add('tpon'); }
+function closeTopics(){ document.getElementById('topicModal').classList.remove('on'); document.body.classList.remove('tpon'); }
+function openTopics(mtId){ ensureBoards();
+  _openMeeting = (typeof mtId==='string' && mtId) ? mtId : defaultMeetingId();
+  renderTopics(); showTopicPanel(); }
 function mtCounts(id){ const rows=state.topics.filter(t=>t&&t.meetingId===id); return {total:rows.length, open:rows.filter(t=>!t.done).length}; }
+function carryCount(id){ return state.topics.filter(t=>t&&t.meetingId===id&&t.from).length; }   // 前回から持ち越してきた件数
 function renderTopics(){
   const box=document.getElementById('topicBody'); if(!box) return; ensureBoards();
   if(_openMeeting && state.meetings.some(m=>m.id===_openMeeting)) renderMeetingTable(box); else { _openMeeting=null; renderMeetingList(box); }
@@ -2024,16 +2083,19 @@ function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
   const todayY=ymd(new Date());
   const nextId=(list.find(m=>m.date&&m.date>=todayY)||{}).id;   // 当日を含む直近の1件が「次回」
-  let h=`<div class="tpsec">定例一覧（クリックでお題を記入／📅でカレンダー登録）</div>`;
-  h+= list.length ? list.map(m=>{ const c=mtCounts(m.id);
+  let h=`<div class="tpsec">定例一覧（クリックで概要・お題を記入／📅でカレンダー登録）</div>`;
+  h+= list.length ? list.map(m=>{ const c=mtCounts(m.id), co=carryCount(m.id);
       const past=!!(m.date&&m.date<todayY), isNext=(m.id===nextId);
       return `<div class="mtrow${past?' past':''}${isNext?' next':''}" data-open-mt="${esca(m.id)}">`+
-        `<span class="mtt">${esc(m.title||'(無題の定例)')}</span>`+
-        (past?`<span class="mttag done">済</span>`:'')+(isNext?`<span class="mttag now">次回</span>`:'')+
+        `<div class="l1"><span class="mtt">${esc(m.title||'(無題の定例)')}</span>`+
+          (past?`<span class="mttag done">済</span>`:'')+(isNext?`<span class="mttag now">次回</span>`:'')+
+          `<button class="mtgcal" data-gcal-mt="${esca(m.id)}" title="Googleカレンダーに登録">📅</button>`+
+          `<button class="del" data-del-mt="${esca(m.id)}" title="この定例を削除">✕</button></div>`+
         `<span class="mtd">${mtWhen(m)}</span>`+
-        `<span class="mtc">お題 ${c.total}件${c.open?'（未対応 '+c.open+'）':''}</span>`+
-        `<button class="mtgcal" data-gcal-mt="${esca(m.id)}" title="Googleカレンダーに登録">📅</button>`+
-        `<button class="del" data-del-mt="${esca(m.id)}" title="この定例を削除">✕</button></div>`;
+        `<span class="mtc">お題 ${c.total}件${c.open?'（未対応 '+c.open+'）':''}`+
+          (co?` ／ <span class="co">🔁 持ち越し ${co}件</span>`:'')+`</span>`+
+        (m.note?`<div class="mtn">${esc(m.note)}</div>`:'')+
+      `</div>`;
     }).join('') : `<div class="tpempty">定例がまだありません。下の「＋ 定例を追加」から登録してください。</div>`;
   // 全部過ぎている＝次回が未登録。前回を引き継いだ登録を促す
   if(list.length && !nextId) h+=`<div class="tpempty">直近の定例は終了しています。「＋ 定例を追加」で次回を登録してください。<b>日付は直近の開催間隔からの推定値</b>なので、招待メール・カレンダーで確認してから追加してください。</div>`;
@@ -2084,8 +2146,7 @@ function nextMeetingDraft(){ ensureBoards();
   while(ymd(d)<todayY && guard++<400) d=addDays(d,step);
   return { title:bumpMtTitle(base.title), date:ymd(d),
            start:base.start||'', end:base.end||'', room:base.room||'' }; }
-function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _openMeeting=null; renderTopics();
-  document.getElementById('topicModal').classList.add('on');
+function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _openMeeting=null; renderTopics(); showTopicPanel();
   const t=document.getElementById('mtTitle'); if(t) t.focus(); }
 // ===== 決まっている予定のワンタイム投入（seed）=====
 // ブラウザのログインセッションでしか共有ボードに書けないため、確定済みの予定はここに書いて
@@ -2095,7 +2156,9 @@ function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _op
 // お題は「やること」が同じ行があればスキップするので、seedを取り消し忘れても二重登録にならない。
 function seedMeetingWithTopics(MT, rows){
   let m=state.meetings.find(x=>x&&x.date===MT.date);
-  if(m){ Object.assign(m, MT); m._u=Date.now(); }
+  if(m){ const patch=Object.assign({}, MT);
+         if(m.note) delete patch.note;                       // 人が書いた「会議の概要」は上書きしない
+         Object.assign(m, patch); m._u=Date.now(); }
   else { m=Object.assign({ id:uid('mt'), _u:Date.now() }, MT); state.meetings.push(m); }
   (rows||[]).forEach(r=>{
     if(state.topics.some(t=>t&&t.meetingId===m.id&&(t.todo||'')===r.todo)) return;
@@ -2105,9 +2168,10 @@ function seedMeetingWithTopics(MT, rows){
 const SEEDS=[
   // 第4回・第5回定例（実施済み）。日時はGoogleカレンダーの実物で確認（2026-07-13 / 07-27 16:00〜17:00 会議室Ｌ）。
   // 中身は「企画AI定例シート」の議事録から書き起こし。済んだ話はチェック済み、次回に持ち越す宿題だけ未対応で残す。
-  { id:'mt_20260713_dai4_v1', apply(){
+  { id:'mt_20260713_dai4_v2', apply(){
       seedMeetingWithTopics(
-        { title:'第4回定例', date:'2026-07-13', start:'16:00', end:'17:00', room:'会議室L' },
+        { title:'第4回定例', date:'2026-07-13', start:'16:00', end:'17:00', room:'会議室L',
+          note:'・担当の再確認とスケジュール（角谷ツールのデモも兼ねて）\n・事前確認シートのFB／共有\n・出玉関連の今後の進め方\n・全社AI定例のFB' },
         [
           { name:'議事録', done:true, todo:'担当の再確認・スケジュール',
             detail:'角谷ツールのデモも兼ねて実施。以降の状況次第で期限決めを進める。' },
@@ -2120,9 +2184,10 @@ const SEEDS=[
           { name:'議事録', done:true, todo:'AI定例（全社）のFB',
             detail:'各部門の取り組み共有が主体。取り立てて共有事項はナシ。' },
         ]); } },
-  { id:'mt_20260727_dai5_v1', apply(){
+  { id:'mt_20260727_dai5_v2', apply(){
       seedMeetingWithTopics(
-        { title:'第5回定例', date:'2026-07-27', start:'16:00', end:'17:00', room:'会議室L' },
+        { title:'第5回定例', date:'2026-07-27', start:'16:00', end:'17:00', room:'会議室L',
+          note:'・ツール化のネックについて\n・進捗確認／共有のやり方をどうするか' },
         [
           { name:'伊藤(真)', done:false, todo:'ツール化のネックを調査して報告',
             detail:'次回定例でツール化の壁について調査・報告を実施。あわせて事前確認シートを作ってもらえると良さそう。' },
@@ -2136,6 +2201,11 @@ const SEEDS=[
       const cur=state.meetings.find(m=>m&&(m.date==='2026-08-17'||m.date==='2026-08-18'));
       if(cur){ Object.assign(cur, MT); cur._u=Date.now(); return; }
       state.meetings.push(Object.assign({ id:uid('mt'), _u:Date.now() }, MT)); } },
+  // 第6回の「会議の概要」だけ後入れ（第5回の持ち越しが議題の中心になる想定）。人が書いていたら触らない。
+  { id:'mt_20260817_dai6_note_v1', apply(){
+      const m=state.meetings.find(x=>x&&x.date==='2026-08-17'); if(!m||m.note) return;
+      m.note='・ツール化のネックについて 調査報告（伊藤さん）\n・個別タスクの進捗報告／共有のやり方を決める（角谷ツール＋当面スプレッド併用？）\n・各担当の進捗確認';
+      m._u=Date.now(); } },
 ];
 function applySeeds(){ ensureBoards();
   if(!Array.isArray(state.seeds)) state.seeds=[];
@@ -2152,27 +2222,87 @@ function prefillNextIfEmpty(){ const g=id=>document.getElementById(id);
   if(g('mtTitle')) g('mtTitle').value=d.title||''; if(g('mtDate')) g('mtDate').value=d.date||'';
   if(g('mtStart')) g('mtStart').value=d.start||''; if(g('mtEnd')) g('mtEnd').value=d.end||'';
   if(g('mtRoom')) g('mtRoom').value=d.room||''; }
+// お題1件＝1カード。狭いパネルでも「やること」を大きく書けるよう、表ではなくカードにしている。
+function tpCard(t){
+  const src=t.from ? state.meetings.find(x=>x&&x.id===t.from) : null;
+  return `<div class="tpcard${t.done?' done':''}${t.from?' carried':''}" data-tid="${esca(t.id)}">`+
+    `<div class="r1">`+
+      `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'未対応に戻す':'対応済みにする'}">${t.done?'✓':''}</button>`+
+      `<div class="nm cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="名前">${esc(t.name||'')}</div>`+
+      (t.from?`<button class="cotag" data-uncarry="${esca(t.id)}" title="${esca((src&&src.title)||'元の定例')}から持ち越し。クリックで元に戻す">🔁 前回から</button>`:'')+
+      (t.done?'':`<button class="act carry" data-carry="${esca(t.id)}" title="このお題を次の定例に移す">▶ 次回へ</button>`)+
+      `<button class="del" data-del="${esca(t.id)}" title="このお題を削除">✕</button>`+
+    `</div>`+
+    `<div class="cell todo" contenteditable="true" data-edit="${esca(t.id)}" data-field="todo" data-ph="やること・話したいこと">${esc(t.todo||'')}</div>`+
+    `<div class="cell memo" contenteditable="true" data-edit="${esca(t.id)}" data-field="detail" data-ph="詳細・メモ（任意）">${esc(t.detail||'')}</div>`+
+  `</div>`;
+}
+function tpGroup(rows, label, cls){
+  if(!rows.length) return '';
+  return `<div class="tpgrp ${cls||''}"><div class="gh">${label} <span class="n">${rows.length}</span></div>`+
+    rows.map(tpCard).join('')+`</div>`;
+}
 function renderMeetingTable(box){
   const m=state.meetings.find(x=>x.id===_openMeeting);
   const rows=state.topics.filter(t=>t&&t.meetingId===_openMeeting);
+  const carried=rows.filter(t=>t.from), own=rows.filter(t=>!t.from);
+  const movedOut=state.topics.filter(t=>t&&t.from===m.id);   // この回から次回へ移したもの（痕跡として残す）
   let h=`<div class="tphd"><button class="tpback" id="tpBack">← 定例一覧</button>`+
+        `<button class="tpgcal" id="tpGcal" title="Googleカレンダーに予定を作成（概要とお題を説明欄に、ログイン済みメンバーを招待先に自動セット）">📅 カレンダー登録</button></div>`+
         `<div class="tpmeta"><input class="mtedit tpttl-in" data-mt="title" value="${esca(m.title||'')}" placeholder="定例名">`+
           `<div class="mtline"><input class="mtedit" type="date" data-mt="date" value="${esca(m.date||'')}">`+
           `<select class="mtedit tsel" data-mt="start" title="開始">${timeOpts(m.start||'','開始')}</select><span class="mtsep">〜</span>`+
           `<select class="mtedit tsel" data-mt="end" title="終了">${timeOpts(m.end||'','終了')}</select>`+
-          `<select class="mtedit tsel rmsel" data-mt="room" title="会議室">${roomOpts(m.room||'')}</select></div></div>`+
-        `<button class="tpgcal" id="tpGcal" title="Googleカレンダーに予定を作成（お題を説明欄に、ログイン済みメンバーを招待先に自動セット）">📅 Googleカレンダーに登録</button></div>`;
-  h+=`<div class="tphint">📅 「登録」で日時・会議室・お題・招待先（ログイン済みメンバー）が入った状態でGoogleカレンダーが開きます。不足分はその画面で追加できます。</div>`;
-  h+=`<table class="tptbl"><thead><tr><th></th><th>名前</th><th>やること</th><th>詳細</th><th></th></tr></thead><tbody>`;
-  h+= rows.length ? rows.map(t=>`<tr class="${t.done?'done':''}" data-tid="${esca(t.id)}">`+
-      `<td class="c-chk"><button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'未対応に戻す':'対応済みにする'}">${t.done?'✓':''}</button></td>`+
-      `<td class="c-name"><div class="cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="名前">${esc(t.name||'')}</div></td>`+
-      `<td><div class="cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="todo" data-ph="やること">${esc(t.todo||'')}</div></td>`+
-      `<td><div class="cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="detail" data-ph="詳細（任意）">${esc(t.detail||'')}</div></td>`+
-      `<td class="c-del"><button class="del" data-del="${esca(t.id)}" title="この行を削除">✕</button></td></tr>`
-    ).join('') : `<tr><td colspan="5"><div class="tpempty" style="padding:12px 8px">まだお題がありません。「＋ 行を追加」から書き込んでください。</div></td></tr>`;
-  h+=`</tbody></table><div class="tpaddrow"><button id="tpAddRow">＋ 行を追加</button></div>`;
+          `<select class="mtedit tsel rmsel" data-mt="room" title="会議室">${roomOpts(m.room||'')}</select></div></div>`;
+  h+=`<div class="tpnote"><label>■ 会議の概要 <span class="sm">議題・目的。会議中もそのまま書き換えられます（自動で全員に共有）</span></label>`+
+     `<textarea data-mtnote placeholder="例）・ツール化のネック報告（伊藤さん）&#10;・進捗共有のやり方を決める">${esc(m.note||'')}</textarea></div>`;
+  h+=tpGroup(carried,'🔁 前回からの持ち越し','carry');
+  h+=tpGroup(own, carried.length?'この回のお題':'お題','');
+  if(!rows.length) h+=`<div class="tpempty">まだお題がありません。下の「＋ お題を追加」から書き込んでください。</div>`;
+  h+=`<div class="tpaddrow"><button id="tpAddRow">＋ お題を追加</button></div>`;
+  // 前の回で未対応のまま終わったお題＝この回に入れるかどうかを、ここで一覧して選べるようにする
+  const cand=carryCandidates(m);
+  if(cand.length) h+=`<div class="tpgrp cand"><div class="gh">🔁 前の回で未対応のお題 <span class="n">${cand.length}</span>`+
+    `<span class="sm">この回に入れますか？</span></div>`+
+    cand.map(t=>{ const src=state.meetings.find(x=>x&&x.id===t.meetingId);
+      return `<div class="candrow"><div class="ct">${esc(t.todo||'(無題)')}`+
+        `<span class="cs">${esc((src&&src.title)||'')}${t.name?' ／ '+esc(t.name):''}</span></div>`+
+        `<button class="act carry" data-carryto="${esca(t.id)}" title="この回のお題に移す">＋ この回へ</button></div>`;
+    }).join('')+`</div>`;
+  if(movedOut.length) h+=`<div class="tpgrp" style="margin-top:16px"><div class="gh">→ 次回へ持ち越したお題 <span class="n">${movedOut.length}</span></div>`+
+    `<div class="tpmoved">`+movedOut.map(t=>`<span class="mv">・${esc(t.todo||'(無題)')}</span>`).join('')+`</div></div>`;
   box.innerHTML=h;
+  autoGrowNote();
+}
+// 概要欄は中身のぶんだけ伸ばす（会議中にスクロールさせない）
+function autoGrowNote(){ const ta=document.querySelector('#topicBody [data-mtnote]'); if(!ta) return;
+  ta.style.height='auto'; ta.style.height=Math.min(360, Math.max(96, ta.scrollHeight+2))+'px'; }
+// この回より前の定例に残っている未対応のお題＝持ち越し候補
+function carryCandidates(m){
+  if(!m||!m.date) return [];
+  const older=new Set(state.meetings.filter(x=>x&&x.date&&x.date<m.date).map(x=>x.id));
+  return state.topics.filter(t=>t&&!t.done&&older.has(t.meetingId));
+}
+// 候補を「この回」へ入れる（前の回からの持ち越しとして記録）
+function carryTopicTo(id, mtId){
+  const t=state.topics.find(x=>x&&x.id===id); if(!t||!mtId||t.meetingId===mtId) return;
+  t.from=t.meetingId; t.meetingId=mtId; t.done=false; t._u=Date.now();
+  save(); renderTopics();
+}
+// 未対応のまま終わったお題を次の定例へ移す。元の回には「→次回へ持ち越した」痕跡が残る（t.from）。
+function carryTopic(id){
+  const t=state.topics.find(x=>x&&x.id===id); if(!t) return;
+  const cur=state.meetings.find(x=>x&&x.id===t.meetingId); if(!cur) return;
+  const nx=mtSorted().find(x=>String(x.date||'')>String(cur.date||''));
+  if(!nx){ alert('次の定例がまだ登録されていません。\n「← 定例一覧」→「＋ 定例を追加」で次回を登録してから移してください。'); return; }
+  t.from=cur.id; t.meetingId=nx.id; t.done=false; t._u=Date.now();
+  save(); _openMeeting=nx.id; renderTopics();   // 移した先を開いて、どこへ行ったかが目で分かるようにする
+}
+function uncarryTopic(id){
+  const t=state.topics.find(x=>x&&x.id===id); if(!t||!t.from) return;
+  const back=state.meetings.find(x=>x&&x.id===t.from); if(!back){ delete t.from; save(); renderTopics(); return; }
+  t.meetingId=t.from; delete t.from; t._u=Date.now();
+  save(); _openMeeting=back.id; renderTopics();
 }
 function addMeeting(){ const g=id=>document.getElementById(id);
   const title=(g('mtTitle')&&g('mtTitle').value.trim())||'', date=(g('mtDate')&&g('mtDate').value)||'';
@@ -2202,7 +2332,8 @@ function editCell(id, field, text){ const t=state.topics.find(x=>x&&x.id===id); 
 function _plus1h(hhmm){ const a=String(hhmm).split(':'); const h=(+a[0]+1)%24; return String(h).padStart(2,'0')+':'+String(+a[1]||0).padStart(2,'0'); }
 function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレートURL（認証不要・入力済みで開く）
   const rows=state.topics.filter(t=>t&&t.meetingId===m.id);
-  const det='■お題\n'+(rows.length? rows.map(t=>`・[${t.name||''}] ${t.todo||''}${t.detail?' — '+t.detail:''}`).join('\n') : '（お題未記入）');
+  const det=(m.note?'■会議の概要\n'+m.note+'\n\n':'')+
+    '■お題\n'+(rows.length? rows.map(t=>`・${t.from?'[持ち越し]':''}[${t.name||''}] ${t.todo||''}${t.detail?' — '+t.detail:''}`).join('\n') : '（お題未記入）');
   const p=new URLSearchParams(); p.set('action','TEMPLATE'); p.set('text', m.title||'定例');
   if(m.date){ const d=String(m.date).replace(/-/g,'');
     const st=(m.start||'14:00'), en=(m.end||(m.start?_plus1h(m.start):'15:00'));
@@ -2216,7 +2347,19 @@ function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレー
 { const _kb=document.getElementById('kpibar'); if(_kb) _kb.addEventListener('click', e=>{
     if(e.target.closest('#kpiNextMt')){ e.stopPropagation(); openNextMeetingForm(); return; }   // 「＋次回を登録」＝プリセット付きで開く
     if(e.target.closest('#kpiMeet')) openTopics(); }); }
-document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.id==='topicModal'||e.target.id==='topicClose') document.getElementById('topicModal').classList.remove('on'); });
+document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.closest('#topicClose')) closeTopics(); });
+// パネルの幅はドラッグで変更＋この端末に記憶（ダブルクリックで既定に戻す）
+(function(){ const h=document.getElementById('tpResize'); if(!h) return;
+  const KEY='aisch_tpw', MIN=380, MAX=980, DEF=520;
+  const set=w=>{ w=Math.max(MIN,Math.min(MAX,Math.round(w))); document.documentElement.style.setProperty('--tpw', w+'px'); return w; };
+  let cur=DEF; try{ const s=parseInt(localStorage.getItem(KEY)||'',10); if(isFinite(s)) cur=set(s); }catch(e){}
+  let drag=false;
+  h.addEventListener('mousedown', e=>{ drag=true; document.body.classList.add('tpdrag'); e.preventDefault(); });
+  window.addEventListener('mousemove', e=>{ if(drag) cur=set(window.innerWidth-e.clientX); });
+  window.addEventListener('mouseup', ()=>{ if(!drag) return; drag=false; document.body.classList.remove('tpdrag');
+    try{ localStorage.setItem(KEY, String(cur)); }catch(e){} });
+  h.addEventListener('dblclick', ()=>{ cur=set(DEF); try{ localStorage.setItem(KEY, String(DEF)); }catch(e){} });
+})();
 document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#tpBack')){ _openMeeting=null; renderTopics(); return; }
   if(e.target.closest('#mtAddToggle')){ const f=document.getElementById('mtAddForm');
@@ -2229,13 +2372,26 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   const dmt=e.target.closest('[data-del-mt]'); if(dmt){ e.stopPropagation(); delMeeting(dmt.dataset.delMt); return; }
   const omt=e.target.closest('[data-open-mt]'); if(omt){ _openMeeting=omt.dataset.openMt; renderTopics(); return; }
   const tg=e.target.closest('[data-toggle]'); if(tg){ toggleTopic(tg.dataset.toggle); return; }
+  const cy=e.target.closest('[data-carry]'); if(cy){ carryTopic(cy.dataset.carry); return; }
+  const ct=e.target.closest('[data-carryto]'); if(ct){ carryTopicTo(ct.dataset.carryto, _openMeeting); return; }
+  const uc=e.target.closest('[data-uncarry]'); if(uc){ uncarryTopic(uc.dataset.uncarry); return; }
   const dl=e.target.closest('[data-del]'); if(dl){ delTopic(dl.dataset.del); return; }
 });
 document.getElementById('topicBody').addEventListener('change', e=>{
   const el=e.target.closest('[data-mt]'); if(el) setMtField(el.dataset.mt, el.value);
 });
+// 会議の概要：入力中は再描画せず共有だけ（再描画するとカーソルが飛ぶ）。手が止まったら履歴に1点残す。
+let _noteTimer=null;
+document.getElementById('topicBody').addEventListener('input', e=>{
+  const ta=e.target.closest('[data-mtnote]'); if(!ta) return;
+  const m=state.meetings.find(x=>x&&x.id===_openMeeting); if(!m) return;
+  if((m.note||'')===ta.value) return;
+  m.note=ta.value; m._u=Date.now(); autoGrowNote();
+  clearTimeout(_noteTimer); _noteTimer=setTimeout(persist, 600);
+});
 document.getElementById('topicBody').addEventListener('blur', e=>{
-  const ed=e.target.closest('[data-edit]'); if(ed) editCell(ed.dataset.edit, ed.dataset.field, ed.textContent);
+  const ed=e.target.closest('[data-edit]'); if(ed){ editCell(ed.dataset.edit, ed.dataset.field, ed.textContent); return; }
+  if(e.target.closest('[data-mtnote]')){ clearTimeout(_noteTimer); save(); }
 }, true);
 document.getElementById('topicBody').addEventListener('keydown', e=>{
   if(e.target.id==='mtTitle' && e.key==='Enter'){ e.preventDefault(); addMeeting(); }
