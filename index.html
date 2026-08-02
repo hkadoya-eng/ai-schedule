@@ -566,19 +566,23 @@
   .difftag.same{background:var(--panel3); color:var(--dim);}
   .difftag.del{background:rgba(242,88,95,.16); color:#f2585f;}
   /* お題・議題ボード（右サイドパネル：ガントを見ながら会議中に書ける）*/
-  :root{--tpw:520px;}
+  :root{--tpw:720px;}
   #topicModal{position:fixed; z-index:58; right:0; top:0; height:100vh; width:var(--tpw);
     background:var(--panel); border-left:1px solid var(--line); box-shadow:-10px 0 40px rgba(0,0,0,.45);
     display:none; flex-direction:column;}
   #topicModal.on{display:flex;}
   body.tpon{padding-right:var(--tpw);}         /* ガントを右パネルのぶん詰める＝重ならず両方見える */
-  .tpresize{position:absolute; left:-3px; top:0; width:7px; height:100%; cursor:col-resize; z-index:2;}
-  .tpresize:hover, body.tpdrag .tpresize{background:linear-gradient(90deg,transparent,rgba(47,182,176,.5),transparent);}
+  /* 幅を変えられることが分かるよう、つまみを薄く常時表示しておく */
+  .tpresize{position:absolute; left:-4px; top:0; width:9px; height:100%; cursor:col-resize; z-index:2;
+    display:flex; align-items:center; justify-content:center;}
+  .tpresize:before{content:''; width:3px; height:46px; border-radius:2px; background:var(--line);}
+  .tpresize:hover:before, body.tpdrag .tpresize:before{background:var(--teal); height:88px;}
   body.tpdrag{cursor:col-resize; user-select:none;}
   .tphdr{flex:0 0 auto; display:flex; align-items:center; gap:10px; padding:11px 14px;
     background:linear-gradient(180deg,var(--panel3),var(--panel2)); border-bottom:1px solid var(--line);}
   .tphdr .t{font-weight:700; font-size:14.5px;}
-  .tphdr .tpx{margin-left:auto; background:var(--panel3); border:1px solid var(--line); color:var(--text);
+  .tphdr .tpwhint{margin-left:auto; font-size:10.5px; color:var(--dim); white-space:nowrap; cursor:default;}
+  .tphdr .tpx{ background:var(--panel3); border:1px solid var(--line); color:var(--text);
     width:28px; height:28px; border-radius:7px; cursor:pointer; font-size:16px; line-height:1;}
   .tphdr .tpx:hover{border-color:var(--teal);}
   .tpbody{flex:1 1 auto; overflow:auto; padding:14px;}
@@ -656,7 +660,7 @@
   .tpcard .cell:focus{background:var(--panel3); box-shadow:inset 0 0 0 1px var(--teal);}
   .tpcard .cell:empty:before{content:attr(data-ph); color:var(--dim);}
   .tpcard .cell.todo{font-size:14px; font-weight:600; line-height:1.6;}
-  .tpcard .cell.memo{font-size:12.5px; color:var(--muted); line-height:1.65; margin-top:1px;}   /* class名は memo。detail は左の詳細パネルが使っている */
+  .tpcard .cell.memo{font-size:13px; min-height:36px; color:var(--muted); line-height:1.65; margin-top:1px;}   /* class名は memo。detail は左の詳細パネルが使っている */
   .tpcard.done .cell.todo{text-decoration:line-through;}
   .tpgrp.cand{margin-top:18px; border-top:1px dashed var(--line); padding-top:12px;}
   .tpgrp.cand .gh{color:#a8710a;} .tpgrp .gh .sm{font-weight:400; color:var(--dim); font-size:11px;}
@@ -879,6 +883,7 @@
 <div id="topicModal">
   <div class="tpresize" id="tpResize" title="左右にドラッグで幅を変える（ダブルクリックで既定の幅に戻す）"></div>
   <div class="tphdr"><div class="t">📝 打合せ予定</div>
+    <span class="tpwhint" title="左端のつまみを左右にドラッグ（ダブルクリックで既定の幅）">⇔ 端をドラッグで幅調整</span>
     <button class="tpx" id="topicClose" title="閉じる（ガントは開いたまま操作できます）">×</button></div>
   <div class="tpbody" id="topicBody"></div>
 </div>
@@ -2350,7 +2355,7 @@ function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレー
 document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target.closest('#topicClose')) closeTopics(); });
 // パネルの幅はドラッグで変更＋この端末に記憶（ダブルクリックで既定に戻す）
 (function(){ const h=document.getElementById('tpResize'); if(!h) return;
-  const KEY='aisch_tpw', MIN=380, MAX=980, DEF=520;
+  const KEY='aisch_tpw', MIN=420, MAX=1200, DEF=720;
   const set=w=>{ w=Math.max(MIN,Math.min(MAX,Math.round(w))); document.documentElement.style.setProperty('--tpw', w+'px'); return w; };
   let cur=DEF; try{ const s=parseInt(localStorage.getItem(KEY)||'',10); if(isFinite(s)) cur=set(s); }catch(e){}
   let drag=false;
