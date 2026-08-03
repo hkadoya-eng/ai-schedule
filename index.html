@@ -584,6 +584,10 @@
   .difftag.chg{background:rgba(242,177,61,.16); color:#f2b13d;}
   .difftag.same{background:var(--panel3); color:var(--dim);}
   .difftag.del{background:rgba(242,88,95,.16); color:#f2585f;}
+  .cfrow{display:flex; align-items:center; gap:12px; padding:4px 0 8px 8px; font-size:12px; flex-wrap:wrap;}
+  .cfrow .cfl{font-size:10.5px; color:var(--muted); min-width:76px;}
+  .cfrow label{display:flex; align-items:center; gap:5px; cursor:pointer; color:var(--muted);}
+  .cfrow label b{color:var(--text); font-weight:600;}
   /* KPIタイルの内訳 */
   .kpi.drill{cursor:pointer;}
   .kpi.drill:hover{border-color:var(--teal);}
@@ -994,6 +998,7 @@
   <button id="exportBtn">💾 書き出し（保存）</button>
   <button id="importBtn">📂 読み込み</button>
   <button id="backupBtn">🕘 復元</button>
+  <button id="syncBtn" title="定例シート（議題）とお題を突き合わせて、差分だけ取り込む">🔄 定例シートと同期</button>
   <div class="mlabel" style="color:#c2555f">危険な操作</div>
   <button id="resetBtn" style="color:#c2555f" title="全データを初期サンプルに戻す（通常は使いません）">🧨 初期化（全部消してサンプルに戻す）</button>
 </div>
@@ -1054,6 +1059,12 @@
   <div class="mh"><div class="t" id="kpiTitle"></div><div class="s" id="kpiSub"></div></div>
   <div class="mb" id="kpiBody"></div>
   <div class="mf"><button class="ghost" id="kpiClose">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="syncModal"><div class="m">
+  <div class="mh"><div class="t">🔄 定例シートと同期</div><div class="s">スプレッドシートの「議題」とお題を突き合わせます。<b>取り込む前に差分を確認できます。</b>片方だけが変わった欄はそのまま採用し、両方変わった欄だけ選んでもらいます。</div></div>
+  <div class="mb" id="syncBody"></div>
+  <div class="mf"><button class="ghost" id="syncClose">閉じる</button><button class="big" id="syncApply" disabled>この内容で取り込む</button></div>
 </div></div>
 
 <div class="modal" id="msModal"><div class="m">
@@ -1981,7 +1992,7 @@ function closeMore(){ const m=document.getElementById('moreMenu'); if(m) m.style
     try{ ensureBoards(); const mb=document.getElementById('memBtn'); if(mb) mb.textContent='👥 ログイン済みメンバー ('+(state.members||[]).length+')'; }catch(e){}
     const r=btn.getBoundingClientRect();
     menu.style.left=Math.min(r.left, window.innerWidth-200)+'px'; menu.style.top=(r.bottom+4)+'px'; menu.style.display='block'; });
-  menu.addEventListener('click', e=>{ if(e.target.closest('#excelBtn,#exportBtn,#importBtn,#backupBtn,#resetBtn')) closeMore(); });  // データ操作時のみ閉じる（トグル・期間入力では開いたまま）
+  menu.addEventListener('click', e=>{ if(e.target.closest('#excelBtn,#exportBtn,#importBtn,#backupBtn,#resetBtn,#syncBtn')) closeMore(); });  // データ操作時のみ閉じる（トグル・期間入力では開いたまま）
 })();
 
 // ===== 右クリック（コンテキスト）メニュー =====
@@ -2188,6 +2199,7 @@ async function loadCloudBackups(){
     `<button data-snap="${esca(String(r.id))}">この状態に戻す</button></div>`).join('');
 }
 document.getElementById('backupBtn').addEventListener('click', openBackup);
+document.getElementById('syncBtn').addEventListener('click', openSyncModal);
 document.getElementById('backupModal').addEventListener('click', e=>{
   if(e.target.id==='backupModal'||e.target.id==='backupClose'){ document.getElementById('backupModal').classList.remove('on'); return; }
   const sn=e.target.closest('button[data-snap]');
@@ -3040,6 +3052,178 @@ document.getElementById('topicBody').addEventListener('keydown', e=>{
   if(e.target.id==='tpQuick' && e.key==='Enter'){ e.preventDefault(); addTopicQuick(); }
 });
 // メンバー一覧（⚙管理の中）
+// ===== 定例シートとの同期（3-wayマージ：どちらの変更も消さない）=====
+// 前回同期した時点(base) / いまのアプリ / いまのシート を比べる。
+// 片側だけ変わった欄はその値を採用、両方変わった欄だけ「衝突」として選んでもらう。
+const SYNC_FIELDS=['todo','detail','note'];        // note = シートの「備考／議事録」列
+const SYNC_URL_KEY='ai_sched_gas_url';
+function syncUrl(){ try{ return (localStorage.getItem(SYNC_URL_KEY)||'').trim(); }catch(e){ return ''; } }
+// アプリの「当日メモ＋決まったこと」を、シートの1セルに収める形にする（シートに列を足さない方針）
+function toSheetNote(t){
+  const parts=[];
+  if(String(t.log||'').trim()) parts.push(String(t.log).trim());
+  if(String(t.result||'').trim()){
+    let r='【決まったこと】'+String(t.result).trim();
+    if(t.owner) r+='（担当: '+t.owner+'）';
+    if(t.due)   r+='（期限: '+t.due+'）';
+    parts.push(r);
+  }
+  return parts.join('\n');
+}
+function fromSheetNote(v){
+  const s=String(v||''); const i=s.indexOf('【決まったこと】');
+  if(i<0) return { log:s.trim(), result:'', owner:'', due:'' };
+  const log=s.slice(0,i).trim(); let rest=s.slice(i+'【決まったこと】'.length);
+  let owner='', due='';
+  rest=rest.replace(/（担当:\s*([^）]*)）/, function(m,g){ owner=g.trim(); return ''; })
+           .replace(/（期限:\s*([^）]*)）/, function(m,g){ due=g.trim(); return ''; });
+  return { log:log, result:rest.trim(), owner:owner, due:due };
+}
+// アプリのお題を、シートと同じ形（3項目）に写したもの
+function topicAsSheet(t){ return { todo:String(t.todo||''), detail:String(t.detail||''), note:toSheetNote(t) }; }
+function syncBase(){ const b=state.sheetSync&&state.sheetSync.rows; return (b&&typeof b==='object')?b:{}; }
+// シートから受け取った行（{uid,date,todo,detail,note}）とアプリを突き合わせる
+function syncDiff(sheetRows){
+  ensureBoards();
+  const base=syncBase(), out={ add:[], upd:[], conf:[], delSheet:[], delApp:[], push:[], skip:[] };
+  const byUid={}; state.topics.forEach(t=>{ if(t&&t.id) byUid[t.id]=t; });
+  const seen=new Set();
+  (sheetRows||[]).forEach(r=>{
+    const u=String(r.uid||'').trim();
+    const sh={ todo:String(r.todo||''), detail:String(r.detail||''), note:String(r.note||'') };
+    if(!u){                                              // ID無し＝シート側で人が足した行
+      const mt=state.meetings.find(m=>m&&m.date===r.date);
+      out.add.push({ row:r, sheet:sh, meeting:mt||null }); return;
+    }
+    seen.add(u);
+    const t=byUid[u];
+    if(!t){ out.delApp.push({ uid:u, sheet:sh, row:r }); return; }   // アプリ側から消えている
+    const ap=topicAsSheet(t), bs=base[u]||{};
+    const fields=[];
+    SYNC_FIELDS.forEach(f=>{
+      const b=(bs[f]==null?'':String(bs[f])), a=ap[f], x=sh[f];
+      if(a===x) return;                                  // 同じ → 何もしない
+      const aChanged=(a!==b), xChanged=(x!==b);
+      if(xChanged && !aChanged) fields.push({ f:f, from:a, to:x, take:'sheet' });     // シートだけ変わった
+      else if(aChanged && !xChanged) fields.push({ f:f, from:x, to:a, take:'app' });  // アプリだけ変わった
+      else fields.push({ f:f, from:a, to:x, take:'conflict' });                       // 両方変わった
+    });
+    if(!fields.length){ out.skip.push({ t:t }); return; }
+    if(fields.some(x=>x.take==='conflict')) out.conf.push({ t:t, sheet:sh, fields:fields });
+    else if(fields.every(x=>x.take==='app')) out.push.push({ t:t, sheet:sh, fields:fields });
+    else out.upd.push({ t:t, sheet:sh, fields:fields });
+  });
+  // シート側に無い行
+  state.topics.forEach(t=>{ if(!t||!t.id) return;
+    if(seen.has(t.id)) return;
+    if(base[t.id]) out.delSheet.push({ t:t });            // 前回は両方にあった → シートで消された
+    else out.push.push({ t:t, sheet:null, fields:[] });   // まだシートに出していない → 書き戻す対象
+  });
+  return out;
+}
+const SYNC_LABEL={ todo:'やること', detail:'メモ・背景', note:'備考／議事録' };
+function syncPreviewHtml(d){
+  const cut=v=>{ v=String(v==null?'':v).replace(/\n/g,' '); return v.length>44?esc(v.slice(0,44))+'…':esc(v); };
+  let h='<div class="diffsum">'+
+    '<span>＋新規 <b style="color:#12a06a">'+d.add.length+'</b></span>'+
+    '<span>更新 <b style="color:#c98a12">'+d.upd.length+'</b></span>'+
+    '<span>衝突 <b style="color:#c2555f">'+d.conf.length+'</b></span>'+
+    '<span>シートへ書き戻し <b>'+d.push.length+'</b></span>'+
+    '<span>同じ <b>'+d.skip.length+'</b></span></div>';
+  if(d.conf.length){
+    h+='<div class="diffgrp" style="color:#c2555f">⚠ 両方が変わっています（どちらを残すか選んでください）</div>';
+    d.conf.forEach((c,i)=>{ h+='<div class="diffrow"><span class="difftag chg">衝突</span><span class="nm">'+esc(c.t.todo||'(無題)')+'</span></div>';
+      c.fields.forEach((f,j)=>{ if(f.take!=='conflict') return;
+        h+='<div class="cfrow"><span class="cfl">'+esc(SYNC_LABEL[f.f]||f.f)+'</span>'+
+           '<label><input type="radio" name="cf_'+i+'_'+j+'" value="app" data-cf="'+i+'|'+f.f+'" checked> アプリ：<b>'+cut(f.from)+'</b></label>'+
+           '<label><input type="radio" name="cf_'+i+'_'+j+'" value="sheet" data-cf="'+i+'|'+f.f+'"> シート：<b>'+cut(f.to)+'</b></label></div>'; }); });
+  }
+  if(d.add.length){ h+='<div class="diffgrp">➕ シートで追加された行（アプリに取り込みます）</div>';
+    d.add.forEach(a=>{ h+='<div class="diffrow"><span class="difftag add">新規</span><span class="nm">'+esc(a.sheet.todo||'(無題)')+'</span>'+
+      '<span class="meta">'+esc(a.row.date||'日付なし')+(a.meeting?'':'　※この日付の定例がありません（取り込みません）')+'</span></div>'; }); }
+  if(d.upd.length){ h+='<div class="diffgrp">🔁 片側だけ変わっています（そのまま反映します）</div>';
+    d.upd.forEach(u=>{ h+='<div class="diffrow"><span class="difftag chg">更新</span><span class="nm">'+esc(u.t.todo||'(無題)')+'</span>'+
+      '<span class="meta">'+esc(u.fields.map(f=>(SYNC_LABEL[f.f]||f.f)+'←'+(f.take==='sheet'?'シート':'アプリ')).join('・'))+'</span></div>'; }); }
+  if(d.delSheet.length){ h+='<div class="diffgrp" style="color:#c2555f">🗑 シートから消えています（<b>アプリでは消しません</b>・確認用）</div>';
+    d.delSheet.forEach(x=>{ h+='<div class="diffrow"><span class="difftag del">削除?</span><span class="nm">'+esc(x.t.todo||'(無題)')+'</span></div>'; }); }
+  if(d.delApp.length){ h+='<div class="diffgrp" style="color:#c2555f">🗑 アプリから消えています（<b>シートでは消しません</b>・確認用）</div>';
+    d.delApp.forEach(x=>{ h+='<div class="diffrow"><span class="difftag del">削除?</span><span class="nm">'+esc(x.sheet.todo||'(無題)')+'</span></div>'; }); }
+  if(d.push.length){ h+='<div class="diffgrp">↗ シートへ書き戻す内容（GASの受け口ができてから送ります）</div>';
+    d.push.forEach(x=>{ h+='<div class="diffrow"><span class="difftag same">書戻</span><span class="nm">'+esc(x.t.todo||'(無題)')+'</span></div>'; }); }
+  h+='<div class="hint" style="margin-top:10px">※ 削除は<b>どちらにも反映しません</b>（消えると戻せないため、確認だけ出します）。手で消してください。</div>';
+  return h;
+}
+let _syncDiff=null, _syncChoice={};
+function setTopicSheetField(t, f, v){
+  if(f==='note'){ const nt=fromSheetNote(v); t.log=nt.log; t.result=nt.result; if(nt.owner) t.owner=nt.owner; if(nt.due) t.due=nt.due; }
+  else t[f]=v;
+  t._u=Date.now();
+}
+// 「前回同期した時点」を記録（次回の3-way比較の基準になる）
+function markSyncBase(){
+  const rows={}; state.topics.forEach(t=>{ if(t&&t.id) rows[t.id]=topicAsSheet(t); });
+  state.sheetSync={ at:Date.now(), by:(meAuthor()||window.__user||''), rows:rows };
+}
+function applySyncDiff(){
+  if(!_syncDiff) return; const d=_syncDiff; let n=0;
+  d.upd.forEach(u=>{ u.fields.forEach(f=>{ if(f.take==='sheet'){ setTopicSheetField(u.t, f.f, f.to); n++; } }); });
+  d.conf.forEach((c,i)=>{ c.fields.forEach(f=>{
+      if(f.take!=='conflict'){ if(f.take==='sheet'){ setTopicSheetField(c.t, f.f, f.to); n++; } return; }
+      const pick=_syncChoice[i+'|'+f.f]||'app';
+      if(pick==='sheet'){ setTopicSheetField(c.t, f.f, f.to); n++; } }); });
+  d.add.forEach(a=>{ if(!a.meeting) return;
+    const t={ id:uid('tp'), meetingId:a.meeting.id, done:false, name:'', todo:a.sheet.todo, detail:a.sheet.detail,
+              ord:nextOrd(a.meeting.id), _u:Date.now() };
+    const nt=fromSheetNote(a.sheet.note); t.log=nt.log; t.result=nt.result; t.owner=nt.owner; t.due=nt.due;
+    state.topics.push(t); n++; });
+  markSyncBase();
+  save(); renderTopics();
+  document.getElementById('syncModal').classList.remove('on');
+  alert(n?(n+'件を取り込みました。誤りがあれば Ctrl+Z で戻せます。'):'取り込む変更はありませんでした。');
+}
+function renderSyncModal(rows, err){
+  const box=document.getElementById('syncBody'); if(!box) return;
+  const last=state.sheetSync&&state.sheetSync.at;
+  let h='<div class="fld"><label>GASの受け口URL（できてから貼ってください。空でも下の貼り付けで試せます）</label>'+
+        '<input id="syncUrl" placeholder="https://script.google.com/.../exec" value="'+esca(syncUrl())+'"></div>'+
+        '<div class="hint">前回の同期：'+(last?esc(fmtBkTime(last)):'まだ一度もしていません')+'</div>';
+  if(err) h+='<div class="hint" style="color:#c2555f;margin-top:8px">'+esc(err)+'</div>';
+  if(!rows){
+    h+='<div class="fld" style="margin-top:12px"><label>シートの内容（JSON）を貼り付けて試す</label>'+
+       '<textarea id="syncPaste" rows="5" placeholder=\'[{"uid":"","date":"2026-07-13","todo":"…","detail":"…","note":"…"}]\'></textarea></div>'+
+       '<div class="detailops"><button class="btn" id="syncFetch">シートから読み込む</button><button class="btn" id="syncCheck">貼り付けた内容で差分を見る</button></div>';
+  } else {
+    _syncDiff=syncDiff(rows); _syncChoice={};
+    h+=syncPreviewHtml(_syncDiff);
+  }
+  box.innerHTML=h;
+  document.getElementById('syncApply').disabled=!rows;
+}
+function openSyncModal(){ ensureBoards(); _syncDiff=null; renderSyncModal(null); document.getElementById('syncModal').classList.add('on'); }
+document.getElementById('syncModal').addEventListener('click', async e=>{
+  if(e.target.id==='syncModal'||e.target.id==='syncClose'){ document.getElementById('syncModal').classList.remove('on'); return; }
+  if(e.target.closest('#syncApply')){ applySyncDiff(); return; }
+  if(e.target.closest('#syncCheck')){
+    const v=(document.getElementById('syncPaste')||{}).value||'';
+    try{ const rows=JSON.parse(v); if(!Array.isArray(rows)) throw new Error('配列ではありません');
+      renderSyncModal(rows); }catch(err){ renderSyncModal(null, '読めませんでした: '+err.message); }
+    return; }
+  if(e.target.closest('#syncFetch')){
+    const u=((document.getElementById('syncUrl')||{}).value||'').trim();
+    try{ localStorage.setItem(SYNC_URL_KEY, u); }catch(err){}
+    if(!u){ renderSyncModal(null, 'GASのURLがまだ設定されていません。下の貼り付けで試せます。'); return; }
+    renderSyncModal(null, '読み込み中…');
+    try{ const res=await fetch(u+(u.indexOf('?')<0?'?':'&')+'action=list');
+      const js=await res.json();
+      if(!js || !Array.isArray(js.rows)) throw new Error('rows が返ってきません');
+      renderSyncModal(js.rows);
+    }catch(err){ renderSyncModal(null, '読み込みに失敗しました: '+err.message); }
+    return; }
+});
+document.getElementById('syncModal').addEventListener('change', e=>{
+  const r=e.target.closest('[data-cf]'); if(!r) return;
+  _syncChoice[r.dataset.cf]=r.value;
+});
 function renderMembers(){ ensureBoards(); const box=document.getElementById('memberBody'); if(!box) return;
   const list=(state.members||[]).slice().sort((a,b)=>(b.lastSeen||0)-(a.lastSeen||0));
   let h=`<div class="tpsec">${list.length}名がログイン済み</div>`;
