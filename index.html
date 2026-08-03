@@ -173,10 +173,16 @@
   .linkbtn:hover{background:#d5e0ee;}
   .linkbtn.has{background:#cdece8; color:#1f8e8e; font-weight:700;}
   /* 詳細/リンク パネル */
-  .detail{position:fixed; z-index:60; left:0; top:0; height:100vh; width:min(560px,46vw); min-width:440px; background:#fff;
+  .detail{position:fixed; z-index:60; left:0; top:0; height:100vh; width:var(--dtw,640px); min-width:380px; background:#fff;
     border-right:1px solid var(--line); box-shadow:6px 0 24px rgba(0,0,0,.14); display:none;
     flex-direction:column;}
   .detail.open{display:flex;}
+  /* カルテも右端ドラッグで幅を変えられる（打合せ予定パネルと同じ操作感）*/
+  .dtresize{position:absolute; right:-4px; top:0; width:9px; height:100%; cursor:col-resize; z-index:3;
+    display:flex; align-items:center; justify-content:center;}
+  .dtresize:before{content:''; width:3px; height:46px; border-radius:2px; background:var(--line);}
+  .dtresize:hover:before, body.dtdrag .dtresize:before{background:var(--teal); height:88px;}
+  body.dtdrag{cursor:col-resize; user-select:none;}
   .detail header{background:var(--hd); color:#fff; padding:11px 14px; border:none; display:block;}
   .detail header .dt-no{font-size:11px; opacity:.8;}
   .detail header .dt-name{font-size:15px; font-weight:700; margin-top:2px;}
@@ -710,9 +716,19 @@
   .tpcard .act.carry{color:#a8710a; border-color:rgba(224,161,44,.55);}
   .tpcard .del{flex:none; background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:2px 5px;}
   .tpcard .del:hover{color:#f2585f;}
-  .tpcard .cell{outline:none; white-space:pre-wrap; word-break:break-word; border-radius:7px; padding:6px 8px;}
-  .tpcard .cell:focus{background:var(--panel3); box-shadow:inset 0 0 0 1px var(--teal);}
+  /* 「書ける場所」は入力欄に見せる：ホバーで枠が浮き、フォーカスで青くなる */
+  .tpcard .cell{outline:none; white-space:pre-wrap; word-break:break-word; border-radius:7px; padding:6px 8px;
+    border:1px solid transparent; cursor:text; transition:border-color .12s, background-color .12s;}
+  .tpcard:hover .cell{border-color:var(--line); background:var(--panel3);}
+  .tpcard .cell:focus{border-color:var(--teal); background:var(--panel3); box-shadow:0 0 0 1px var(--teal);}
   .tpcard .cell:empty:before{content:attr(data-ph); color:var(--dim);}
+  /* 「押して開く場所」は帯に見せる（書ける場所と見た目をはっきり分ける） */
+  .expbar{display:block; width:calc(100% + 20px); margin:8px -10px 0; text-align:left; background:var(--panel3);
+    border:none; border-top:1px solid var(--line); border-radius:0 0 9px 9px; color:var(--muted);
+    padding:7px 12px; cursor:pointer; font-family:inherit; font-size:11.5px;}
+  .tpcard{padding-bottom:0;}                       /* 帯をカードの底までぴったり出す */
+  .expbar:hover{background:var(--panel2); color:var(--teal);}
+  .tpcard.open .tpx-body{padding-bottom:2px;}
   .tpcard .cell.todo{font-size:14px; font-weight:600; line-height:1.6;}
   .tpcard .cell.memo{font-size:13px; min-height:36px; color:var(--muted); line-height:1.65; margin-top:1px;}   /* class名は memo。detail は左の詳細パネルが使っている */
   .tpcard.done .cell.todo{text-decoration:line-through;}
@@ -722,7 +738,7 @@
   .tpcard.open .exp{background:var(--panel3); border-color:var(--line);}
   .tpcard .exp:hover{color:var(--teal);}
   .tpcard.open{border-color:var(--teal); box-shadow:0 2px 14px rgba(0,0,0,.06);}
-  .memoprev{font-size:12.5px; color:var(--muted); line-height:1.6; padding:2px 8px;
+  .memoprev{font-size:12.5px; color:var(--muted); line-height:1.6; padding:2px 8px; cursor:pointer;
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;}
   .tpchips{display:flex; flex-wrap:wrap; gap:5px; padding:6px 8px 2px;}
   .tpchips span{font-size:10.5px; color:var(--muted); background:var(--panel3); border:1px solid var(--line);
@@ -945,6 +961,7 @@
 </div></div>
 
 <div class="detail" id="detail">
+  <div class="dtresize" id="dtResize" title="右端を左右にドラッグで幅を変える（ダブルクリックで既定の幅）"></div>
   <header>
     <button class="close" id="detailClose" title="閉じる">×</button>
     <div class="dt-no" id="dtNo"></div>
@@ -2152,7 +2169,8 @@ function mtSorted(){ return state.meetings.filter(m=>m).slice().sort((a,b)=>Stri
 // 会議中にすぐ書けるよう、既定では「次回（全部過ぎていれば直近）」の定例をいきなり開く
 function defaultMeetingId(){ const list=mtSorted(), todayY=ymd(new Date());
   return (list.find(m=>m.date&&m.date>=todayY) || list[list.length-1] || {}).id || null; }
-function showTopicPanel(){ document.getElementById('topicModal').classList.add('on'); document.body.classList.add('tpon'); }
+function showTopicPanel(){ document.getElementById('topicModal').classList.add('on'); document.body.classList.add('tpon');
+  if(window.__reclampDetail) window.__reclampDetail(); }   // カルテが開いていれば、はみ出さない幅に詰め直す
 function closeTopics(){ document.getElementById('topicModal').classList.remove('on'); document.body.classList.remove('tpon'); }
 function openTopics(mtId){ ensureBoards();
   _openMeeting = (typeof mtId==='string' && mtId) ? mtId : defaultMeetingId(); _mtEdit=_noteEdit=false;
@@ -2401,13 +2419,14 @@ function tpCard(t){
       `<div class="nm cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="名前">${esc(t.name||'')}</div>`+
       (t.from?`<button class="cotag" data-uncarry="${esca(t.id)}" title="${esca((src&&src.title)||'元の定例')}から持ち越し。クリックで元に戻す">🔁 前回から</button>`:'')+
       (t.done?'':`<button class="act carry" data-carry="${esca(t.id)}" title="このお題を次の定例に移す">▶ 次回へ</button>`)+
-      `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'メモ・リンク・カルテなどを書く'}">${open?'▾ とじる':'▸ 詳細'}</button>`+
+      (open?`<button class="exp" data-expand="${esca(t.id)}" title="たたむ">▾ とじる</button>`:'')+
       `<button class="del" data-del="${esca(t.id)}" title="このお題を削除">✕</button>`+
     `</div>`+
     tpCell(t,'todo','todo','やること・話したいこと');
   if(!open){                                        // 閉じているときは要点だけ
     if((t.detail||'').trim()) h+=`<div class="memoprev">${esc(t.detail)}</div>`;
     h+=tpChips(t);
+    h+=`<button class="expbar" data-expand="${esca(t.id)}">▸ 詳細・メモをひらく</button>`;
   }else{
     h+=`<div class="tpx-body">`+
       tpFld('メモ・背景', tpCell(t,'detail','memo','この件の背景、共有しておきたいこと'))+
@@ -2424,7 +2443,8 @@ function tpCard(t){
             `<span class="lb">期限</span><input class="mtedit" type="date" data-tfield="due" data-tid="${esca(t.id)}" value="${esca(t.due||'')}"></div>`):'')+
       `<div class="addflds">`+tpAddBtn(t,'links','リンク')+tpAddBtn(t,'task','カルテ')+
         tpAddBtn(t,'log','当日メモ')+tpAddBtn(t,'result','決まったこと')+`</div>`+
-    `</div>`;
+    `</div>`+
+    `<button class="expbar" data-expand="${esca(t.id)}">▾ とじる</button>`;
   }
   return h+`</div>`;
 }
@@ -2645,13 +2665,33 @@ document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target
   let drag=false;
   h.addEventListener('mousedown', e=>{ drag=true; document.body.classList.add('tpdrag'); e.preventDefault(); });
   window.addEventListener('mousemove', e=>{ if(drag) cur=set(window.innerWidth-e.clientX); });
-  window.addEventListener('mouseup', ()=>{ if(!drag) return; drag=false; document.body.classList.remove('tpdrag'); store(cur); });
+  window.addEventListener('mouseup', ()=>{ if(!drag) return; drag=false; document.body.classList.remove('tpdrag'); store(cur);
+    if(window.__reclampDetail) window.__reclampDetail(); });
   h.addEventListener('dblclick', ()=>{ cur=set(half()); try{ localStorage.removeItem(KEY); }catch(e){} });   // 画面半分に戻す
+  // カルテ（左の詳細パネル）も同じ操作で幅を変えられるようにする。
+  // カルテはガントに“かぶせる”オーバーレイなので、右の打合せ予定パネルと合わせて
+  // ガントが完全に隠れないよう、右側に最低240pxは残す。
+  (function(){ const dh=document.getElementById('dtResize'); if(!dh) return;
+    const DKEY='aisch_dtw', DMIN=380, DDEF=640;
+    const dmax=()=>{ const tp=document.body.classList.contains('tpon') ? (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tpw'),10)||0) : 0;
+      return Math.max(DMIN, window.innerWidth - tp - 240); };
+    const dset=w=>{ w=Math.max(DMIN, Math.min(dmax(), Math.round(w))); document.documentElement.style.setProperty('--dtw', w+'px'); return w; };
+    let dcur=dset(DDEF);
+    try{ const s=parseInt(localStorage.getItem(DKEY)||'',10); if(isFinite(s)) dcur=dset(s); }catch(e){}
+    let dd=false;
+    dh.addEventListener('mousedown', e=>{ dd=true; document.body.classList.add('dtdrag'); e.preventDefault(); });
+    window.addEventListener('mousemove', e=>{ if(dd) dcur=dset(e.clientX); });
+    window.addEventListener('mouseup', ()=>{ if(!dd) return; dd=false; document.body.classList.remove('dtdrag');
+      try{ localStorage.setItem(DKEY, String(dcur)); }catch(e){} });
+    dh.addEventListener('dblclick', ()=>{ dcur=dset(DDEF); try{ localStorage.removeItem(DKEY); }catch(e){} });
+    window.__reclampDetail=()=>{ dcur=dset(dcur); };     // パネル幅が変わったら はみ出さないよう詰め直す
+  })();
   // ドラッグは細くて掴みにくいので、ボタンでも縮められるようにしておく
   const bar=document.querySelector('.tphdr'); if(!bar) return;
   bar.addEventListener('click', e=>{ const b=e.target.closest('[data-tpw]'); if(!b) return;
     const k=b.dataset.tpw;
     cur = set(k==='half' ? half() : k==='wide' ? cur+STEP : cur-STEP);
+    if(window.__reclampDetail) window.__reclampDetail();
     if(k==='half'){ try{ localStorage.removeItem(KEY); }catch(err){} } else store(cur); });
 })();
 document.getElementById('topicBody').addEventListener('click', e=>{
