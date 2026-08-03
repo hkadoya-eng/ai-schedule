@@ -2974,11 +2974,33 @@ function addMeeting(){ const g=id=>document.getElementById(id);
   save(); renderTopics(); }
 function setMtField(field, val){ const m=state.meetings.find(x=>x.id===_openMeeting); if(!m||!field) return;
   if((m[field]||'')===val) return; m[field]=val; m._u=Date.now(); save(); renderTopics(); }
-function delMeeting(id){ const m=state.meetings.find(x=>x.id===id); if(!m) return; const c=mtCounts(id);
-  if(!confirm('定例「'+(m.title||'')+' '+(m.date||'')+'」を削除しますか？\nこの定例のお題 '+c.total+'件も一緒に削除されます。')) return;
+// 定例の削除。中止・日程変更は必ず起きるので、お題を巻き添えで消さないことを最優先にする。
+function delMeeting(id){
+  const m=state.meetings.find(x=>x.id===id); if(!m) return;
+  const c=mtCounts(id), label='「'+(m.title||'定例')+' '+mtWhenLine(m)+'」';
+  const nx=mtSorted().find(x=>x&&x.id!==id && String(x.date||'')>String(m.date||''));
+  if(c.total){
+    if(nx){
+      // 既定は「お題を次の回へ移してから削除」。メモごと消えるのが一番痛いので、これを標準にする。
+      if(!confirm('定例'+label+'を削除します。\n\nこの回にはお題が '+c.total+'件 あります。\n'+
+                  '［OK］お題を「'+(nx.title||'定例')+' '+mtWhenLine(nx)+'」へ移してから削除します\n'+
+                  '［キャンセル］削除をやめる\n\n'+
+                  '※ お題ごと消したい場合は、先にお題を1件ずつ削除してください。')) return;
+      state.topics.forEach(t=>{ if(t&&t.meetingId===id){
+        t.meetingId=nx.id; t.ord=nextOrd(nx.id); delete t.from; t._u=Date.now(); } });
+      tpToast('お題 '+c.total+'件を「'+(nx.title||'定例')+'」へ移しました');
+    } else {
+      if(!confirm('定例'+label+'を削除します。\n\nこの回にはお題が '+c.total+'件 ありますが、\n'+
+                  '移動先になる次の定例がありません。このままだと<お題も一緒に消えます>。\n\n'+
+                  '先に「＋ 定例を追加」で次回を登録すると、お題を移してから削除できます。\n\n'+
+                  'それでも削除しますか？（Ctrl+Z で戻せます）')) return;
+      state.topics=state.topics.filter(t=>!(t&&t.meetingId===id));
+    }
+  } else {
+    if(!confirm('定例'+label+'を削除しますか？（お題は入っていません）')) return;
+  }
   logAct('定例', (m.title||'')+' '+(m.date||''));
   state.meetings=state.meetings.filter(x=>x.id!==id);
-  state.topics=state.topics.filter(t=>!(t&&t.meetingId===id));
   if(_openMeeting===id) _openMeeting=null;
   save(); renderTopics(); }
 function addRow(){ if(!_openMeeting) return;
