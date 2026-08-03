@@ -2991,7 +2991,7 @@ function delMeeting(id){
       tpToast('お題 '+c.total+'件を「'+(nx.title||'定例')+'」へ移しました');
     } else {
       if(!confirm('定例'+label+'を削除します。\n\nこの回にはお題が '+c.total+'件 ありますが、\n'+
-                  '移動先になる次の定例がありません。このままだと<お題も一緒に消えます>。\n\n'+
+                  '移動先になる次の定例がありません。このままだと お題も一緒に消えます。\n\n'+
                   '先に「＋ 定例を追加」で次回を登録すると、お題を移してから削除できます。\n\n'+
                   'それでも削除しますか？（Ctrl+Z で戻せます）')) return;
       state.topics=state.topics.filter(t=>!(t&&t.meetingId===id));
