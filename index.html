@@ -348,6 +348,10 @@
   .smstat b{display:block; font-size:22px; font-weight:750; font-variant-numeric:tabular-nums; line-height:1.1;}
   .smstat span{font-size:11px; color:var(--muted);}
   .smstat .bad b{color:#ff6b6b;}
+  .smsub{display:block; font-size:11px; color:var(--muted); line-height:1.6; margin-top:2px; white-space:pre-wrap;}
+  .smnote{font-size:11.5px; color:var(--muted); background:var(--panel2); border:1px solid var(--line);
+    border-radius:8px; padding:7px 10px; margin:6px 0 2px; line-height:1.7; white-space:pre-wrap;}
+  .smnote.warn{color:#a8710a; border-color:rgba(224,161,44,.5);}
   .htag{font-size:10px; font-weight:700; background:var(--panel3); border:1px solid var(--line);
     border-radius:8px; padding:1px 7px; color:var(--muted); white-space:nowrap;}
   .htag.del{color:#c2555f; border-color:rgba(194,85,99,.45);}
@@ -3045,6 +3049,22 @@ function summaryData(){
   const ums=(state.milestones||[]).filter(m=>m&&m.date&&parse(m.date)>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
   return {leaves,total,done,pct,late,week,ws,we,ums};
 }
+// 定例まわりのサマリー材料（前回で決まったこと／次回のお題）
+function summaryMeetings(){
+  ensureBoards();
+  const mts=mtSorted().filter(m=>m&&m.date), today=ymd(new Date());
+  const next=mts.find(m=>m.date>=today)||null;
+  const prev=mts.slice().reverse().find(m=>m.date<today)||null;
+  const of=id=>tpOrdered(state.topics.filter(t=>t&&t.meetingId===id));
+  return {
+    next, prev,
+    nextTp: next?of(next.id):[],
+    prevDone: prev?of(prev.id).filter(t=>String(t.result||'').trim()):[],
+    prevLog : prev?of(prev.id).filter(t=>String(t.log||'').trim()):[],
+    // 「決まったこと」が書かれていれば片付いた扱い（決着済みが未対応にも並ぶと読みにくい）
+    prevOpen: prev?of(prev.id).filter(t=>!t.done && !String(t.result||'').trim()):[]
+  };
+}
 function renderSummary(){ ensureBoards(); const box=document.getElementById('summaryBody'); if(!box) return;
   const d=summaryData();
   const row=x=>{ const ss=schedStatus(x.n); return `<div class="smrow ${ss||''}"><span class="smn">${lateMark(ss)}${esc(x.n.name)}</span><span class="smmeta">${esc(x.role||'—')} ／ ${x.n.start?mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):'日付未設定'} ／ ${getProgress(x.n)}%</span></div>`; };
@@ -3052,6 +3072,27 @@ function renderSummary(){ ensureBoards(); const box=document.getElementById('sum
   h+=`<div class="tpsec">⚠ 遅延している作業（${d.late.length}）</div>`+(d.late.length?d.late.map(row).join(''):'<div class="tpempty">なし。順調です 👍</div>');
   h+=`<div class="tpsec">📅 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}・${d.week.length}件）</div>`+(d.week.length?d.week.map(row).join(''):'<div class="tpempty">今週に期間がかかる未完作業はありません。</div>');
   if(d.ums.length) h+=`<div class="tpsec">🚩 この先のマイルストーン</div>`+d.ums.map(m=>`<div class="smrow"><span class="smn">🚩 ${esc(m.label||'')}</span><span class="smmeta">${esc(m.date)}</span></div>`).join('');
+  // ここから定例（打合せ予定に書かれた内容をそのまま持ってくる）
+  const mm=summaryMeetings();
+  if(mm.prev){
+    h+=`<div class="tpsec">🗣 前回の定例（${esc(mtWhenLine(mm.prev))}・${esc(mm.prev.title||'定例')}）</div>`;
+    h+= mm.prevDone.length
+      ? mm.prevDone.map(t=>`<div class="smrow"><span class="smn">✅ ${esc(t.todo||'')}<span class="smsub">${esc(t.result||'')}</span></span>`+
+          `<span class="smmeta">${esc(t.owner||t.name||'—')}${t.due?' ／ 期限 '+esc(t.due):''}</span></div>`).join('')
+      : `<div class="tpempty">「決まったこと」の記入はまだありません。</div>`;
+    if(mm.prevLog.length) h+=`<div class="smnote">📝 当日メモあり：${mm.prevLog.map(t=>esc(t.todo||'')).join('／')}</div>`;
+    if(mm.prevOpen.length) h+=`<div class="smnote warn">↺ 未対応のまま：${mm.prevOpen.map(t=>esc(t.todo||'')).join('／')}</div>`;
+  }
+  if(mm.next){
+    const openN=mm.nextTp.filter(t=>!t.done).length;
+    h+=`<div class="tpsec">📝 次回の定例（${esc(mtWhenLine(mm.next))}・${esc(mm.next.title||'定例')}）</div>`;
+    if((mm.next.note||'').trim()) h+=`<div class="smnote">${esc(mm.next.note)}</div>`;
+    h+= mm.nextTp.length
+      ? mm.nextTp.map(t=>`<div class="smrow"><span class="smn">${t.done?'✓ ':'・'}${esc(t.todo||'')}</span>`+
+          `<span class="smmeta">${esc(t.name||'—')}${t.from?' ／ 持ち越し':''}</span></div>`).join('')+
+        `<div class="smnote">お題 ${mm.nextTp.length}件（未対応 ${openN}件）</div>`
+      : `<div class="tpempty">お題はまだありません。「📝 打合せ予定」から書けます。</div>`;
+  }
   box.innerHTML=h; }
 function summaryText(){ const d=summaryData(); const L=[];
   L.push('【AI推進 サマリー '+ymd(new Date())+'】');
@@ -3061,6 +3102,22 @@ function summaryText(){ const d=summaryData(); const L=[];
   L.push(''); L.push(`■ 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}）`);
   L.push(d.week.length?d.week.map(x=>`・${x.n.name}（${x.role||'—'}・${getProgress(x.n)}%）`).join('\n'):'・なし');
   if(d.ums.length){ L.push(''); L.push('■ 直近マイルストーン'); L.push(d.ums.map(m=>`・${m.date} ${m.label||''}`).join('\n')); }
+  // 定例の中身も同じテキストに含める（メール・チャットにそのまま貼れるように）
+  const mm=summaryMeetings();
+  if(mm.prev){
+    L.push(''); L.push(`■ 前回の定例（${mtWhenLine(mm.prev)} ${mm.prev.title||''}）で決まったこと`);
+    L.push(mm.prevDone.length
+      ? mm.prevDone.map(t=>`・${t.todo||''} → ${String(t.result||'').replace(/\n/g,' ')}${t.owner?'（担当 '+t.owner+'）':''}${t.due?'（期限 '+t.due+'）':''}`).join('\n')
+      : '・記入なし');
+    if(mm.prevOpen.length) L.push('（未対応のまま：'+mm.prevOpen.map(t=>t.todo||'').join('／')+'）');
+  }
+  if(mm.next){
+    L.push(''); L.push(`■ 次回の定例（${mtWhenLine(mm.next)} ${mm.next.title||''}）のお題`);
+    if((mm.next.note||'').trim()) L.push(String(mm.next.note).split('\n').map(x=>'　'+x).join('\n'));
+    L.push(mm.nextTp.length
+      ? mm.nextTp.map(t=>`・${t.todo||''}（${t.name||'—'}${t.from?'・持ち越し':''}）`).join('\n')
+      : '・まだありません');
+  }
   return L.join('\n'); }
 document.getElementById('topicBtn').addEventListener('click', ()=>{ _tpOpen() ? closeTopics() : openTopics(); });
 document.getElementById('sumBtn').addEventListener('click', ()=>{ renderSummary(); document.getElementById('summaryModal').classList.add('on'); });
