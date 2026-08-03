@@ -622,6 +622,15 @@
     font-weight:700; line-height:1; white-space:nowrap;}
   .tphdr .tpx:hover{border-color:#d4707a; color:#c2555f; background:rgba(194,85,99,.08);}
   .tpbody{flex:1 1 auto; overflow:auto; padding:14px;}
+  .tpnote-sm{font-size:10.5px; color:var(--dim); line-height:1.6; margin:-4px 2px 12px;}
+  /* 画面が狭いとき（タブレット・スマホ）は、パネルを全画面にしてガントを詰めない */
+  @media (max-width:860px){
+    #topicModal{width:100%; border-left:none;}
+    body.tpon{padding-right:0;}
+    .tpresize, .tphdr .tpwgrp{display:none;}
+    .detail{width:100%!important; min-width:0;}
+    .dtresize{display:none;}
+  }
   .tpgcal{background:linear-gradient(180deg,#5b8def,#3f6fd6); color:#fff; font-weight:700; border:none; border-radius:8px; padding:7px 13px; cursor:pointer; font-family:inherit; font-size:12.5px; margin-left:auto; white-space:nowrap;}
   .tpgcal:hover{filter:brightness(1.08);}
   .mtadd{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:11px 12px;}
@@ -1168,6 +1177,7 @@ window.__bindUserName=function(email, googleName){
     localStorage.setItem(USER_KEY, googleName||'');
     const el=document.getElementById('userName'); if(el) el.value=googleName||'';
   }catch(e){}
+  try{ const w=document.getElementById('whoami'); if(w) w.textContent='👤 '+(meAuthor()||''); }catch(e){}
 };
 function touch(t){ t.updatedBy = currentUser(); t.updatedAt = new Date().toISOString(); }
 // 進捗を delta(±5等)動かす。0→未着手 / 100→完了 に連動、途中は着手へ。
@@ -2509,7 +2519,7 @@ function tpCard(t){
   // 1行目＝お題そのもの（主役）。名前などの補足は2行目に小さく置く。
   let h=`<div class="tpcard${t.done?' done':''}${t.from?' carried':''}${open?' open':''}" data-tid="${esca(t.id)}">`+
     `<div class="r1">`+
-      `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'未対応に戻す':'対応済みにする'}">${t.done?'✓':''}</button>`+
+      `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'「まだ話していない」に戻す':'この回で話した（済）にする。タスクの完了ではありません'}">${t.done?'✓':''}</button>`+
       tpCell(t,'todo','todo','やること・話したいこと')+
       `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'メモ・リンク・カルテなどを書く'}">${open?'▾ とじる':'▸ 詳細'}</button>`+
     `</div>`+
@@ -2601,6 +2611,7 @@ function renderMeetingTable(box){
      (meAuthorIsRaw()?`<br><b>表示名がメールのIDのままです。</b>上の「氏名」欄に名前を入れると、以降の書き込みに反映されます。`:'')+`</div>`;
   h+=tpGroup(carried,'🔁 前回からの持ち越し','carry');
   h+=tpGroup(own, carried.length?'この回のお題':'お題','');
+  if(rows.length) h+=`<div class="tpnote-sm">✓ は「この回で話した」の印です（タスクの完了ではありません）。話せなかったものは「▶ ◯/◯の定例へ送る」で次に回せます。</div>`;
   if(!rows.length) h+=`<div class="tpempty">まだお題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
   // 前の回で未対応のまま終わったお題＝この回に入れるかどうかを、ここで一覧して選べるようにする
   const cand=carryCandidates(m);
@@ -3709,6 +3720,7 @@ function buildUserList(){
   walkAll(state.tree, n=>{ if(n.kind==='small' && n.role){
     n.role.split(/[・、,／\/]/).forEach(tok=>{ const s=tok.replace(/[（(][^)）]*[)）]/g,'').trim();
       if(s && s!=='要協議' && s.indexOf('？')<0) set.add(s); }); } });
+  (state.members||[]).forEach(m=>{ if(m&&m.name) set.add(m.name); });   // ログインしたことがある人
   const dl=document.getElementById('userList'); if(dl) dl.innerHTML=[...set].map(n=>`<option value="${esc(n)}">`).join('');
 }
 const userName=document.getElementById('userName');
@@ -3854,6 +3866,7 @@ async function afterLogin(session){
       const merged=(window.__mergeBoards&&window.__getState)?window.__mergeBoards(p.new.data, window.__getState()):p.new.data;
       window.__applyMerged?window.__applyMerged(merged):window.__applyRemote(merged);
       setStatus('● 更新を受信','#12a06a');
+      if(document.body.classList.contains('tpon') && typeof tpToast==='function') tpToast('ほかの人の更新を反映しました');
     }
   }).subscribe();
   }catch(e){ loggingIn=false;   // 失敗したら次のイベントで再試行できるように戻す
