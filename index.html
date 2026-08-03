@@ -33,6 +33,7 @@
   .seg button.on{background:var(--navy); color:#fff;}
   .datectl{font-size:12px; color:var(--muted); display:flex; align-items:center; gap:4px;}
   .datectl input{font-family:inherit; font-size:12px; padding:3px 5px; border:1px solid var(--line); border-radius:5px;}
+  .whoami{font-size:11.5px; color:var(--muted); white-space:nowrap; max-width:150px; overflow:hidden; text-overflow:ellipsis;}
   .seg button:disabled{opacity:.38; cursor:default;}
   #hist button{font-size:14px; padding:5px 10px; line-height:1;}
   /* ツールバーのグループ化 */
@@ -921,7 +922,8 @@
     <button class="btn" id="moreBtn" title="表示オプション・データ管理">⚙ 管理 ▾</button>
     <button class="btn" id="themeBtn" title="ライト⇄ダーク切替">🌙</button>
     <span id="sbStatus" title="共有状態"></span>
-    <button class="btn" id="signOut" title="ログアウト">⏻</button>
+    <span class="whoami" id="whoami" title="いま書き込みに記録される名前。違う人ならログアウトしてください"></span>
+    <button class="btn" id="signOut" title="ログアウト（共有PCでは使い終わったら押してください）">⏻ ログアウト</button>
   </div>
 </header>
 
@@ -1154,7 +1156,19 @@ function isTracked(t){ return t.kind==='small' || t.kind==='task'; }
 function canEditProgress(t){ return isLeaf(t); }
 // 更新者・時刻の記録
 const USER_KEY = 'ai_sched_user';
+const USER_OWNER_KEY = 'ai_sched_user_owner';   // 氏名欄がどのアカウントのものか（共有PC対策）
 function currentUser(){ try{ return (localStorage.getItem(USER_KEY)||'').trim(); }catch(e){ return ''; } }
+// ログインした人が前回と違う（＝共有PCで交代した）なら、氏名欄を引き継がず入れ替える。
+// これをしないと、前の人の名前のまま別人の書き込みが記録されてしまう。
+window.__bindUserName=function(email, googleName){
+  try{
+    const prev=(localStorage.getItem(USER_OWNER_KEY)||'').trim();
+    if(prev===email) return;                        // 同じ人ならそのまま
+    localStorage.setItem(USER_OWNER_KEY, email);
+    localStorage.setItem(USER_KEY, googleName||'');
+    const el=document.getElementById('userName'); if(el) el.value=googleName||'';
+  }catch(e){}
+};
 function touch(t){ t.updatedBy = currentUser(); t.updatedAt = new Date().toISOString(); }
 // 進捗を delta(±5等)動かす。0→未着手 / 100→完了 に連動、途中は着手へ。
 function bumpProgress(t, delta){
@@ -3699,7 +3713,9 @@ function buildUserList(){
 }
 const userName=document.getElementById('userName');
 userName.value=currentUser();
-userName.addEventListener('input', ()=>{ try{ localStorage.setItem(USER_KEY, userName.value.trim()); }catch(e){} if(fMine) render(); });
+userName.addEventListener('input', ()=>{ try{ localStorage.setItem(USER_KEY, userName.value.trim()); }catch(e){}
+  const w=document.getElementById('whoami'); if(w && window.__user) w.textContent='👤 '+(meAuthor()||'');
+  if(fMine) render(); });
 const fMineBtn=document.getElementById('fMine'), fOpenBtn=document.getElementById('fOpen');
 fMineBtn.addEventListener('click', ()=>{ fMine=!fMine; fMineBtn.classList.toggle('on',fMine);
   if(fMine && !currentUser()) alert('先に「更新者」に自分の氏名を入れてください。担当名と一致する部分で絞り込みます。');
@@ -3824,9 +3840,13 @@ async function afterLogin(session){
   const board=await loadBoard();
   gate.style.display='none';
   setStatus('● '+myEmail.split('@')[0]+'（共有中）','#12a06a');
+  try{ const w=document.getElementById('whoami');
+    if(w) w.textContent='👤 '+((typeof meAuthor==='function'&&meAuthor())||myEmail.split('@')[0]); }catch(e){}
   started=true; window.__initApp(board);
   // ログインした本人を参加者候補（メンバー名簿）に登録
-  try{ const md=session.user.user_metadata||{}; const nm=md.full_name||md.name||''; if(window.__registerMember) window.__registerMember(myEmail, nm); }catch(e){}
+  try{ const md=session.user.user_metadata||{}; const nm=md.full_name||md.name||'';
+    if(window.__bindUserName) window.__bindUserName(myEmail, nm);      // 共有PCで人が変わったら氏名欄も入れ替える
+    if(window.__registerMember) window.__registerMember(myEmail, nm); }catch(e){}
   sb.channel('board').on('postgres_changes', {event:'UPDATE',schema:'public',table:'schedule_board',filter:'id=eq.main'}, (p)=>{
     if(!p.new || p.new.updated_by===myEmail) return;             // 自分の更新は無視
     if(p.new.data && p.new.data.tree){
