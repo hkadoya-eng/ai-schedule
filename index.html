@@ -650,9 +650,40 @@
   .mtrow .del:hover{color:#f2585f;}
   .tpback{background:none; border:1px solid var(--line); color:var(--text); border-radius:7px; padding:5px 13px; cursor:pointer; font-family:inherit; font-size:12px;}
   .tphd{display:flex; align-items:center; gap:12px; margin-bottom:12px;}
+  /* 定例の見出し（ふだんは1行。✎を押したときだけ入力欄が出る）*/
+  .mthead{margin-bottom:12px;}
+  .mthead .ttl{font-size:17px; font-weight:700; line-height:1.4;}
+  .mthead .whenline{display:flex; align-items:center; gap:9px; margin-top:3px; font-size:12.5px; color:var(--muted); font-variant-numeric:tabular-nums;}
+  .mthead .mini{background:none; border:1px solid var(--line); color:var(--muted); border-radius:6px;
+    padding:2px 8px; cursor:pointer; font-family:inherit; font-size:10.5px; white-space:nowrap;}
+  .mthead .mini:hover{border-color:var(--teal); color:var(--text);}
+  /* ★入口：まずここに一言書く */
+  .tpquick{display:flex; gap:7px; margin-top:2px;}
+  .tpquick input{flex:1; min-width:0; background:var(--panel3); color:var(--text); border:1px solid var(--line);
+    border-radius:9px; padding:11px 13px; font-family:inherit; font-size:14px;}
+  .tpquick input::placeholder{color:var(--dim);}
+  .tpquick input:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
+  .tpquick button{flex:none; background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:9px;
+    padding:0 20px; cursor:pointer; font-family:inherit; font-size:13.5px;}
+  .tpquick button:hover{filter:brightness(1.06);}
+  .tpquickhint{font-size:10.5px; color:var(--dim); margin:5px 2px 14px; line-height:1.6;}
+  /* 概要：ふだんは本文だけ。押すと書き換えモード */
+  .notelab{font-size:10.5px; font-weight:700; color:var(--muted); margin:0 2px 4px;}
+  .noteview{position:relative; background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+    padding:10px 34px 10px 12px; margin-bottom:12px; font-size:13px; line-height:1.75; white-space:pre-wrap; cursor:pointer;}
+  .noteview:hover{border-color:var(--teal);}
+  .noteview .pen{position:absolute; right:10px; top:8px; font-size:11px; color:var(--dim);}
+  .noteadd{display:block; width:100%; text-align:left; background:none; border:1px dashed var(--line); color:var(--muted);
+    border-radius:10px; padding:9px 12px; margin-bottom:12px; cursor:pointer; font-family:inherit; font-size:12.5px;}
+  .noteadd:hover{border-color:var(--teal); color:var(--text);}
+  /* 開いたカードの「＋◯◯」で欄を足す */
+  .addflds{display:flex; flex-wrap:wrap; gap:6px; margin-top:2px;}
+  .addflds .addfld{background:none; border:1px dashed var(--line); color:var(--muted); border-radius:8px;
+    padding:4px 10px; cursor:pointer; font-family:inherit; font-size:11px;}
+  .addflds .addfld:hover{border-color:var(--teal); border-style:solid; color:var(--text);}
   /* 会議の概要（会議中にそのまま書き換える欄）*/
   .tpnote{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin-bottom:14px;}
-  .tpnote label{display:block; font-size:11.5px; font-weight:700; color:var(--muted); margin-bottom:6px;}
+  .tpnote label{display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:700; color:var(--muted); margin-bottom:6px;}
   .tpnote label .sm{font-weight:400; font-size:10.5px; color:var(--dim);}
   .tpnote textarea{width:100%; min-height:74px; resize:vertical; background:var(--panel3); color:var(--text);
     border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13.5px; line-height:1.7;}
@@ -2124,7 +2155,7 @@ function defaultMeetingId(){ const list=mtSorted(), todayY=ymd(new Date());
 function showTopicPanel(){ document.getElementById('topicModal').classList.add('on'); document.body.classList.add('tpon'); }
 function closeTopics(){ document.getElementById('topicModal').classList.remove('on'); document.body.classList.remove('tpon'); }
 function openTopics(mtId){ ensureBoards();
-  _openMeeting = (typeof mtId==='string' && mtId) ? mtId : defaultMeetingId();
+  _openMeeting = (typeof mtId==='string' && mtId) ? mtId : defaultMeetingId(); _mtEdit=_noteEdit=false;
   renderTopics(); showTopicPanel(); }
 function mtCounts(id){ const rows=state.topics.filter(t=>t&&t.meetingId===id); return {total:rows.length, open:rows.filter(t=>!t.done).length}; }
 function carryCount(id){ return state.topics.filter(t=>t&&t.meetingId===id&&t.from).length; }   // 前回から持ち越してきた件数
@@ -2134,6 +2165,11 @@ function renderTopics(){
   updateTopicBtn();
 }
 function mtWhen(m){ return `${esc(m.date||'日付未設定')}${m.start?' '+esc(m.start)+(m.end?'〜'+esc(m.end):''):''}${m.room?'　@'+esc(m.room):''}`; }
+const _WD=['日','月','火','水','木','金','土'];
+function mtWhenLine(m){ const d=m.date?parse(m.date):null;                       // 「8/17(月) 16:00〜17:00 ／ 会議室L」
+  return (d?`${d.getMonth()+1}/${d.getDate()}(${_WD[d.getDay()]})`:'日付未定')+
+    (m.start?` ${m.start}${m.end?'〜'+m.end:''}`:'')+(m.room?` ／ ${m.room}`:''); }
+let _mtEdit=false, _noteEdit=false;   // 定例の日時／概要を「書き換えモード」にしているか（画面の状態）
 function timeOpts(sel, ph){ let o=`<option value=""${sel?'':' selected'}>${ph||'--:--'}</option>`;   // 15分刻みの時刻オプション（8:00〜21:45）
   for(let h=8;h<=21;h++) for(const mm of ['00','15','30','45']){ const v=String(h).padStart(2,'0')+':'+mm; o+=`<option value="${v}"${v===sel?' selected':''}>${v}</option>`; }
   return o; }
@@ -2348,6 +2384,14 @@ function tpChips(t){
   if(ids.length>2) c.push('📌 ほか'+(ids.length-2)+'件');
   return c.length?`<div class="tpchips">`+c.map(x=>`<span>${esc(x)}</span>`).join('')+`</div>`:'';
 }
+// 開いたときの記入欄は「最初はメモだけ」。他は＋ボタンで出す（いきなり全部出すと書く気が失せるため）。
+let _tpShow=new Set();     // 'お題id:欄' … その欄を出しているか（中身があるものは常に出る）
+function tpHas(t,f){
+  if(f==='task') return tpTaskIds(t).length>0;
+  return !!String(t[f]||'').trim();
+}
+function tpOn(t,f){ return tpHas(t,f) || _tpShow.has(t.id+':'+f); }
+function tpAddBtn(t,f,label){ return tpOn(t,f)?'':`<button class="addfld" data-addfld="${esca(t.id)}|${f}">＋ ${label}</button>`; }
 function tpCard(t){
   const src=t.from ? state.meetings.find(x=>x&&x.id===t.from) : null;
   const open=_tpOpenCards.has(t.id);
@@ -2357,31 +2401,40 @@ function tpCard(t){
       `<div class="nm cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="名前">${esc(t.name||'')}</div>`+
       (t.from?`<button class="cotag" data-uncarry="${esca(t.id)}" title="${esca((src&&src.title)||'元の定例')}から持ち越し。クリックで元に戻す">🔁 前回から</button>`:'')+
       (t.done?'':`<button class="act carry" data-carry="${esca(t.id)}" title="このお題を次の定例に移す">▶ 次回へ</button>`)+
-      `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'開いて詳細を書く'}">${open?'▾ とじる':'▸'}</button>`+
+      `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'メモ・リンク・カルテなどを書く'}">${open?'▾ とじる':'▸ 詳細'}</button>`+
       `<button class="del" data-del="${esca(t.id)}" title="このお題を削除">✕</button>`+
     `</div>`+
     tpCell(t,'todo','todo','やること・話したいこと');
   if(!open){                                        // 閉じているときは要点だけ
     if((t.detail||'').trim()) h+=`<div class="memoprev">${esc(t.detail)}</div>`;
     h+=tpChips(t);
-    h+=`<div class="exphint" data-expand="${esca(t.id)}">クリックで開く（背景・リンク・当日メモ・決まったこと）</div>`;
   }else{
     h+=`<div class="tpx-body">`+
-      tpFld('背景・事前に共有しておくこと', tpCell(t,'detail','memo','この件の背景、前提、読んでおいてほしいこと'))+
-      tpFld('参考リンク <span class="sm">1行に1つ貼ると下にボタンが出ます</span>',
-            tpCell(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links))+
-      tpFld('関連するカルテ <span class="sm">いくつでも結びつけられます。📌を押すとカルテが開きます</span>',
+      tpFld('メモ・背景', tpCell(t,'detail','memo','この件の背景、共有しておきたいこと'))+
+      (tpOn(t,'links')?tpFld('参考リンク <span class="sm">1行に1つ</span>',
+            tpCell(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links)):'')+
+      (tpOn(t,'task')?tpFld('関連するカルテ <span class="sm">📌を押すとカルテが開きます</span>',
             tpLinkedTasks(t)+
-            `<div class="tprow"><select class="mtedit tsel grow" data-addtask="${esca(t.id)}">${tpTaskOptions(tpTaskIds(t))}</select></div>`)+
-      tpFld(`当日メモ <button class="act" data-today="${esca(t.id)}" title="今日の日付と自分の名前を入れて書き始める">＋ 今日の記録</button>`,
-            tpCell(t,'log','log','会議中に出た話・その場で決まったことをここに'))+
-      tpFld('決まったこと・次アクション',
+            `<div class="tprow"><select class="mtedit tsel grow" data-addtask="${esca(t.id)}">${tpTaskOptions(tpTaskIds(t))}</select></div>`):'')+
+      (tpOn(t,'log')?tpFld(`当日メモ <button class="act" data-today="${esca(t.id)}" title="今日の日付と自分の名前を入れて書き始める">＋ 今日の記録</button>`,
+            tpCell(t,'log','log','会議中に出た話・その場で決まったことをここに')):'')+
+      (tpOn(t,'result')?tpFld('決まったこと・次アクション',
             tpCell(t,'result','result','何が決まったか／次に誰が何をするか')+
             `<div class="tprow mt"><span class="lb">担当</span><input class="mtedit" data-tfield="owner" data-tid="${esca(t.id)}" value="${esca(t.owner||'')}" placeholder="例）伊藤(真)">`+
-            `<span class="lb">期限</span><input class="mtedit" type="date" data-tfield="due" data-tid="${esca(t.id)}" value="${esca(t.due||'')}"></div>`)+
+            `<span class="lb">期限</span><input class="mtedit" type="date" data-tfield="due" data-tid="${esca(t.id)}" value="${esca(t.due||'')}"></div>`):'')+
+      `<div class="addflds">`+tpAddBtn(t,'links','リンク')+tpAddBtn(t,'task','カルテ')+
+        tpAddBtn(t,'log','当日メモ')+tpAddBtn(t,'result','決まったこと')+`</div>`+
     `</div>`;
   }
   return h+`</div>`;
+}
+// この定例に、上の入力欄から1件足す（名前は自動）
+function addTopicQuick(){
+  const el=document.getElementById('tpQuick'); if(!el||!_openMeeting) return;
+  const v=el.value.trim(); if(!v){ el.focus(); return; }
+  state.topics.push({ id:uid('tp'), meetingId:_openMeeting, done:false, name:meAuthor(), todo:v, detail:'', _u:Date.now() });
+  save(); renderTopics();
+  const n=document.getElementById('tpQuick'); if(n){ n.value=''; n.focus(); }
 }
 // 「＋ 今日の記録」…日付＋自分の名前の見出しを足して、その続きから書けるようにする
 function addTodayLog(id){
@@ -2405,17 +2458,32 @@ function renderMeetingTable(box){
   const movedOut=state.topics.filter(t=>t&&t.from===m.id);   // この回から次回へ移したもの（痕跡として残す）
   let h=`<div class="tphd"><button class="tpback" id="tpBack">← 定例一覧</button>`+
         `<button class="tpgcal" id="tpGcal" title="Googleカレンダーに予定を作成（概要とお題を説明欄に、ログイン済みメンバーを招待先に自動セット）">📅 カレンダー登録</button></div>`+
-        `<div class="tpmeta"><input class="mtedit tpttl-in" data-mt="title" value="${esca(m.title||'')}" placeholder="定例名">`+
+        `<div class="mthead"><div class="ttl">${esc(m.title||'定例')}</div>`+
+          `<div class="whenline">${esc(mtWhenLine(m))}`+
+          `<button class="mini" id="mtEditToggle" title="定例名・日時・会議室を直す">${_mtEdit?'とじる':'✎ 直す'}</button></div></div>`;
+  if(_mtEdit) h+=`<div class="tpmeta"><input class="mtedit tpttl-in" data-mt="title" value="${esca(m.title||'')}" placeholder="定例名">`+
           `<div class="mtline"><input class="mtedit" type="date" data-mt="date" value="${esca(m.date||'')}">`+
           `<select class="mtedit tsel" data-mt="start" title="開始">${timeOpts(m.start||'','開始')}</select><span class="mtsep">〜</span>`+
           `<select class="mtedit tsel" data-mt="end" title="終了">${timeOpts(m.end||'','終了')}</select>`+
           `<select class="mtedit tsel rmsel" data-mt="room" title="会議室">${roomOpts(m.room||'')}</select></div></div>`;
-  h+=`<div class="tpnote"><label>■ 会議の概要 <span class="sm">議題・目的。会議中もそのまま書き換えられます（自動で全員に共有）</span></label>`+
-     `<textarea data-mtnote placeholder="例）・ツール化のネック報告（伊藤さん）&#10;・進捗共有のやり方を決める">${esc(m.note||'')}</textarea></div>`;
+  // 会議の概要：ふだんは本文だけ見せて、押したら書き換えられる（空の入力欄を並べない）
+  if(_noteEdit){
+    h+=`<div class="tpnote"><label>この回のねらい・議題 <span class="sm">会議中もそのまま書き換えられます（自動で全員に共有）</span>`+
+       `<button class="mini" id="noteDone" style="margin-left:auto">とじる</button></label>`+
+       `<textarea data-mtnote placeholder="例）・ツール化のネック報告（伊藤さん）&#10;・進捗共有のやり方を決める">${esc(m.note||'')}</textarea></div>`;
+  }else if((m.note||'').trim()){
+    h+=`<div class="notelab">この回のねらい・議題</div>`+
+       `<div class="noteview" id="noteEditBtn" title="クリックで書き換え">${esc(m.note)}<span class="pen">✎</span></div>`;
+  }else{
+    h+=`<button class="noteadd" id="noteEditBtn">＋ この回のねらい・議題を書く</button>`;
+  }
+  // ★入口：ここに書けばいい、が一目で分かるようにする
+  h+=`<div class="tpquick"><input id="tpQuick" type="text" autocomplete="off"`+
+     ` placeholder="話したいこと・相談したいことを書く"><button id="tpQuickAdd">追加</button></div>`+
+     `<div class="tpquickhint">Enterでも追加できます${meAuthor()?`／名前は「${esc(meAuthor())}」で入ります`:''}。詳しいメモは追加したあと「▸ 詳細」から。</div>`;
   h+=tpGroup(carried,'🔁 前回からの持ち越し','carry');
   h+=tpGroup(own, carried.length?'この回のお題':'お題','');
-  if(!rows.length) h+=`<div class="tpempty">まだお題がありません。下の「＋ お題を追加」から書き込んでください。</div>`;
-  h+=`<div class="tpaddrow"><button id="tpAddRow">＋ お題を追加</button></div>`;
+  if(!rows.length) h+=`<div class="tpempty">まだお題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
   // 前の回で未対応のまま終わったお題＝この回に入れるかどうかを、ここで一覧して選べるようにする
   const cand=carryCandidates(m);
   if(cand.length) h+=`<div class="tpgrp cand"><div class="gh">🔁 前の回で未対応のお題 <span class="n">${cand.length}</span>`+
@@ -2587,16 +2655,25 @@ document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target
     if(k==='half'){ try{ localStorage.removeItem(KEY); }catch(err){} } else store(cur); });
 })();
 document.getElementById('topicBody').addEventListener('click', e=>{
-  if(e.target.closest('#tpBack')){ _openMeeting=null; renderTopics(); return; }
+  if(e.target.closest('#tpBack')){ _openMeeting=null; _mtEdit=_noteEdit=false; renderTopics(); return; }
   if(e.target.closest('#mtAddToggle')){ const f=document.getElementById('mtAddForm');
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
       if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
   if(e.target.closest('#tpGcal')){ const m=state.meetings.find(x=>x.id===_openMeeting); if(m) window.open(gcalUrl(m),'_blank','noopener'); return; }
   if(e.target.closest('#tpAddRow')){ addRow(); return; }
+  if(e.target.closest('#tpQuickAdd')){ addTopicQuick(); return; }
+  if(e.target.closest('#mtEditToggle')){ _mtEdit=!_mtEdit; renderTopics(); return; }
+  if(e.target.closest('#noteDone')){ _noteEdit=false; renderTopics(); return; }
+  if(e.target.closest('#noteEditBtn')){ _noteEdit=true; renderTopics();
+    const ta=document.querySelector('#topicBody [data-mtnote]'); if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
+  const af=e.target.closest('[data-addfld]');
+  if(af){ const [tid,f]=af.dataset.addfld.split('|'); _tpShow.add(tid+':'+f); renderTopics();
+    const sel='#topicBody '+(f==='task'?`[data-addtask="${tid}"]`:`[data-edit="${tid}"][data-field="${f}"]`);
+    const el=document.querySelector(sel); if(el){ el.focus(); el.scrollIntoView({block:'nearest'}); } return; }
   const gmt=e.target.closest('[data-gcal-mt]'); if(gmt){ e.stopPropagation(); const m=state.meetings.find(x=>x.id===gmt.dataset.gcalMt); if(m) window.open(gcalUrl(m),'_blank','noopener'); return; }
   const dmt=e.target.closest('[data-del-mt]'); if(dmt){ e.stopPropagation(); delMeeting(dmt.dataset.delMt); return; }
-  const omt=e.target.closest('[data-open-mt]'); if(omt){ _openMeeting=omt.dataset.openMt; renderTopics(); return; }
+  const omt=e.target.closest('[data-open-mt]'); if(omt){ _openMeeting=omt.dataset.openMt; _mtEdit=_noteEdit=false; renderTopics(); return; }
   const tg=e.target.closest('[data-toggle]'); if(tg){ toggleTopic(tg.dataset.toggle); return; }
   const cy=e.target.closest('[data-carry]'); if(cy){ carryTopic(cy.dataset.carry); return; }
   const ct=e.target.closest('[data-carryto]'); if(ct){ carryTopicTo(ct.dataset.carryto, _openMeeting); return; }
@@ -2636,6 +2713,7 @@ document.getElementById('topicBody').addEventListener('blur', e=>{
 }, true);
 document.getElementById('topicBody').addEventListener('keydown', e=>{
   if(e.target.id==='mtTitle' && e.key==='Enter'){ e.preventDefault(); addMeeting(); }
+  if(e.target.id==='tpQuick' && e.key==='Enter'){ e.preventDefault(); addTopicQuick(); }
 });
 // メンバー一覧（⚙管理の中）
 function renderMembers(){ ensureBoards(); const box=document.getElementById('memberBody'); if(!box) return;
