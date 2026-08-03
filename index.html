@@ -913,6 +913,7 @@
       <button data-m="edit" title="編集（バーを引く・動かす）">✏ 編集</button>
     </span>
     <button class="btn" id="todayBtn" title="今日の位置へスクロール">📍 今日</button>
+    <button class="btn" id="topicBtn" title="打合せ予定・お題を開く（話したいことを書く）">📝 打合せ予定</button>
     <button class="btn" id="sumBtn" title="今週のサマリー（進捗・遅延・今週やること）">📊 サマリー</button>
     <span class="tsep"></span>
     <!-- 右：ヘルプ・管理・状態 -->
@@ -2174,7 +2175,18 @@ window.__registerMember=function(email, name){
   persist();   // 履歴に乗せず共有(Supabase)へ反映（マージで他者のメンバーも保持）
 };
 function uid(p){ return p+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7); }
-function meAuthor(){ return currentUser() || (window.__user? String(window.__user).split('@')[0] : ''); }
+function meAuthor(){
+  const u=currentUser(); if(u) return u;                       // ツールバーの「氏名」が最優先
+  const email=window.__user?String(window.__user):'';
+  const m=(state.members||[]).find(x=>x&&x.id===email);        // 次点：Googleログインの表示名
+  if(m && m.name) return m.name;
+  return email?email.split('@')[0]:''; }
+// 表示名が取れず、メールのID（kadoya 等）のままかどうか
+function meAuthorIsRaw(){
+  if(currentUser()) return false;
+  const email=window.__user?String(window.__user):''; if(!email) return false;
+  const m=(state.members||[]).find(x=>x&&x.id===email);
+  return !(m && m.name && m.name!==email.split('@')[0]); }
 let _openMeeting=null;   // null=定例一覧／会議id=その会議のお題テーブル
 let _mtDraft=null;       // 「＋次回を登録」で開いたときの追加フォームのプリセット値（一度使ったら破棄）
 function updateTopicBtn(){ ensureBoards(); if(typeof computeKPIs==='function'){ try{ computeKPIs(); }catch(e){} } }  // KPIの打合せ予定タイルを更新
@@ -2571,19 +2583,22 @@ function renderMeetingTable(box){
   // ★入口：ここに書けばいい、が一目で分かるようにする
   h+=`<div class="tpquick"><input id="tpQuick" type="text" autocomplete="off"`+
      ` placeholder="話したいこと・相談したいことを書く"><button id="tpQuickAdd">追加</button></div>`+
-     `<div class="tpquickhint">Enterでも追加できます${meAuthor()?`／名前は「${esc(meAuthor())}」で入ります`:''}。詳しいメモは追加したあと「▸ 詳細」から。</div>`;
+     `<div class="tpquickhint">Enterでも追加できます${meAuthor()?`／名前は「${esc(meAuthor())}」で入ります`:''}。詳しいメモは追加したあと「▸ 詳細」から。`+
+     (meAuthorIsRaw()?`<br><b>表示名がメールのIDのままです。</b>上の「氏名」欄に名前を入れると、以降の書き込みに反映されます。`:'')+`</div>`;
   h+=tpGroup(carried,'🔁 前回からの持ち越し','carry');
   h+=tpGroup(own, carried.length?'この回のお題':'お題','');
   if(!rows.length) h+=`<div class="tpempty">まだお題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
   // 前の回で未対応のまま終わったお題＝この回に入れるかどうかを、ここで一覧して選べるようにする
   const cand=carryCandidates(m);
   if(cand.length) h+=`<div class="tpgrp cand"><div class="gh">🔁 前の回で未対応のお題 <span class="n">${cand.length}</span>`+
-    `<span class="sm">この回に入れますか？</span></div>`+
+    `<span class="sm">この回に入れますか？（直近${CARRY_BACK}回ぶん）</span></div>`+
     cand.map(t=>{ const src=state.meetings.find(x=>x&&x.id===t.meetingId);
       return `<div class="candrow"><div class="ct">${esc(t.todo||'(無題)')}`+
         `<span class="cs">${esc((src&&src.title)||'')}${t.name?' ／ '+esc(t.name):''}</span></div>`+
         `<button class="act carry" data-carryto="${esca(t.id)}" title="この回のお題に移す">＋ この回へ</button></div>`;
-    }).join('')+`</div>`;
+    }).join('')+
+    ((n=>n?`<div class="tpmoved" style="padding-top:6px">これより前の回にも未対応が ${n} 件あります（定例一覧から開けます）</div>`:'')(carryOlderCount(m)))+
+    `</div>`;
   if(movedOut.length) h+=`<div class="tpgrp" style="margin-top:16px"><div class="gh">→ 次回へ持ち越したお題 <span class="n">${movedOut.length}</span></div>`+
     `<div class="tpmoved">`+movedOut.map(t=>`<span class="mv">・${esc(t.todo||'(無題)')}</span>`).join('')+`</div></div>`;
   box.innerHTML=h;
@@ -2593,10 +2608,19 @@ function renderMeetingTable(box){
 function autoGrowNote(){ const ta=document.querySelector('#topicBody [data-mtnote]'); if(!ta) return;
   ta.style.height='auto'; ta.style.height=Math.min(360, Math.max(96, ta.scrollHeight+2))+'px'; }
 // この回より前の定例に残っている未対応のお題＝持ち越し候補
+const CARRY_BACK=2;          // さかのぼる回数（増やすと古い未対応が延々と候補に出続ける）
 function carryCandidates(m){
   if(!m||!m.date) return [];
-  const older=new Set(state.meetings.filter(x=>x&&x.date&&x.date<m.date).map(x=>x.id));
-  return state.topics.filter(t=>t&&!t.done&&older.has(t.meetingId));
+  const prev=mtSorted().filter(x=>x&&x.date&&x.date<m.date);
+  const near=new Set(prev.slice(-CARRY_BACK).map(x=>x.id));
+  return state.topics.filter(t=>t&&!t.done&&near.has(t.meetingId));
+}
+// それより前の回に残っている未対応の数（件数だけ知らせて、候補一覧には出さない）
+function carryOlderCount(m){
+  if(!m||!m.date) return 0;
+  const prev=mtSorted().filter(x=>x&&x.date&&x.date<m.date);
+  const far=new Set(prev.slice(0,Math.max(0,prev.length-CARRY_BACK)).map(x=>x.id));
+  return state.topics.filter(t=>t&&!t.done&&far.has(t.meetingId)).length;
 }
 // 候補を「この回」へ入れる（前の回からの持ち越しとして記録）
 function carryTopicTo(id, mtId){
@@ -2934,6 +2958,7 @@ function summaryText(){ const d=summaryData(); const L=[];
   L.push(d.week.length?d.week.map(x=>`・${x.n.name}（${x.role||'—'}・${getProgress(x.n)}%）`).join('\n'):'・なし');
   if(d.ums.length){ L.push(''); L.push('■ 直近マイルストーン'); L.push(d.ums.map(m=>`・${m.date} ${m.label||''}`).join('\n')); }
   return L.join('\n'); }
+document.getElementById('topicBtn').addEventListener('click', ()=>{ _tpOpen() ? closeTopics() : openTopics(); });
 document.getElementById('sumBtn').addEventListener('click', ()=>{ renderSummary(); document.getElementById('summaryModal').classList.add('on'); });
 document.getElementById('summaryModal').addEventListener('click', e=>{
   if(e.target.id==='summaryModal'||e.target.id==='summaryClose'){ document.getElementById('summaryModal').classList.remove('on'); return; }
