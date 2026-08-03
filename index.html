@@ -519,6 +519,8 @@
   .khours .h .l{font-size:10px; color:var(--dim);}
   .khours .h input{width:100%; background:transparent; border:none; color:var(--text); font-size:16px;
     font-weight:700; font-family:inherit; outline:none; font-variant-numeric:tabular-nums;}
+  .khours .h.act{border-color:rgba(47,182,176,.55); background:rgba(47,182,176,.06);}
+  .khours .h.act .l{color:var(--teal); font-weight:700;}
   .khours .cut{color:#7fe0ab; font-weight:750; font-size:16px; display:flex; align-items:center;}
   .reports{display:flex; flex-direction:column; gap:7px;}
   .addrep{display:flex; align-items:center; justify-content:center; gap:6px; border:1px dashed var(--line);
@@ -594,6 +596,20 @@
   .kpi.drill .go{position:absolute; right:12px; top:12px; font-size:10.5px; color:var(--dim); font-weight:700;}
   .kpi.drill:hover .go{color:var(--teal);}
   #kpiModal .m{width:min(940px,96vw);}
+  #findModal .m{width:min(860px,96vw);}
+  #findInput{width:100%; font-family:inherit; font-size:15px; padding:10px 12px; border-radius:9px;
+    border:1px solid var(--line); background:var(--panel3); color:var(--text); margin-bottom:10px;}
+  #findInput:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
+  .fdsec{font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.6px; margin:12px 0 6px;}
+  .fdrow{display:flex; align-items:center; gap:10px; padding:8px 11px; border:1px solid var(--line);
+    border-radius:9px; margin-bottom:6px; background:var(--panel2); cursor:pointer; font-size:12.5px;}
+  .fdrow:hover{border-color:var(--teal); background:var(--panel3);}
+  .fdrow .ft{flex:none; font-size:10px; font-weight:700; color:var(--muted); background:var(--panel3);
+    border:1px solid var(--line); border-radius:8px; padding:1px 7px; white-space:nowrap;}
+  .fdrow .fn{flex:1; min-width:0;}
+  .fdrow .fn b{background:rgba(47,182,176,.25); color:var(--text); border-radius:3px; padding:0 2px;}
+  .fdrow .fs{display:block; font-size:11px; color:var(--dim); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .fdrow .fm{flex:none; font-size:10.5px; color:var(--dim); white-space:nowrap;}
   .kpsec{font-size:11px; font-weight:700; color:var(--muted); letter-spacing:.6px; margin:14px 0 6px;}
   .kpsec:first-child{margin-top:2px;}
   .kpsec .n{background:var(--panel3); border-radius:9px; padding:1px 8px; font-size:11px; color:var(--text); font-weight:700;}
@@ -947,6 +963,7 @@
       <button data-m="edit" title="編集（バーを引く・動かす）">✏ 編集</button>
     </span>
     <button class="btn" id="todayBtn" title="今日の位置へスクロール">📍 今日</button>
+    <button class="btn" id="findBtn" title="作業・お題・議事メモをまとめて探す（Ctrl+F）">🔍 検索</button>
     <button class="btn" id="topicBtn" title="打合せ予定・お題を開く（話したいことを書く）">📝 打合せ予定</button>
     <button class="btn" id="sumBtn" title="今週のサマリー（進捗・遅延・今週やること）">📊 サマリー</button>
     <span class="tsep"></span>
@@ -1061,6 +1078,12 @@
   <div class="mf"><button class="ghost" id="kpiClose">閉じる</button></div>
 </div></div>
 
+<div class="modal" id="findModal"><div class="m">
+  <div class="mh"><div class="t">🔍 検索</div><div class="s">作業（カルテ）・お題・当日メモ・決まったこと・定例をまとめて探します。行をクリックすると、その場所が開きます。</div></div>
+  <div class="mb"><input id="findInput" placeholder="例）ツール化／伊藤／セリフ／8月" autocomplete="off"><div id="findBody"></div></div>
+  <div class="mf"><button class="ghost" id="findClose">閉じる</button></div>
+</div></div>
+
 <div class="modal" id="syncModal"><div class="m">
   <div class="mh"><div class="t">🔄 定例シートと同期</div><div class="s">スプレッドシートの「議題」とお題を突き合わせます。<b>取り込む前に差分を確認できます。</b>片方だけが変わった欄はそのまま採用し、両方変わった欄だけ選んでもらいます。</div></div>
   <div class="mb" id="syncBody"></div>
@@ -1148,8 +1171,12 @@ function dueStatus(due){ if(!due) return null; const d=parse(due); const now=new
   if(diff<0) return {cls:'over', label:`期限超過 ${-diff}日`, soon:true, over:true};
   if(diff<=7) return {cls:'', label:`期限 ${mdNum(d)}（あと${diff}日）`, soon:true};
   return {cls:'', label:`期限 ${mdNum(d)}`, soon:false}; }
-function cutText(t){ const o=+t.hoursOld, n=+t.hoursNew;
-  if(t.hoursOld!=null && t.hoursNew!=null && o>0) return '▼'+Math.round((1-n/o)*100)+'%';
+// 削減率。実績が入っていれば「実績ベース」を主に出す（見込みだけだと効果を証明できないため）
+function cutPct(o, x){ o=+o; x=+x; return (o>0 && isFinite(x)) ? Math.round((1-x/o)*100) : null; }
+function cutText(t){
+  const p1=cutPct(t.hoursOld, t.hoursNew), p2=(t.hoursAct!=null)?cutPct(t.hoursOld, t.hoursAct):null;
+  if(p2!=null) return '<span title="実績ベース">▼'+p2+'%</span><small style="opacity:.6;font-size:10px;display:block">見込 ▼'+(p1!=null?p1:'—')+'%</small>';
+  if(p1!=null) return '▼'+p1+'%';
   return '—'; }
 function pdotHTML(t){ return t.priority ? `<span class="pdot p-${t.priority}" title="優先度: ${(PRIOS.find(p=>p.k===t.priority)||{}).label||''}"></span>` : ''; }
 function caretHTML(n){ return hasKids(n)
@@ -1545,10 +1572,12 @@ function setDepsMode(on){
 function computeKPIs(){
   const box=document.getElementById('kpibar'); if(!box) return;
   let total=0, done=0, sum=0, hOld=0, hNew=0, dueSoon=0, over=0, lateOver=0, behind=0;
+  let aOld=0, aAct=0, aCnt=0;                       // 実績が入っているぶんだけの集計
   state.tree.forEach(n=> eachLeaf(n, s=>{
     if(s.kind==='small' && s.status && s.status!=='normal') return;  // AI対象外/未割当/TBD は集計外
     total++; sum+=getProgress(s); if(getStage(s)==='完了') done++;
-    if(s.hoursOld!=null){ hOld+=(+s.hoursOld||0); hNew+=(s.hoursNew!=null?(+s.hoursNew||0):(+s.hoursOld||0)); }
+    if(s.hoursOld!=null){ hOld+=(+s.hoursOld||0); hNew+=(s.hoursNew!=null?(+s.hoursNew||0):(+s.hoursOld||0));
+      if(s.hoursAct!=null){ aOld+=(+s.hoursOld||0); aAct+=(+s.hoursAct||0); aCnt++; } }
     if(getStage(s)!=='完了'){ const d=dueStatus(effEnd(s)); if(d&&d.soon){ dueSoon++; if(d.over) over++; } }
     const _ss=schedStatus(s); if(_ss==='overdue') lateOver++; else if(_ss==='behind') behind++;
   }));
@@ -1556,6 +1585,7 @@ function computeKPIs(){
   const pct = total ? Math.round(sum/total) : 0;
   const donePct = total ? Math.round(done/total*100) : 0;
   const cut = hOld>0 ? Math.round((1-hNew/hOld)*100) : null;
+  const actCut = aOld>0 ? Math.round((1-aAct/aOld)*100) : null;   // 実績ベースの削減率
   // 打合せ予定：次回の定例と未対応お題数
   ensureBoards();
   const mts=(state.meetings||[]).filter(m=>m&&m.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
@@ -1581,9 +1611,11 @@ function computeKPIs(){
       `<div class="ring" style="--p:${pct}"><span>${pct}</span></div></div>`+
     `<div class="kpi drill" data-kpi="done" title="クリックで内訳（完了・未完了の一覧）"><div class="go">内訳 ▸</div><div class="lab">完了</div><div class="val">${done}<small> / ${total}</small></div>`+
       `<div class="barmini"><i style="width:${donePct}%"></i></div></div>`+
-    `<div class="kpi drill ${cut!=null?'accent':''}" data-kpi="hours" title="クリックで内訳（工数を入力した作業）"><div class="go">内訳 ▸</div><div class="lab">AI工数削減</div>`+
-      `<div class="val">${cut!=null?cut:'—'}${cut!=null?'<small>%</small>':''}</div>`+
-      `<div class="meta">${hOld>0?`見込 ${hOld}h → ${hNew}h`:'工数を入力すると表示'}</div></div>`+
+    `<div class="kpi drill ${(actCut!=null||cut!=null)?'accent':''}" data-kpi="hours" title="クリックで内訳（工数を入力した作業）"><div class="go">内訳 ▸</div>`+
+      `<div class="lab">AI工数削減${actCut!=null?'<span style="font-size:9px;color:var(--teal)">（実績）</span>':''}</div>`+
+      `<div class="val">${actCut!=null?actCut:(cut!=null?cut:'—')}${(actCut!=null||cut!=null)?'<small>%</small>':''}</div>`+
+      `<div class="meta">${actCut!=null?`実績 ${aOld}h → ${aAct}h（${aCnt}件）`:(hOld>0?`見込 ${hOld}h → ${hNew}h`:'工数を入力すると表示')}`+
+        `${(actCut!=null&&cut!=null)?` ／ 見込 ${cut}%`:''}</div></div>`+
     `<div class="kpi drill" data-kpi="late" title="クリックで内訳（超過・遅れ・期限が近いもの）"><div class="go">内訳 ▸</div><div class="lab">遅延・期限</div><div class="val" style="${late?'color:#dc3b3b':(dueSoon?'color:#d99413':'')}">${late}<small> 件</small></div>`+
       `<div class="meta">超過 ${lateOver}・遅れ ${behind}${dueSoon?` ／ 期限7日内 ${dueSoon}`:''}</div></div>`;
 }
@@ -2895,7 +2927,8 @@ function kpiSection(label, rows, rightFn, tone){
   return `<div class="kpsec">${esc(label)} <span class="n">${rows.length}</span></div>`+
     rows.map(n=>kpiRow(n, rightFn(n), tone)).join('');
 }
-function _cutOf(n){ const o=+n.hoursOld||0, w=(n.hoursNew!=null?+n.hoursNew||0:o); return {o,w,d:o-w}; }
+function _cutOf(n){ const o=+n.hoursOld||0, w=(n.hoursNew!=null?+n.hoursNew||0:o); return {o:o,w:w,d:o-w}; }
+function _actOf(n){ const o=+n.hoursOld||0, a=(n.hoursAct!=null?+n.hoursAct||0:o); return {o:o,a:a,d:o-a}; }
 function openKpiDrill(kind){
   const all=kpiLeaves(); let title='', sub='', body='';
   if(kind==='progress'){
@@ -2911,12 +2944,18 @@ function openKpiDrill(kind){
     body=kpiSection('未完了', all.filter(n=>getStage(n)!=='完了').sort((a,b)=>getProgress(b)-getProgress(a)), st)+
          kpiSection('完了', all.filter(n=>getStage(n)==='完了'), st, 'ok');
   }else if(kind==='hours'){
-    title='⏱ AI工数削減の内訳'; sub='工数を入力した作業だけが対象です。削減の大きい順。';
-    const rows=all.filter(n=>n.hoursOld!=null).sort((a,b)=>_cutOf(b).d-_cutOf(a).d);
-    body=rows.length
-      ? kpiSection('工数を入力ずみ', rows, n=>{ const c=_cutOf(n);
-          return `${c.o}h → ${c.w}h <b class="${c.d>0?'good':''}">${c.d>0?'−'+Math.round(c.d/c.o*100)+'%':'±0'}</b>`; })
-      : `<div class="tpempty">工数（AI化前／後の見込み時間）を入れた作業がまだありません。カルテの「工数」に入力すると、ここと上のタイルに出ます。</div>`;
+    title='⏱ AI工数削減の内訳'; sub='工数を入力した作業だけが対象です。実績が入っているものを上に出しています。';
+    const has=all.filter(n=>n.hoursOld!=null);
+    const withAct=has.filter(n=>n.hoursAct!=null).sort((a,b)=>_actOf(b).d-_actOf(a).d);
+    const estOnly=has.filter(n=>n.hoursAct==null).sort((a,b)=>_cutOf(b).d-_cutOf(a).d);
+    const fmtAct=n=>{ const c=_actOf(n);
+      return `${c.o}h → <b>${c.a}h</b> <b class="${c.d>0?'good':''}">${c.o>0?(c.d>0?'−'+Math.round(c.d/c.o*100)+'%':'±0'):''}</b>`; };
+    const fmtEst=n=>{ const c=_cutOf(n);
+      return `${c.o}h → ${c.w}h（見込）<b class="${c.d>0?'good':''}">${c.o>0?(c.d>0?' −'+Math.round(c.d/c.o*100)+'%':' ±0'):''}</b>`; };
+    body = (has.length
+      ? kpiSection('実績が入っている（本当に減ったか）', withAct, fmtAct)+
+        kpiSection('見込みだけ（実績はこれから）', estOnly, fmtEst, 'ok')
+      : `<div class="tpempty">工数を入れた作業がまだありません。カルテの「工数（AI効果）」に、見込 旧／見込 新／実績 を入れると、ここと上のタイルに出ます。</div>`);
   }else{
     title='⚠ 遅延・期限の内訳'; sub='危ないものから並べています。行をクリックするとカルテが開きます。';
     const seen=new Set();
@@ -3224,6 +3263,67 @@ document.getElementById('syncModal').addEventListener('change', e=>{
   const r=e.target.closest('[data-cf]'); if(!r) return;
   _syncChoice[r.dataset.cf]=r.value;
 });
+// ===== 検索（作業・お題・議事メモを横断）=====
+function fdHit(text, q){ return String(text||'').toLowerCase().indexOf(q)>=0; }
+function fdMark(text, q, len){
+  const s=String(text||'').replace(/\n/g,' ');
+  const i=s.toLowerCase().indexOf(q);
+  if(i<0) return esc(s.slice(0, len||60))+(s.length>(len||60)?'…':'');
+  const from=Math.max(0, i-18), to=Math.min(s.length, i+q.length+(len||60));
+  return (from?'…':'')+esc(s.slice(from,i))+'<b>'+esc(s.slice(i,i+q.length))+'</b>'+esc(s.slice(i+q.length,to))+(to<s.length?'…':'');
+}
+function runFind(){
+  const q=String((document.getElementById('findInput')||{}).value||'').trim().toLowerCase();
+  const box=document.getElementById('findBody'); if(!box) return;
+  if(q.length<1){ box.innerHTML='<div class="tpempty">探したい言葉を入れてください。作業名・担当・お題・当日メモ・決まったことから探します。</div>'; return; }
+  ensureBoards();
+  const tasks=[], topics=[], mts=[];
+  walkAll(state.tree, nd=>{ if(!nd) return;
+    const fields=[nd.name, nd.role, nd.note, nd.aiDoes, nd.humanDoes, nd.tools, nd.usage, nd.bg];
+    const f=fields.find(v=>fdHit(v,q)); if(f===undefined) return;
+    tasks.push({ nd:nd, snip:fdMark(fields.filter(v=>fdHit(v,q))[0], q) }); });
+  (state.topics||[]).forEach(t=>{ if(!t) return;
+    const fields=[t.todo, t.detail, t.log, t.result, t.name, t.owner, t.links];
+    if(!fields.some(v=>fdHit(v,q))) return;
+    const m=state.meetings.find(x=>x&&x.id===t.meetingId);
+    topics.push({ t:t, m:m, snip:fdMark(fields.filter(v=>fdHit(v,q))[0], q) }); });
+  (state.meetings||[]).forEach(m=>{ if(!m) return;
+    if(!fdHit(m.title,q) && !fdHit(m.note,q) && !fdHit(m.date,q) && !fdHit(m.room,q)) return;
+    mts.push({ m:m, snip:fdMark(fdHit(m.note,q)?m.note:(m.title||''), q) }); });
+  let h='';
+  if(tasks.length){ h+='<div class="fdsec">作業（カルテ） '+tasks.length+'</div>'+
+    tasks.slice(0,40).map(x=>'<div class="fdrow" data-detail="'+esca(x.nd.id)+'"><span class="ft">カルテ</span>'+
+      '<span class="fn">'+esc(x.nd.name||'(無題)')+'<span class="fs">'+x.snip+'</span></span>'+
+      '<span class="fm">'+esc(x.nd.role||'')+'</span></div>').join(''); }
+  if(topics.length){ h+='<div class="fdsec">お題・議事メモ '+topics.length+'</div>'+
+    topics.slice(0,40).map(x=>'<div class="fdrow" data-findtp="'+esca(x.t.id)+'"><span class="ft">お題</span>'+
+      '<span class="fn">'+esc(x.t.todo||'(無題)')+'<span class="fs">'+x.snip+'</span></span>'+
+      '<span class="fm">'+esc((x.m&&x.m.title)||'')+'</span></div>').join(''); }
+  if(mts.length){ h+='<div class="fdsec">定例 '+mts.length+'</div>'+
+    mts.slice(0,20).map(x=>'<div class="fdrow" data-findmt="'+esca(x.m.id)+'"><span class="ft">定例</span>'+
+      '<span class="fn">'+esc(x.m.title||'(無題)')+'<span class="fs">'+x.snip+'</span></span>'+
+      '<span class="fm">'+esc(mtWhenLine(x.m))+'</span></div>').join(''); }
+  box.innerHTML = h || '<div class="tpempty">見つかりませんでした。</div>';
+}
+function openFind(pre){
+  const m=document.getElementById('findModal'); if(!m) return;
+  m.classList.add('on');
+  const i=document.getElementById('findInput');
+  if(i){ if(pre!=null) i.value=pre; i.focus(); i.select(); }
+  runFind();
+}
+document.getElementById('findBtn').addEventListener('click', ()=>openFind());
+document.getElementById('findInput').addEventListener('input', runFind);
+document.getElementById('findModal').addEventListener('click', e=>{
+  if(e.target.id==='findModal'||e.target.id==='findClose'){ document.getElementById('findModal').classList.remove('on'); return; }
+  const tp=e.target.closest('[data-findtp]');
+  if(tp){ const t=state.topics.find(x=>x&&x.id===tp.dataset.findtp); if(!t) return;
+    document.getElementById('findModal').classList.remove('on');
+    _tpOpenCards.add(t.id); openTopics(t.meetingId); _flashTid=t.id; renderTopics(); return; }
+  const mt=e.target.closest('[data-findmt]');
+  if(mt){ document.getElementById('findModal').classList.remove('on'); openTopics(mt.dataset.findmt); return; }
+  if(e.target.closest('[data-detail]')) document.getElementById('findModal').classList.remove('on');   // カルテは既存の仕組みが開く
+});
 function renderMembers(){ ensureBoards(); const box=document.getElementById('memberBody'); if(!box) return;
   const list=(state.members||[]).slice().sort((a,b)=>(b.lastSeen||0)-(a.lastSeen||0));
   let h=`<div class="tpsec">${list.length}名がログイン済み</div>`;
@@ -3298,6 +3398,14 @@ function summaryData(){
   return {leaves,total,done,pct,late,week,ws,we,ums};
 }
 // 定例まわりのサマリー材料（前回で決まったこと／次回のお題）
+// 実績が入っている作業だけを集計（見込みではなく「本当に減ったか」）
+function actualHours(){
+  let old=0, act=0, cnt=0;
+  (state.tree||[]).forEach(n=>eachLeaf(n, s=>{
+    if(s.kind==='small' && s.status && s.status!=='normal') return;
+    if(s.hoursOld!=null && s.hoursAct!=null){ old+=(+s.hoursOld||0); act+=(+s.hoursAct||0); cnt++; } }));
+  return { old:old, act:act, cnt:cnt, pct: old>0?Math.round((1-act/old)*100):0 };
+}
 function summaryMeetings(){
   ensureBoards();
   const mts=mtSorted().filter(m=>m&&m.date), today=ymd(new Date());
@@ -3317,6 +3425,7 @@ function renderSummary(){ ensureBoards(); const box=document.getElementById('sum
   const d=summaryData();
   const row=x=>{ const ss=schedStatus(x.n); return `<div class="smrow ${ss||''}"><span class="smn">${lateMark(ss)}${esc(x.n.name)}</span><span class="smmeta">${esc(x.role||'—')} ／ ${x.n.start?mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):'日付未設定'} ／ ${getProgress(x.n)}%</span></div>`; };
   let h=`<div class="smstat"><div><b>${d.pct}%</b><span>全体進捗</span></div><div><b>${d.done}/${d.total}</b><span>完了</span></div><div class="${d.late.length?'bad':''}"><b>${d.late.length}</b><span>遅延</span></div><div><b>${d.week.length}</b><span>今週</span></div></div>`;
+  { const a=actualHours(); if(a.cnt) h+=`<div class="smnote">⏱ AI工数削減（実績）：<b>${a.old}h → ${a.act}h ＝ ${a.pct}%減</b>（実績を入れた ${a.cnt}件で計測）</div>`; }
   h+=`<div class="tpsec">⚠ 遅延している作業（${d.late.length}）</div>`+(d.late.length?d.late.map(row).join(''):'<div class="tpempty">なし。順調です 👍</div>');
   h+=`<div class="tpsec">📅 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}・${d.week.length}件）</div>`+(d.week.length?d.week.map(row).join(''):'<div class="tpempty">今週に期間がかかる未完作業はありません。</div>');
   if(d.ums.length) h+=`<div class="tpsec">🚩 この先のマイルストーン</div>`+d.ums.map(m=>`<div class="smrow"><span class="smn">🚩 ${esc(m.label||'')}</span><span class="smmeta">${esc(m.date)}</span></div>`).join('');
@@ -3345,6 +3454,7 @@ function renderSummary(){ ensureBoards(); const box=document.getElementById('sum
 function summaryText(){ const d=summaryData(); const L=[];
   L.push('【AI推進 サマリー '+ymd(new Date())+'】');
   L.push(`全体進捗 ${d.pct}% ／ 完了 ${d.done}/${d.total} ／ 遅延 ${d.late.length}件`);
+  { const a=actualHours(); if(a.cnt) L.push(`AI工数削減（実績）${a.old}h → ${a.act}h＝${a.pct}%減（${a.cnt}件で計測）`); }
   L.push(''); L.push('■ 遅延している作業');
   L.push(d.late.length?d.late.map(x=>`・${x.n.name}（${x.role||'—'}・${getProgress(x.n)}%・${schedStatus(x.n)==='overdue'?'超過':'遅れ'}）`).join('\n'):'・なし');
   L.push(''); L.push(`■ 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}）`);
@@ -3866,9 +3976,10 @@ function openDetail(id){
           <span>〜</span>
           <input type="date" id="dtEnd" value="${esca(effEnd(t))}"${leaf?'':' readonly'} title="${leaf?'終了日＝期限（変更でガントのバーが動く）':'子タスクの集計（子側で変更）'}">
         </div></div></div>`;
-    html+=`<div class="fld"><label>工数（AI効果）</label><div class="khours">
+    html+=`<div class="fld wide"><label>工数（AI効果）<span class="hint" style="margin:0 0 0 6px">実績を入れると「本当に減ったか」が出ます</span></label><div class="khours">
         <div class="h"><div class="l">見込 旧(h)</div><input id="dtHoursOld" type="number" min="0" placeholder="0" value="${t.hoursOld!=null?t.hoursOld:''}"></div>
         <div class="h"><div class="l">見込 新(h)</div><input id="dtHoursNew" type="number" min="0" placeholder="0" value="${t.hoursNew!=null?t.hoursNew:''}"></div>
+        <div class="h act"><div class="l">実績(h)</div><input id="dtHoursAct" type="number" min="0" placeholder="0" value="${t.hoursAct!=null?t.hoursAct:''}"></div>
         <div class="h" style="text-align:center"><div class="l">削減</div><div class="cut" id="dtCut">${cutText(t)}</div></div>
       </div></div>`;
   }
@@ -3978,11 +4089,13 @@ function openDetail(id){
     if(t.end && t.start && parse(t.start) > parse(t.end)) t.start = t.end;   // 逆転防止
     save(); render(); });
   // 工数
-  const hoO=document.getElementById('dtHoursOld'), hoN=document.getElementById('dtHoursNew');
+  const hoO=document.getElementById('dtHoursOld'), hoN=document.getElementById('dtHoursNew'), hoA=document.getElementById('dtHoursAct');
   const hoursChg=()=>{ t.hoursOld = hoO.value!==''?+hoO.value:null; t.hoursNew = hoN.value!==''?+hoN.value:null;
-    const cut=document.getElementById('dtCut'); if(cut) cut.textContent=cutText(t); persist(); };
+    if(hoA) t.hoursAct = hoA.value!==''?+hoA.value:null;
+    const cut=document.getElementById('dtCut'); if(cut) cut.innerHTML=cutText(t); persist(); };
   if(hoO){ hoO.addEventListener('input', hoursChg); hoO.addEventListener('blur', ()=>{ save(); render(); }); }
   if(hoN){ hoN.addEventListener('input', hoursChg); hoN.addEventListener('blur', ()=>{ save(); render(); }); }
+  if(hoA){ hoA.addEventListener('input', hoursChg); hoA.addEventListener('blur', ()=>{ save(); render(); }); }
   // 人とAIの役割
   const aiE=document.getElementById('dtAi'), huE=document.getElementById('dtHu');
   if(aiE){ aiE.addEventListener('input', ()=>{ t.aiDoes=aiE.value; persist(); }); aiE.addEventListener('blur', ()=>save()); }
@@ -4097,6 +4210,7 @@ document.addEventListener('keydown', e=>{
     e.preventDefault(); wrap.scrollLeft += (e.key==='ArrowRight'?140:-140); return;
   }
   const k=e.key.toLowerCase();
+  if((e.ctrlKey||e.metaKey) && k==='f'){ e.preventDefault(); openFind(); return; }   // ブラウザ検索よりこちらを出す
   // 記入中は文字の取り消しをブラウザに任せる。横取りすると「誤字を1文字戻すつもりが
   // 全体が直前の保存時点まで巻き戻る（他人の変更ごと）」という事故になる。
   const _ae=document.activeElement;
