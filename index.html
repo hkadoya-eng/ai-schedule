@@ -39,6 +39,11 @@
   /* ツールバーのグループ化 */
   .tsep{width:1px; height:22px; background:var(--line); margin:0 3px; flex:0 0 auto;}
   .tgroup{display:inline-flex; align-items:center; gap:6px; padding:3px 7px; border:1px solid var(--line); border-radius:8px;}
+  #filterPop{width:250px;}
+  #filterPop button.flt{width:100%; display:flex; align-items:center; gap:9px; text-align:left;}
+  #filterPop button.flt.on{color:var(--teal); font-weight:700;}
+  #filterPop .datectl input{width:150px;}
+  #filterBtn.on{background:var(--teal); color:#04222b; border-color:transparent; font-weight:700;}
   #moreMenu .mlabel{font-size:10px; color:var(--dim); padding:7px 10px 2px; letter-spacing:.05em; font-weight:700;}
   #moreMenu .mlabel:first-child{padding-top:4px;}
   #moreMenu .mrow{display:flex; align-items:center; gap:5px; padding:5px 10px 7px; font-size:11.5px; color:var(--muted);}
@@ -976,14 +981,7 @@
       <button data-v="day">日</button>
     </span>
     <span class="tsep"></span>
-    <!-- 自分・絞り込み（氏名とフィルタはセット）-->
-    <span class="tgroup">
-      <span class="datectl">👤 <input id="userName" list="userList" placeholder="氏名" title="進捗更新時にこの名前が記録されます"><datalist id="userList"></datalist></span>
-      <button class="btn flt" id="fMine" title="自分が担当の作業だけ表示">自分のみ</button>
-      <button class="btn flt" id="fOpen" title="未完（完了以外）だけ表示">未完のみ</button>
-      <button class="btn flt" id="fLate" title="遅延（期限超過・予定より遅れ）だけ表示">⚠ 遅延</button>
-    </span>
-    <span class="tsep"></span>
+    <button class="btn" id="filterBtn" title="表示する作業をしぼる（自分のみ・未完のみ・遅延）">🔽 絞り込み</button>
     <!-- 操作（元に戻す・モード）-->
     <span class="seg" id="hist">
       <button id="undoBtn" title="元に戻す (Ctrl+Z)" disabled>↶</button>
@@ -998,13 +996,12 @@
     <button class="btn" id="topicBtn" title="打合せ予定・お題を開く（話したいことを書く）">📝 打合せ予定</button>
     <button class="btn" id="sumBtn" title="今週のサマリー（進捗・遅延・今週やること）">📊 サマリー</button>
     <span class="tsep"></span>
-    <!-- 右：ヘルプ・管理・状態 -->
-    <button class="btn" id="helpBtn" title="使い方を見る">❓ 使い方</button>
-    <button class="btn" id="moreBtn" title="表示オプション・データ管理">⚙ 管理 ▾</button>
-    <button class="btn" id="themeBtn" title="ライト⇄ダーク切替">🌙</button>
+    <!-- 右：管理・状態 -->
+    <button class="btn" id="moreBtn" title="使い方・表示オプション・データ管理">⚙ 管理 ▾</button>
     <span id="sbStatus" title="共有状態"></span>
     <span class="whoami" id="whoami" title="いま書き込みに記録される名前。違う人ならログアウトしてください"></span>
-    <button class="btn" id="signOut" title="ログアウト（共有PCでは使い終わったら押してください）">⏻ ログアウト</button>
+    <button class="btn" id="themeBtn" title="ライト⇄ダーク切替">🌙</button>
+    <button class="btn" id="signOut" title="ログアウト（共有PCでは使い終わったら押してください）">⏻</button>
   </div>
 </header>
 
@@ -1028,7 +1025,17 @@
 <div class="pop" id="progPop"></div>
 <div class="pop" id="datePop"></div>
 <div class="pop" id="ctxMenu"></div>
+<div class="pop" id="filterPop">
+  <div class="mlabel">この名前で記録する</div>
+  <div class="mrow"><span class="datectl">👤 <input id="userName" list="userList" placeholder="氏名" title="進捗更新時・お題の記入者としてこの名前が使われます"><datalist id="userList"></datalist></span></div>
+  <div class="mlabel">表示をしぼる</div>
+  <button class="flt" id="fMine" title="自分が担当の作業だけ表示">👤 自分の作業だけ</button>
+  <button class="flt" id="fOpen" title="未完（完了以外）だけ表示">◻ 未完だけ</button>
+  <button class="flt" id="fLate" title="遅延（期限超過・予定より遅れ）だけ表示">⚠ 遅延だけ</button>
+</div>
 <div class="pop" id="moreMenu">
+  <div class="mlabel">はじめに</div>
+  <button id="helpBtn">❓ 使い方</button>
   <div class="mlabel">表示オプション</div>
   <button id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
   <button id="depToggle" title="依存関係の矢印を表示／非表示（詳細パネルの「依存」に先行No.を入力）">🔗 依存線 ▷</button>
@@ -1944,13 +1951,14 @@ document.addEventListener('click', e=>{
   const del=e.target.closest('[data-del]'); if(del){ delNode(del.dataset.del); return; }
   // タスク表の外をクリックしたら閉じる（保存してから）
   if(detailId!=null && !e.target.closest('#detail') && !e.target.closest('[data-detail]') && !e.target.closest('#topicModal')) closeDetail();
-  if(!e.target.closest('#statusPop') && !e.target.closest('#progPop') && !e.target.closest('#datePop') && !e.target.closest('[data-date]') && !e.target.closest('#moreMenu') && !e.target.closest('#moreBtn')) closeAllPops();
+  if(!e.target.closest('#statusPop') && !e.target.closest('#progPop') && !e.target.closest('#datePop') && !e.target.closest('[data-date]') && !e.target.closest('#moreMenu') && !e.target.closest('#moreBtn') && !e.target.closest('#filterPop') && !e.target.closest('#filterBtn')) closeAllPops();
 });
 // 押した瞬間（pointerdown）でも外側なら閉じる。
 // ※ガントの空きはドラッグ開始のpreventDefaultでclickが出ないため、こちらで確実に閉じる
 document.addEventListener('pointerdown', e=>{
   const t=e.target;
   if(!t.closest('#statusPop') && !t.closest('#progPop') && !t.closest('#datePop') && !t.closest('#ctxMenu') && !t.closest('#moreMenu') && !t.closest('#moreBtn')
+     && !t.closest('#filterPop') && !t.closest('#filterBtn')
      && !t.closest('.statusdot') && !t.closest('[data-prog]') && !t.closest('[data-date]')) closeAllPops();
   if(detailId!=null && !t.closest('#detail') && !t.closest('[data-detail]') && !t.closest('#topicModal')) closeDetail();
 });
@@ -2048,7 +2056,23 @@ function closeProgPop(){ const wasOpen=(ppId!=null); ppop.style.display='none'; 
   if(wasOpen) render(); }  // 集計（中/大項目の%）を反映
 function closeAllPops(){ closePop(); closeProgPop(); closeDatePop(); closeCtx(); closeMore(); }
 // ⚙ 管理メニュー（普段使わない：ベース取込・書き出し・読み込み・復元）
-function closeMore(){ const m=document.getElementById('moreMenu'); if(m) m.style.display='none'; }
+function closeMore(){ const m=document.getElementById('moreMenu'); if(m) m.style.display='none';
+  const f=document.getElementById('filterPop'); if(f) f.style.display='none'; }
+// 絞り込みが効いているかをボタンの見た目に出す（隠したせいで「なぜ減っているのか」が
+// 分からなくなるのを防ぐ）
+function syncFilterBtn(){
+  const b=document.getElementById('filterBtn'); if(!b) return;
+  const on=['fMine','fOpen','fLate'].filter(id=>{ const e=document.getElementById(id); return e&&e.classList.contains('on'); });
+  b.classList.toggle('on', on.length>0);
+  b.textContent = on.length ? '🔽 絞り込み中 '+on.length : '🔽 絞り込み';
+}
+(function(){ const btn=document.getElementById('filterBtn'), pop=document.getElementById('filterPop'); if(!btn||!pop) return;
+  btn.addEventListener('click', e=>{ e.stopPropagation();
+    const open=pop.style.display==='block'; closeAllPops(); if(open) return;
+    const r=btn.getBoundingClientRect();
+    pop.style.left=Math.min(r.left, window.innerWidth-240)+'px'; pop.style.top=(r.bottom+4)+'px'; pop.style.display='block'; });
+  pop.addEventListener('click', e=>{ e.stopPropagation(); });   // 中の操作でポップを閉じない
+})();
 (function(){ const btn=document.getElementById('moreBtn'), menu=document.getElementById('moreMenu'); if(!btn||!menu) return;
   btn.addEventListener('click', e=>{ e.stopPropagation();
     const open=menu.style.display==='block'; closeAllPops(); if(open) return;
@@ -3629,6 +3653,7 @@ document.getElementById('resetBtn').addEventListener('click', ()=>{
 });
 
 function syncToolbar(){
+  try{ syncFilterBtn(); }catch(e){}
   pStart.value=state.projectStart; pEnd.value=state.projectEnd;
   viewSeg.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.v===state.view));
   document.body.classList.remove('view-month','view-week','view-day'); document.body.classList.add('view-'+state.view);
@@ -4340,11 +4365,11 @@ userName.addEventListener('input', ()=>{ try{ localStorage.setItem(USER_KEY, use
   if(fMine) render(); });
 const fMineBtn=document.getElementById('fMine'), fOpenBtn=document.getElementById('fOpen');
 fMineBtn.addEventListener('click', ()=>{ fMine=!fMine; fMineBtn.classList.toggle('on',fMine);
-  if(fMine && !currentUser()) alert('先に「更新者」に自分の氏名を入れてください。担当名と一致する部分で絞り込みます。');
-  render(); });
-fOpenBtn.addEventListener('click', ()=>{ fOpen=!fOpen; fOpenBtn.classList.toggle('on',fOpen); render(); });
+  if(fMine && !currentUser()) alert('先に上の「氏名」に自分の名前を入れてください。担当名と一致する部分で絞り込みます。');
+  syncFilterBtn(); render(); });
+fOpenBtn.addEventListener('click', ()=>{ fOpen=!fOpen; fOpenBtn.classList.toggle('on',fOpen); syncFilterBtn(); render(); });
 const fLateBtn=document.getElementById('fLate');
-if(fLateBtn) fLateBtn.addEventListener('click', ()=>{ fLate=!fLate; fLateBtn.classList.toggle('on',fLate); render(); });
+if(fLateBtn) fLateBtn.addEventListener('click', ()=>{ fLate=!fLate; fLateBtn.classList.toggle('on',fLate); syncFilterBtn(); render(); });
 // 備考カラムの折りたたみ（表示プレファレンス）
 const NOTE_KEY='ai_sched_notecol';
 const noteToggle=document.getElementById('noteToggle');
