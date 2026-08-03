@@ -187,6 +187,10 @@
   .detail header .dt-no{font-size:11px; opacity:.8;}
   .detail header .dt-name{font-size:15px; font-weight:700; margin-top:2px;}
   .detail .body{flex:1 1 auto; overflow:auto; padding:14px;}
+  /* 幅を広げたときは2段組にして、縦スクロールを減らす（長い欄は横いっぱい）*/
+  .detail.w2 .body{display:grid; grid-template-columns:1fr 1fr; gap:0 16px; align-content:start;}
+  .detail.w2 .body > *{min-width:0;}
+  .detail.w2 .body > .fld.wide, .detail.w2 .body > .row2{grid-column:1 / -1;}
   .detail .fld{margin-bottom:12px;}
   .detail .fld label{display:block; font-size:11px; color:var(--muted); margin-bottom:3px; font-weight:600;}
   .detail .fld .ro{font-size:12.5px; line-height:1.5; white-space:pre-wrap; color:var(--text);}
@@ -195,7 +199,8 @@
   .detail .fld textarea:focus, .detail .fld input:focus{outline:2px solid var(--teal); outline-offset:-2px;}
   .detail .row2{display:flex; gap:10px;} .detail .row2 .fld{flex:1;}
   .detail .close{position:absolute; right:10px; top:9px; z-index:5; background:rgba(255,255,255,.2); color:#fff;
-    border:none; border-radius:5px; width:28px; height:28px; cursor:pointer; font-size:15px; line-height:1;}
+    border:none; border-radius:6px; height:28px; padding:0 12px; cursor:pointer; font-size:12px; font-weight:700;
+    font-family:inherit; line-height:1; white-space:nowrap;}
   .detail .close:hover{background:rgba(255,255,255,.32);}
   .detail .openpath{margin-top:5px;}
   .depwarn{color:var(--crimson); font-size:11px; margin-top:3px;}
@@ -612,8 +617,9 @@
     border-radius:6px; padding:3px 9px; cursor:pointer; font-family:inherit; font-size:11px; line-height:1.4;}
   .tphdr .tpwgrp button:hover{border-color:var(--teal); color:var(--text);}
   .tphdr .tpx{ background:var(--panel3); border:1px solid var(--line); color:var(--text);
-    width:28px; height:28px; border-radius:7px; cursor:pointer; font-size:16px; line-height:1;}
-  .tphdr .tpx:hover{border-color:var(--teal);}
+    height:28px; padding:0 12px; border-radius:7px; cursor:pointer; font-size:12px; font-family:inherit;
+    font-weight:700; line-height:1; white-space:nowrap;}
+  .tphdr .tpx:hover{border-color:#d4707a; color:#c2555f; background:rgba(194,85,99,.08);}
   .tpbody{flex:1 1 auto; overflow:auto; padding:14px;}
   .tpgcal{background:linear-gradient(180deg,#5b8def,#3f6fd6); color:#fff; font-weight:700; border:none; border-radius:8px; padding:7px 13px; cursor:pointer; font-family:inherit; font-size:12.5px; margin-left:auto; white-space:nowrap;}
   .tpgcal:hover{filter:brightness(1.08);}
@@ -963,7 +969,7 @@
 <div class="detail" id="detail">
   <div class="dtresize" id="dtResize" title="右端を左右にドラッグで幅を変える（ダブルクリックで既定の幅）"></div>
   <header>
-    <button class="close" id="detailClose" title="閉じる">×</button>
+    <button class="close" id="detailClose" title="カルテを閉じる（Escでも閉じます）">✕ 閉じる</button>
     <div class="dt-no" id="dtNo"></div>
     <div class="dt-name" id="dtName"></div>
   </header>
@@ -992,7 +998,7 @@
       <button data-tpw="narrow" title="狭くする">－</button>
       <button data-tpw="half" title="画面の半分に戻す">半分</button>
       <button data-tpw="wide" title="広くする">＋</button></span>
-    <button class="tpx" id="topicClose" title="閉じる（ガントは開いたまま操作できます）">×</button></div>
+    <button class="tpx" id="topicClose" title="閉じる（書いた内容は自動で保存・共有されます）">✕ 閉じる</button></div>
   <div class="tpbody" id="topicBody"></div>
 </div>
 
@@ -1484,7 +1490,7 @@ function computeKPIs(){
   const openTp=curMt?(state.topics||[]).filter(t=>t&&!t.done&&t.meetingId===curMt.id).length:0;
   const candTp=curMt?carryCandidates(curMt).length:0;   // 前の回に残っている未対応＝持ち越し候補
   box.innerHTML =
-    `<div class="kpi meet${nextMt?'':' past'}" id="kpiMeet" title="クリックで打合せ予定・お題を開く"><div class="go">開く ▸</div>`+
+    `<div class="kpi meet${nextMt?'':' past'}" id="kpiMeet" title="${_tpOpen()?'クリックで閉じる':'クリックで打合せ予定・お題を開く'}"><div class="go">${_tpOpen()?'閉じる ✕':'開く ▸'}</div>`+
       `<div class="lab">📝 打合せ予定</div>`+
       `<div class="val">${nextMt?mdNum(parse(nextMt.date))+(nextMt.start?' <small>'+esc(nextMt.start)+(nextMt.end?'〜'+esc(nextMt.end):'')+'</small>':''):'未定'}</div>`+
       `<div class="meta">${nextMt?esc((nextMt.title||'定例'))+(nextMt.room?'／'+esc(nextMt.room):'')+' ／ ':
@@ -1796,7 +1802,7 @@ document.addEventListener('click', e=>{
   const dn=e.target.closest('[data-down]'); if(dn){ moveNode(dn.dataset.down,1); return; }
   const del=e.target.closest('[data-del]'); if(del){ delNode(del.dataset.del); return; }
   // タスク表の外をクリックしたら閉じる（保存してから）
-  if(detailId!=null && !e.target.closest('#detail') && !e.target.closest('[data-detail]')) closeDetail();
+  if(detailId!=null && !e.target.closest('#detail') && !e.target.closest('[data-detail]') && !e.target.closest('#topicModal')) closeDetail();
   if(!e.target.closest('#statusPop') && !e.target.closest('#progPop') && !e.target.closest('#datePop') && !e.target.closest('[data-date]') && !e.target.closest('#moreMenu') && !e.target.closest('#moreBtn')) closeAllPops();
 });
 // 押した瞬間（pointerdown）でも外側なら閉じる。
@@ -1805,7 +1811,7 @@ document.addEventListener('pointerdown', e=>{
   const t=e.target;
   if(!t.closest('#statusPop') && !t.closest('#progPop') && !t.closest('#datePop') && !t.closest('#ctxMenu') && !t.closest('#moreMenu') && !t.closest('#moreBtn')
      && !t.closest('.statusdot') && !t.closest('[data-prog]') && !t.closest('[data-date]')) closeAllPops();
-  if(detailId!=null && !t.closest('#detail') && !t.closest('[data-detail]')) closeDetail();
+  if(detailId!=null && !t.closest('#detail') && !t.closest('[data-detail]') && !t.closest('#topicModal')) closeDetail();
 });
 
 function addChild(parentId){
@@ -2170,8 +2176,11 @@ function mtSorted(){ return state.meetings.filter(m=>m).slice().sort((a,b)=>Stri
 function defaultMeetingId(){ const list=mtSorted(), todayY=ymd(new Date());
   return (list.find(m=>m.date&&m.date>=todayY) || list[list.length-1] || {}).id || null; }
 function showTopicPanel(){ document.getElementById('topicModal').classList.add('on'); document.body.classList.add('tpon');
-  if(window.__reclampDetail) window.__reclampDetail(); }   // カルテが開いていれば、はみ出さない幅に詰め直す
-function closeTopics(){ document.getElementById('topicModal').classList.remove('on'); document.body.classList.remove('tpon'); }
+  if(window.__reclampDetail) window.__reclampDetail();
+  if(typeof computeKPIs==='function') computeKPIs(); }   // カルテが開いていれば、はみ出さない幅に詰め直す
+function _tpOpen(){ return document.body.classList.contains('tpon'); }
+function closeTopics(){ document.getElementById('topicModal').classList.remove('on'); document.body.classList.remove('tpon');
+  if(typeof computeKPIs==='function') computeKPIs(); }
 function openTopics(mtId){ ensureBoards();
   _openMeeting = (typeof mtId==='string' && mtId) ? mtId : defaultMeetingId(); _mtEdit=_noteEdit=false;
   renderTopics(); showTopicPanel(); }
@@ -2590,7 +2599,7 @@ function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレー
   return 'https://calendar.google.com/calendar/render?'+p.toString(); }
 { const _kb=document.getElementById('kpibar'); if(_kb) _kb.addEventListener('click', e=>{
     if(e.target.closest('#kpiNextMt')){ e.stopPropagation(); openNextMeetingForm(); return; }   // 「＋次回を登録」＝プリセット付きで開く
-    if(e.target.closest('#kpiMeet')){ openTopics(); return; }
+    if(e.target.closest('#kpiMeet')){ _tpOpen() ? closeTopics() : openTopics(); return; }
     const dk=e.target.closest('[data-kpi]'); if(dk) openKpiDrill(dk.dataset.kpi); }); }
 // ===== KPIタイルの内訳（数字を押すと中身が見える。行を押すとその作業のカルテが開く）=====
 function kpiLeaves(){ const out=[]; (state.tree||[]).forEach(n=>eachLeaf(n, s=>{
@@ -2675,7 +2684,9 @@ document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target
     const DKEY='aisch_dtw', DMIN=380, DDEF=640;
     const dmax=()=>{ const tp=document.body.classList.contains('tpon') ? (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--tpw'),10)||0) : 0;
       return Math.max(DMIN, window.innerWidth - tp - 240); };
-    const dset=w=>{ w=Math.max(DMIN, Math.min(dmax(), Math.round(w))); document.documentElement.style.setProperty('--dtw', w+'px'); return w; };
+    const dset=w=>{ w=Math.max(DMIN, Math.min(dmax(), Math.round(w))); document.documentElement.style.setProperty('--dtw', w+'px');
+      document.getElementById('detail').classList.toggle('w2', w>=760);   // 広いときは2段組
+      return w; };
     let dcur=dset(DDEF);
     try{ const s=parseInt(localStorage.getItem(DKEY)||'',10); if(isFinite(s)) dcur=dset(s); }catch(e){}
     let dd=false;
@@ -3303,26 +3314,26 @@ function openDetail(id){
   document.getElementById('dtNo').textContent=`${kindLabel}${t.no?'　No. '+t.no:''}${t.assign?'　［'+t.assign+'］':''}`;
   document.getElementById('dtName').textContent=t.name||'(無題)';
 
-  let html=`<div class="fld"><div class="detailops">
+  let html=`<div class="fld wide"><div class="detailops">
       <button class="btn" data-up="${t.id}" title="上へ">▲ 上へ</button>
       <button class="btn" data-down="${t.id}" title="下へ">▼ 下へ</button>
       <button class="btn danger" data-del="${t.id}" title="削除">🗑 削除</button>
     </div></div>`;
-  html+=`<div class="fld"><label>名称</label><input id="dtNameEdit" value="${esca(t.name)}"></div>`;
+  html+=`<div class="fld wide"><label>名称</label><input id="dtNameEdit" value="${esca(t.name)}"></div>`;
 
   // 旧・単一レポート → 週報配列へ移行
   if(isLeafReport && t.report && !t.reports){ t.reports=[{id:nextId(), date:'', author:t.updatedBy||'', text:t.report}]; delete t.report; }
   // バッジ（担い手・優先度・期限）
   const chg=chargeInfo(t.charge), pr=PRIOS.find(p=>p.k===t.priority), dSt=dueStatus(effEnd(t));
   if(isLeafReport && (chg||pr||dSt)){
-    html+=`<div class="dt-badges">`+
+    html+=`<div class="fld wide dt-badges">`+
       (chg?`<span class="dbadge charge-${chg.k}">${chg.label}</span>`:'')+
       (pr?`<span class="dbadge prio-${pr.k}">優先度 ${pr.label}</span>`:'')+
       (dSt?`<span class="dbadge due ${dSt.cls}">${dSt.label}</span>`:'')+`</div>`;
   }
   // やること（要約）
   if(isLeafReport){
-    html+=`<div class="fld"><label>🎯 やること（要約）</label>
+    html+=`<div class="fld wide"><label>🎯 やること（要約）</label>
       <textarea id="dtSummary" rows="4" placeholder="この作業でやることを一言で（例：機種情報を読み込ませて資料化し、人が最終調整）">${esca(t.summary||t.usage||'')}</textarea></div>`;
   }
   // 属性エディタ
@@ -3366,18 +3377,18 @@ function openDetail(id){
 
   if(isLeafReport){
     // 人とAIの役割
-    html+=`<div class="fld"><label>人とAIの役割分担</label><div class="aih">
+    html+=`<div class="fld wide"><label>人とAIの役割分担</label><div class="aih">
         <div class="col ai"><div class="h">🤖 AIがやる</div><textarea id="dtAi" placeholder="AIに任せること">${esca(t.aiDoes||'')}</textarea></div>
         <div class="col hu"><div class="h">🙂 人がやる</div><textarea id="dtHu" placeholder="人が担うこと">${esca(t.humanDoes||'')}</textarea></div>
       </div></div>`;
     // 段取り（サブタスク）
     const kids=t.children||[];
-    html+=`<div class="fld"><label>段取り（サブタスク）</label><div class="steplist">`+
+    html+=`<div class="fld wide"><label>段取り（サブタスク）</label><div class="steplist">`+
       kids.map(c=>{ const w=chargeInfo(c.charge); return `<div class="steprow" data-detail="${c.id}"><span class="snm">${esca(c.name)}</span><span class="who ${w?w.who:'none'}">${w?w.label:'—'}</span></div>`; }).join('')+
       `</div><div class="addrep" data-addchild="${t.id}" style="margin-top:6px">＋ 工程（サブタスク）を追加</div></div>`;
     // 週報スタック
     const reps=t.reports||[];
-    html+=`<div class="fld"><label>📝 週報（積み重ね）</label><div class="reports" id="dtReports">
+    html+=`<div class="fld wide"><label>📝 週報（積み重ね）</label><div class="reports" id="dtReports">
         <div class="addrep" data-addrep="${t.id}">＋ 今週の記録を追加</div>`+
       reps.slice().reverse().map(rp=>`<div class="rep">
           <div class="m"><b>${esca(rp.author||'—')}</b> ・ ${esca(rp.date||'')}<button class="rx" data-delrep="${rp.id}" title="削除">🗑</button></div>
@@ -3406,10 +3417,10 @@ function openDetail(id){
 
   if(isLeafReport){
     html+=`<hr style="border:none;border-top:1px solid var(--line2);margin:12px 0">
-      <div class="fld"><label>🔗 関連スキル / ツール / 成果物（1行1件。パスを書くと「開く」）</label>
+      <div class="fld wide"><label>🔗 関連スキル / ツール / 成果物（1行1件。パスを書くと「開く」）</label>
         <textarea id="dtTools" rows="3" placeholder="例）演出仕様書 提出変換スキル&#10;C:\\Users\\...\\セリフリスト.xlsx">${esca(t.tools||'')}</textarea>
         <div id="dtToolLinks" class="openpath"></div></div>
-      <div class="fld"><label>⛓ 依存（前工程の No. をカンマ区切り）</label>
+      <div class="fld wide"><label>⛓ 依存（前工程の No. をカンマ区切り）</label>
         <input id="dtDeps" placeholder="例）17, 21" value="${esca(t.deps||'')}">
         <div id="dtDepInfo" class="ro" style="margin-top:5px;color:var(--muted)"></div></div>`;
   }
@@ -3551,7 +3562,11 @@ function updateDetailProg(t){
   const upd=document.getElementById('dtUpd'); if(upd) upd.textContent = t.updatedAt?('最終更新: '+(t.updatedBy||'(不明)')+' ・ '+fmtWhen(t.updatedAt)):'未更新';
 }
 document.addEventListener('keydown', e=>{
-  if(e.key==='Escape'){ closeDetail(); closeAllPops(); return; }
+  if(e.key==='Escape'){
+    const ae=document.activeElement, typing=!!(ae&&(ae.tagName==='INPUT'||ae.tagName==='TEXTAREA'||ae.isContentEditable));
+    if(typing){ ae.blur(); return; }                       // 記入中の1回目は入力から抜けるだけ（閉じない）
+    if(document.body.classList.contains('tpon')) closeTopics();
+    closeDetail(); closeAllPops(); return; }
   if(inEditable(e.target)) return;  // 入力中はブラウザ標準の操作に任せる（スライダーの矢印もそのまま）
   // 進捗ポップ/詳細が開いている時、← →（±5）で進捗を増減
   if((e.key==='ArrowRight'||e.key==='ArrowLeft') && !e.ctrlKey && !e.metaKey && !e.altKey){
