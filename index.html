@@ -948,7 +948,7 @@
     進捗は「進捗列」のステージピルをクリック → その場でステージ・％を入力（←→や±5でも）。
     <b>項目名クリックで詳細（タスク表）</b>を開く（名称変更・レポート・関連リンク・並べ替え・削除はここ）。各行ホバーの ＋ で子（中項目/作業/タスク）を追加。担当・備考はセルを直接クリックで編集。
     ●で分類切替（通常／AI対象外／TBD／未割当）。<b>列見出し右端ドラッグで幅調整</b>（ダブルクリックで自動幅）。<b>Ctrl+Z / Ctrl+Y</b>。変更は自動保存。
-    <span style="float:right"><button class="btn" id="resetBtn" style="font-size:10px; padding:2px 7px; color:#b3303f; border-color:#e6c2c7;" title="全データを初期サンプルに戻す（要確認）">初期化</button></span>
+
   </div>
 </div>
 
@@ -974,6 +974,8 @@
   <button id="exportBtn">💾 書き出し（保存）</button>
   <button id="importBtn">📂 読み込み</button>
   <button id="backupBtn">🕘 復元</button>
+  <div class="mlabel" style="color:#c2555f">危険な操作</div>
+  <button id="resetBtn" style="color:#c2555f" title="全データを初期サンプルに戻す（通常は使いません）">🧨 初期化（全部消してサンプルに戻す）</button>
 </div>
 <div id="modeToast"></div>
 
@@ -1947,7 +1949,7 @@ function closeMore(){ const m=document.getElementById('moreMenu'); if(m) m.style
     try{ ensureBoards(); const mb=document.getElementById('memBtn'); if(mb) mb.textContent='👥 ログイン済みメンバー ('+(state.members||[]).length+')'; }catch(e){}
     const r=btn.getBoundingClientRect();
     menu.style.left=Math.min(r.left, window.innerWidth-200)+'px'; menu.style.top=(r.bottom+4)+'px'; menu.style.display='block'; });
-  menu.addEventListener('click', e=>{ if(e.target.closest('#excelBtn,#exportBtn,#importBtn,#backupBtn')) closeMore(); });  // データ操作時のみ閉じる（トグル・期間入力では開いたまま）
+  menu.addEventListener('click', e=>{ if(e.target.closest('#excelBtn,#exportBtn,#importBtn,#backupBtn,#resetBtn')) closeMore(); });  // データ操作時のみ閉じる（トグル・期間入力では開いたまま）
 })();
 
 // ===== 右クリック（コンテキスト）メニュー =====
@@ -2124,19 +2126,50 @@ fileInput.addEventListener('change', e=>{ const f=e.target.files[0]; if(!f) retu
 // ===== バックアップ復元 =====
 function __bumpAll(){ const now=Date.now(); (function w(ns){ (ns||[]).forEach(n=>{ n._u=now; if(n.children) w(n.children); }); })(state.tree); }
 function fmtBkTime(ms){ const d=new Date(ms), p=n=>String(n).padStart(2,'0'); return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function bkCount(obj){ let cnt=0; try{ (function w(ns){ (ns||[]).forEach(n=>{ if(n.kind==='small')cnt++; w(n.children); }); })(obj.tree); }catch(e){} return cnt; }
+function fmtSnapDay(iso){ const d=new Date(iso), p=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`; }
 function openBackup(){
   let arr=[]; try{ arr=JSON.parse(localStorage.getItem(BACKUP_KEY)||'[]')||[]; }catch(e){}
   const body=document.getElementById('backupBody');
-  if(!arr.length){ body.innerHTML='<div class="hint">まだ自動バックアップがありません（編集すると自動で保存されます）。</div>'; }
-  else{ body.innerHTML=arr.map((b,i)=>i).reverse().map(idx=>{ const b=arr[idx]; let cnt=0;
-      try{ const s=JSON.parse(b.data); (function w(ns){ (ns||[]).forEach(n=>{ if(n.kind==='small')cnt++; w(n.children); }); })(s.tree); }catch(e){}
-      return `<div class="bkrow"><div class="bt"><b>${fmtBkTime(b.t)}</b>　作業${cnt}件${b.by?'　'+esc(b.by):''}</div><button data-bk="${idx}">この状態に戻す</button></div>`;
-    }).join('')+'<div class="hint" style="margin-top:8px">※復元すると全員に反映されます。念のため先に「書き出し」でバックアップも推奨。</div>'; }
+  let h=`<div class="tpsec">クラウドのバックアップ（全員共通・1日1回）</div><div id="bkCloud"><div class="hint">読み込み中…</div></div>`;
+  h+=`<div class="tpsec" style="margin-top:16px">この端末の自動バックアップ</div>`;
+  h+= arr.length
+    ? arr.map((b,i)=>i).reverse().map(idx=>{ const b=arr[idx]; let cnt=0;
+        try{ cnt=bkCount(JSON.parse(b.data)); }catch(e){}
+        return `<div class="bkrow"><div class="bt"><b>${fmtBkTime(b.t)}</b>　作業${cnt}件${b.by?'　'+esc(b.by):''}</div><button data-bk="${idx}">この状態に戻す</button></div>`;
+      }).join('')
+    : '<div class="hint">まだ自動バックアップがありません（編集すると自動で保存されます）。</div>';
+  h+='<div class="hint" style="margin-top:8px">※復元すると全員に反映されます。念のため先に「書き出し」でバックアップも推奨。</div>';
+  body.innerHTML=h;
   document.getElementById('backupModal').classList.add('on');
+  loadCloudBackups();
+}
+// クラウド側は非同期で後から差し込む（テーブル未作成なら案内を出すだけ）
+async function loadCloudBackups(){
+  const box=document.getElementById('bkCloud'); if(!box) return;
+  if(!window.__listSnapshots){ box.innerHTML='<div class="hint">この版ではクラウドのバックアップは使えません。</div>'; return; }
+  const list=await window.__listSnapshots();
+  if(list===null){ box.innerHTML='<div class="hint">クラウドのバックアップはまだ準備されていません（Supabaseで <b>supabase_setup.sql</b> の「5) 日次スナップショット」を実行してください）。</div>'; return; }
+  if(!list.length){ box.innerHTML='<div class="hint">まだありません。誰かが編集すると、その日ぶんが自動で1件控えられます。</div>'; return; }
+  box.innerHTML=list.map(r=>`<div class="bkrow"><div class="bt"><b>${esc(fmtSnapDay(r.taken_at))}</b>${r.taken_by?'　'+esc(String(r.taken_by).split('@')[0]):''}</div>`+
+    `<button data-snap="${esca(String(r.id))}">この状態に戻す</button></div>`).join('');
 }
 document.getElementById('backupBtn').addEventListener('click', openBackup);
 document.getElementById('backupModal').addEventListener('click', e=>{
   if(e.target.id==='backupModal'||e.target.id==='backupClose'){ document.getElementById('backupModal').classList.remove('on'); return; }
+  const sn=e.target.closest('button[data-snap]');
+  if(sn){
+    if(!confirm('クラウドのバックアップの状態に戻します。\n現在の内容は上書きされ、全員に反映されます。よろしいですか？')) return;
+    sn.disabled=true; sn.textContent='復元中…';
+    window.__getSnapshot(sn.dataset.snap).then(obj=>{
+      if(!obj || !obj.tree){ alert('復元に失敗しました（データが読めませんでした）。'); sn.disabled=false; sn.textContent='この状態に戻す'; return; }
+      document.getElementById('backupModal').classList.remove('on');
+      applyState(JSON.stringify(obj)); __bumpAll(); window.__forceOverwrite=true; save();
+      alert('復元しました。誤操作なら Ctrl+Z で戻せます。');
+    });
+    return;
+  }
   const btn=e.target.closest('button[data-bk]'); if(!btn) return;
   let arr=[]; try{ arr=JSON.parse(localStorage.getItem(BACKUP_KEY)||'[]')||[]; }catch(e2){}
   const bk=arr[+btn.dataset.bk]; if(!bk) return;
@@ -3707,6 +3740,11 @@ document.addEventListener('keydown', e=>{
     e.preventDefault(); wrap.scrollLeft += (e.key==='ArrowRight'?140:-140); return;
   }
   const k=e.key.toLowerCase();
+  // 記入中は文字の取り消しをブラウザに任せる。横取りすると「誤字を1文字戻すつもりが
+  // 全体が直前の保存時点まで巻き戻る（他人の変更ごと）」という事故になる。
+  const _ae=document.activeElement;
+  if((e.ctrlKey||e.metaKey) && (k==='z'||k==='y') &&
+     _ae && (_ae.tagName==='INPUT'||_ae.tagName==='TEXTAREA'||_ae.isContentEditable)) return;
   if((e.ctrlKey||e.metaKey) && k==='z' && !e.shiftKey){ e.preventDefault(); undo(); }
   else if((e.ctrlKey||e.metaKey) && (k==='y' || (k==='z'&&e.shiftKey))){ e.preventDefault(); redo(); }
 });
@@ -3838,8 +3876,32 @@ window.__saveBoard=function(){
       if(error){ setStatus('保存失敗: '+error.message,'#d64550'); console.error('[save]', error); return; }
       if(!data || !data.length){ setStatus('保存不可（権限RLS？0行）','#d64550'); console.error('[save] 0 rows written — RLS拒否かログイン切れの可能性'); return; }
       setStatus('● 同期済み','#12a06a');
+      maybeSnapshot(st);                                   // 1日1回、その日の状態を控えておく
     }catch(e){ setStatus('保存失敗: '+(e&&e.message||e),'#d64550'); console.error('[save]', e); }
   }, 700);
+};
+// ===== 日次スナップショット（誤操作・全消しからの復旧用）=====
+// schedule_board は1行を上書きし続けるので履歴が残らない。1日1回だけ別テーブルに控える。
+// テーブル未作成（SQL未実行）のときは何もしない＝アプリは今まで通り動く。
+let snapChecked=false;
+async function maybeSnapshot(st){
+  if(snapChecked || !st || !st.tree) return; snapChecked=true;
+  try{
+    const t0=new Date(); t0.setHours(0,0,0,0);
+    const { data, error }=await sb.from('schedule_snapshots').select('id').gte('taken_at', t0.toISOString()).limit(1);
+    if(error) return;                                        // テーブルが無い等：黙って見送る
+    if(data && data.length) return;                          // 今日ぶんは誰かが取っている
+    await sb.from('schedule_snapshots').insert({ taken_by: myEmail, data: st });
+  }catch(e){}
+}
+window.__listSnapshots=async function(){
+  try{ const { data, error }=await sb.from('schedule_snapshots')
+        .select('id,taken_at,taken_by').order('taken_at',{ascending:false}).limit(30);
+    return error?null:(data||[]); }catch(e){ return null; }
+};
+window.__getSnapshot=async function(id){
+  try{ const { data, error }=await sb.from('schedule_snapshots').select('data').eq('id',id).maybeSingle();
+    return (error||!data)?null:data.data; }catch(e){ return null; }
 };
 // getSession() と onAuthStateChange() がほぼ同時に発火するため、await の前に同期フラグで塞ぐ。
 // 塞がないと afterLogin が二重に走り、①同じchannelへの再subscribeで例外、②2回目が取り直した
