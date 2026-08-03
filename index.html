@@ -763,6 +763,13 @@
   .tplinks a{font-size:11px; color:var(--teal); text-decoration:none; border:1px solid var(--line);
     background:var(--panel3); border-radius:8px; padding:3px 9px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .tplinks a:hover{border-color:var(--teal);}
+  .tpsug{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:7px;}
+  .tpsug .lb{font-size:10.5px; color:var(--dim); white-space:nowrap;}
+  .tpsug .sug{background:none; border:1px dashed var(--line); color:var(--muted); border-radius:8px;
+    padding:3px 9px; cursor:pointer; font-family:inherit; font-size:11px; max-width:100%;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .tpsug .sug em{font-style:normal; color:var(--dim); font-size:10px; margin-left:4px;}
+  .tpsug .sug:hover{border-style:solid; border-color:var(--teal); color:var(--text);}
   .tplinked{display:flex; flex-direction:column; gap:5px; margin-bottom:7px;}
   .tplinked .lk{display:flex; align-items:center; gap:7px; background:var(--panel3); border:1px solid var(--line); border-radius:8px; padding:3px 5px 3px 3px;}
   .tplinked .nmb{flex:1; min-width:0; text-align:left; background:none; border:none; color:var(--text); font-family:inherit;
@@ -2187,9 +2194,13 @@ function openTopics(mtId){ ensureBoards();
   renderTopics(); showTopicPanel(); }
 function mtCounts(id){ const rows=state.topics.filter(t=>t&&t.meetingId===id); return {total:rows.length, open:rows.filter(t=>!t.done).length}; }
 function carryCount(id){ return state.topics.filter(t=>t&&t.meetingId===id&&t.from).length; }   // 前回から持ち越してきた件数
+let _tpRendering=false;      // 再描画で記入欄が消えるときのblurを無視するための印
 function renderTopics(){
   const box=document.getElementById('topicBody'); if(!box) return; ensureBoards();
-  if(_openMeeting && state.meetings.some(m=>m.id===_openMeeting)) renderMeetingTable(box); else { _openMeeting=null; renderMeetingList(box); }
+  _tpRendering=true;
+  try{
+    if(_openMeeting && state.meetings.some(m=>m.id===_openMeeting)) renderMeetingTable(box); else { _openMeeting=null; renderMeetingList(box); }
+  } finally { _tpRendering=false; }
   updateTopicBtn();
 }
 function mtWhen(m){ return `${esc(m.date||'日付未設定')}${m.start?' '+esc(m.start)+(m.end?'〜'+esc(m.end):''):''}${m.room?'　@'+esc(m.room):''}`; }
@@ -2373,6 +2384,48 @@ function tpLinkAnchors(s){
   return urls.map(u=>`<a href="${esca(u)}" target="_blank" rel="noopener">🔗 ${esc(u.replace(/^https?:\/\//,'').slice(0,44))}${u.length>51?'…':''}</a>`).join('');
 }
 function tpLinkChips(s){ return `<div class="tplinks">${tpLinkAnchors(s)}</div>`; }
+// 「よく使うリンク」＝いま貼られていないURLを、ボードの中から拾って候補に出す。
+// URLを探して貼る手間をなくすのが目的なので、出どころ（どの定例／どのカルテ）も一緒に見せる。
+function urlsIn(s){ return String(s||'').match(/https?:\/\/[^\s　"'<>]+/g)||[]; }
+function linkLabel(u){
+  try{ const x=new URL(u), h=x.hostname.replace(/^www\./,''), p=x.pathname;
+    if(h==='docs.google.com'){ if(p.indexOf('/spreadsheets')===0) return 'スプレッドシート';
+      if(p.indexOf('/document')===0) return 'ドキュメント';
+      if(p.indexOf('/presentation')===0) return 'スライド'; return 'Googleドキュメント'; }
+    if(h==='drive.google.com') return 'Driveのファイル';
+    if(h==='script.google.com') return 'GASツール';
+    if(h==='calendar.google.com') return 'カレンダー';
+    return h;
+  }catch(e){ return u.slice(0,26); }
+}
+function linkSuggestions(t){
+  const have=new Set(urlsIn(t.links)), seen=new Set(), out=[];
+  const push=(u,src)=>{ u=String(u).replace(/[)\]。、,]+$/,'');
+    if(have.has(u)||seen.has(u)) return; seen.add(u); out.push({u,src}); };
+  tpTaskIds(t).forEach(id=>{ const n=findNode(id).node; urlsIn(n.tools).forEach(u=>push(u,'📌 '+(n.name||''))); });
+  const ord={}; mtSorted().forEach((m,i)=>ord[m.id]=i);                       // 新しい定例のものを先に
+  state.topics.slice().sort((a,b)=>(ord[b.meetingId]||0)-(ord[a.meetingId]||0)).forEach(x=>{
+    if(x.id===t.id) return; const m=state.meetings.find(y=>y&&y.id===x.meetingId);
+    const src=(m&&m.title)||'ほかのお題';
+    // 参考リンク欄だけでなく、メモ・当日メモ・決まったことに貼られたURLも拾う（実際はメモに貼られがち）
+    [x.links, x.detail, x.log, x.result].forEach(v=>urlsIn(v).forEach(u=>push(u, src))); });
+  state.meetings.forEach(m=>urlsIn(m.note).forEach(u=>push(u,(m.title||'定例')+'の概要')));
+  (state.tree||[]).forEach(b=>eachLeaf(b,n=>urlsIn(n.tools).forEach(u=>push(u,'📌 '+(n.name||'')))));
+  return out.slice(0,8);
+}
+function tpLinkSuggest(t){
+  const s=linkSuggestions(t); if(!s.length) return '';
+  return `<div class="tpsug"><span class="lb">よく使うリンク</span>`+
+    s.map(o=>`<button class="sug" data-suglink="${esca(t.id)}" data-url="${esca(o.u)}" title="${esca(o.u)}">`+
+      `＋ ${esc(linkLabel(o.u))} <em>${esc(o.src)}</em></button>`).join('')+`</div>`;
+}
+function addSugLink(tid,u){
+  const t=state.topics.find(x=>x&&x.id===tid); if(!t||!u) return;
+  const cell=document.querySelector('#topicBody [data-edit="'+tid+'"][data-field="links"]');
+  const cur=String((cell?cell.textContent:t.links)||'').replace(/\s+$/,'');   // 画面に出ている文字を正とする
+  if(urlsIn(cur).indexOf(u)>=0) return;                                        // すでに入っていれば足さない
+  t.links=(cur?cur+'\n':'')+u; t._u=Date.now(); _tpShow.add(tid+':links'); save(); renderTopics();
+}
 // ガントのカルテ（作業）に紐づける。1つのお題に何件でも結びつけられる。
 function tpTaskIds(t){
   const a=Array.isArray(t.taskIds)?t.taskIds.slice():[];
@@ -2437,8 +2490,10 @@ function tpCard(t){
     `<div class="r2">`+
       `<span class="nmic" title="このお題を書いた人">👤</span>`+
       `<div class="nm cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="書いた人" title="このお題を書いた人（あとで誰に聞けばいいか分かるように）">${esc(t.name||'')}</div>`+
-      (t.from?`<button class="cotag" data-uncarry="${esca(t.id)}" title="${esca((src&&src.title)||'元の定例')}から持ち越し。クリックで元に戻す">🔁 前回から</button>`:'')+
-      (t.done?'':`<button class="act carry" data-carry="${esca(t.id)}" title="このお題を次の定例に移す">▶ 次回へ</button>`)+
+      (t.from?`<button class="cotag" data-uncarry="${esca(t.id)}" title="${esca((src&&src.title)||'元の定例')}から持ち越したお題です。クリックすると元の回に戻します">🔁 ${esc(((src&&src.title)||'前回').replace('定例',''))}から持ち越し</button>`:'')+
+      (t.done?'':(()=>{ const nx=nextMtOf(t);
+        return `<button class="act carry" data-carry="${esca(t.id)}" title="${nx?`このお題を「${esca(nx.title||'次の定例')} ${esca(mtWhenLine(nx))}」に移します。移動先では「前回から」と表示されます`:'次の定例がまだ登録されていません'}">`+
+          `▶ ${nx?esc(mdNum(parse(nx.date)))+'の定例へ送る':'次の定例へ送る'}</button>`; })())+
     `</div>`;
   if(!open){                                        // 閉じているときは要点だけ
     if((t.detail||'').trim()) h+=`<div class="memoprev">${esc(t.detail)}</div>`;
@@ -2446,8 +2501,8 @@ function tpCard(t){
   }else{
     h+=`<div class="tpx-body">`+
       tpFld('メモ・背景', tpCell(t,'detail','memo','この件の背景、共有しておきたいこと'))+
-      (tpOn(t,'links')?tpFld('参考リンク <span class="sm">1行に1つ</span>',
-            tpCell(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links)):'')+
+      (tpOn(t,'links')?tpFld('参考リンク <span class="sm">1行に1つ／下の候補は押すだけで入ります</span>',
+            tpCell(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links)+tpLinkSuggest(t)):'')+
       (tpOn(t,'task')?tpFld('関連するカルテ <span class="sm">📌を押すとカルテが開きます</span>',
             tpLinkedTasks(t)+
             `<div class="tprow"><select class="mtedit tsel grow" data-addtask="${esca(t.id)}">${tpTaskOptions(tpTaskIds(t))}</select></div>`):'')+
@@ -2556,8 +2611,17 @@ function carryTopic(id){
   const nx=mtSorted().find(x=>String(x.date||'')>String(cur.date||''));
   if(!nx){ alert('次の定例がまだ登録されていません。\n「← 定例一覧」→「＋ 定例を追加」で次回を登録してから移してください。'); return; }
   t.from=cur.id; t.meetingId=nx.id; t.done=false; t._u=Date.now();
-  save(); _openMeeting=nx.id; renderTopics();   // 移した先を開いて、どこへ行ったかが目で分かるようにする
+  save(); renderTopics();                        // 画面はこの回のまま（下の「→ 次回へ持ち越したお題」に出る）
+  tpToast(`「${(t.todo||'このお題')}」を ${mtWhenLine(nx)} の${nx.title||'定例'}へ送りました`);
 }
+// お題ボード用の短いお知らせ（ガントのモード表示を流用）
+function tpToast(msg){ const el=document.getElementById('modeToast'); if(!el) return;
+  el.textContent=msg; el.classList.add('show'); el.classList.remove('edit','scroll');
+  el.style.transform='translateX(-50%)'; el.style.left='50%'; el.style.top='76px';
+  clearTimeout(_modeToastT); _modeToastT=setTimeout(()=>el.classList.remove('show'), 2600); }
+// このお題が乗っている定例の「次の定例」
+function nextMtOf(t){ const cur=state.meetings.find(x=>x&&x.id===t.meetingId); if(!cur) return null;
+  return mtSorted().find(x=>String(x.date||'')>String(cur.date||''))||null; }
 function uncarryTopic(id){
   const t=state.topics.find(x=>x&&x.id===id); if(!t||!t.from) return;
   const back=state.meetings.find(x=>x&&x.id===t.from); if(!back){ delete t.from; save(); renderTopics(); return; }
@@ -2740,6 +2804,7 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   const ex=e.target.closest('[data-expand]'); if(ex){ toggleCard(ex.dataset.expand); return; }
   const td=e.target.closest('[data-today]'); if(td){ addTodayLog(td.dataset.today); return; }
   const ul=e.target.closest('[data-unlink]'); if(ul){ delTaskLink(ul.dataset.unlink, ul.dataset.node); return; }
+  const sg=e.target.closest('[data-suglink]'); if(sg){ addSugLink(sg.dataset.suglink, sg.dataset.url); return; }
   // カードの余白をクリックでも開閉（記入欄・ボタン・リンクの上は除く）
   const card=e.target.closest('.tpcard');
   // 開いている間は余白クリックでたたまない（記入中に閉じてしまうため。▾ボタンでたたむ）
@@ -2749,6 +2814,9 @@ document.getElementById('topicBody').addEventListener('click', e=>{
 function toggleCard(id){ if(!id) return;
   if(_tpOpenCards.has(id)) _tpOpenCards.delete(id); else _tpOpenCards.add(id);
   renderTopics(); }
+document.getElementById('topicBody').addEventListener('mousedown', e=>{
+  if(e.target.closest('[data-suglink]')) e.preventDefault();     // 記入欄のフォーカスを保つ
+});
 document.getElementById('topicBody').addEventListener('change', e=>{
   const el=e.target.closest('[data-mt]'); if(el){ setMtField(el.dataset.mt, el.value); return; }
   const at=e.target.closest('[data-addtask]'); if(at){ addTaskLink(at.dataset.addtask, at.value); return; }
@@ -2764,7 +2832,9 @@ document.getElementById('topicBody').addEventListener('input', e=>{
   clearTimeout(_noteTimer); _noteTimer=setTimeout(persist, 600);
 });
 document.getElementById('topicBody').addEventListener('blur', e=>{
-  const ed=e.target.closest('[data-edit]'); if(ed){ editCell(ed.dataset.edit, ed.dataset.field, ed.textContent);
+  const ed=e.target.closest('[data-edit]'); if(ed){
+    if(_tpRendering || !ed.isConnected) return;       // 再描画で消える要素のblurは無視（空で上書きしてしまう）
+    editCell(ed.dataset.edit, ed.dataset.field, ed.textContent);
     if(ed.dataset.field==='links'){ const c=ed.parentElement.querySelector('.tplinks'); if(c) c.innerHTML=tpLinkAnchors(ed.textContent); }
     return; }
   if(e.target.closest('[data-mtnote]')){ clearTimeout(_noteTimer); save(); }
