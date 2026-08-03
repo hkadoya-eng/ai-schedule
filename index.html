@@ -760,11 +760,19 @@
   .tpcard.done .cell.todo{text-decoration:line-through;}
   /* 開閉と、開いたときの記入欄 */
   .tpcard{cursor:pointer;} .tpcard.open{cursor:auto;} .tpcard .cell, .tpcard a{cursor:auto;}
-  .tpcard .ord{flex:none; display:inline-flex; gap:2px; opacity:0; transition:opacity .12s;}
-  .tpcard:hover .ord, .tpcard.open .ord{opacity:1;}
-  .tpcard .ord button{background:none; border:1px solid transparent; color:var(--dim); cursor:pointer;
-    font-size:9px; line-height:1; padding:4px 5px; border-radius:5px; font-family:inherit;}
-  .tpcard .ord button:hover{border-color:var(--teal); color:var(--teal);}
+  .tpcard .grip{flex:none; color:var(--dim); cursor:grab; padding:2px 4px; border-radius:5px;
+    font-size:13px; line-height:1; opacity:.45; transition:opacity .12s, color .12s; user-select:none;}
+  .tpcard:hover .grip{opacity:1;} .tpcard .grip:hover{color:var(--teal); background:var(--panel3);}
+  .tpcard.dragging{opacity:.45; cursor:grabbing;}
+  .tpcard.dropzone{box-shadow:0 -2px 0 0 var(--teal);}
+  .tpcard.flash{animation:tpflash .9s ease;}
+  @keyframes tpflash{ 0%{background:rgba(47,182,176,.22);} 100%{background:var(--panel2);} }
+  .tpfoot{display:flex; align-items:center; gap:8px; margin-top:10px;}
+  .tpfoot .mvbtns{font-size:10.5px; color:var(--dim);}
+  .tpfoot .mvbtns button{background:none; border:1px solid var(--line); color:var(--muted); cursor:pointer;
+    border-radius:6px; padding:3px 8px; margin-left:4px; font-family:inherit; font-size:10.5px;}
+  .tpfoot .mvbtns button:hover{border-color:var(--teal); color:var(--text);}
+  .tpfoot .delrow{margin-left:auto;}
   .tpcard .exp{flex:none; cursor:pointer; font-size:11.5px; padding:3px 9px; border-radius:6px; white-space:nowrap; font-family:inherit;}
   .tpcard.open{border-color:var(--teal); box-shadow:0 2px 14px rgba(0,0,0,.06);}
   .memoprev{font-size:12.5px; color:var(--muted); line-height:1.6; padding:2px 8px 2px 32px; cursor:pointer;
@@ -2585,8 +2593,60 @@ function moveTopic(id, d){
   if(i<0 || j<0 || j>=g.length) return;
   g.splice(j,0,g.splice(i,1)[0]);
   g.forEach((x,k)=>{ if(x.ord!==k){ x.ord=k; x._u=Date.now(); } });
-  save(); renderTopics();
+  _flashTid=id; save(); renderTopics();
 }
+// 並べ替えは「動いたのが目で分かる」ように、位置の差分をアニメーションさせる（FLIP）
+function tpFlip(container, mutate){
+  const els=[...container.querySelectorAll('.tpcard')];
+  const before=new Map(els.map(el=>[el, el.getBoundingClientRect().top]));
+  mutate();
+  [...container.querySelectorAll('.tpcard')].forEach(el=>{
+    const b=before.get(el); if(b==null) return;
+    const d=b-el.getBoundingClientRect().top; if(!d) return;
+    el.style.transition='none'; el.style.transform='translateY('+d+'px)';
+    requestAnimationFrame(()=>{ el.style.transition='transform .18s ease'; el.style.transform=''; });
+  });
+}
+// ドラッグ＆ドロップで並べ替え。掴むのは ⠿ のところだけ（記入欄の選択を邪魔しないため）
+let _dragTid=null, _flashTid=null;
+function tpCommitOrder(group){
+  const ids=[...group.querySelectorAll('.tpcard')].map(el=>el.dataset.tid);
+  let changed=false;
+  ids.forEach((id,k)=>{ const t=state.topics.find(x=>x&&x.id===id);
+    if(t && t.ord!==k){ t.ord=k; t._u=Date.now(); changed=true; } });
+  if(changed){ save(); renderTopics(); }
+}
+(function setupTopicDnD(){
+  const body=document.getElementById('topicBody'); if(!body) return;
+  body.addEventListener('mousedown', e=>{
+    const g=e.target.closest('[data-grip]'); if(!g) return;
+    const c=g.closest('.tpcard'); if(c) c.draggable=true;
+  });
+  body.addEventListener('mouseup', ()=>{ body.querySelectorAll('.tpcard[draggable]').forEach(c=>c.draggable=false); });
+  body.addEventListener('dragstart', e=>{
+    const c=e.target.closest('.tpcard'); if(!c || !c.draggable){ e.preventDefault(); return; }
+    _dragTid=c.dataset.tid; c.classList.add('dragging');
+    try{ e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', _dragTid); }catch(err){}
+  });
+  body.addEventListener('dragover', e=>{
+    if(!_dragTid) return;
+    const drag=body.querySelector('.tpcard.dragging'); if(!drag) return;
+    const over=e.target.closest('.tpcard'); if(!over || over===drag) return;
+    const group=drag.parentElement; if(over.parentElement!==group) return;   // グループ（持ち越し／この回）はまたがない
+    e.preventDefault();
+    const r=over.getBoundingClientRect(), after=(e.clientY > r.top + r.height/2);
+    const ref=after?over.nextSibling:over;
+    if(ref===drag || (after && over.nextSibling===drag)) return;
+    tpFlip(group, ()=>group.insertBefore(drag, ref));
+  });
+  body.addEventListener('drop', e=>{ if(_dragTid) e.preventDefault(); });
+  body.addEventListener('dragend', ()=>{
+    const drag=body.querySelector('.tpcard.dragging');
+    if(drag){ drag.classList.remove('dragging'); drag.draggable=false;
+      _flashTid=_dragTid; tpCommitOrder(drag.parentElement); }
+    _dragTid=null;
+  });
+})();
 function nextOrd(meetingId){    // 追加したものは末尾に置く
   const g=state.topics.filter(x=>x&&x.meetingId===meetingId);
   return g.reduce((mx,x)=>Math.max(mx, (typeof x.ord==='number')?x.ord:-1), -1)+1;
@@ -2599,8 +2659,7 @@ function tpCard(t){
     `<div class="r1">`+
       `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'「まだ話していない」に戻す':'この回で話した（済）にする。タスクの完了ではありません'}">${t.done?'✓':''}</button>`+
       tpCell(t,'todo','todo','やること・話したいこと')+
-      `<span class="ord"><button data-mv="${esca(t.id)}|-1" title="上へ（話す順を変える）">▲</button>`+
-      `<button data-mv="${esca(t.id)}|1" title="下へ（話す順を変える）">▼</button></span>`+
+      `<span class="grip" data-grip="${esca(t.id)}" title="つかんで上下にドラッグ＝話す順を変える">⠿</span>`+
       `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'メモ・リンク・カルテなどを書く'}">${open?'▾ とじる':'▸ 詳細'}</button>`+
     `</div>`+
     `<div class="r2">`+
@@ -2630,7 +2689,9 @@ function tpCard(t){
             `<span class="lb">期限</span><input class="mtedit" type="date" data-tfield="due" data-tid="${esca(t.id)}" value="${esca(t.due||'')}"></div>`):'')+
       `<div class="addflds">`+tpAddBtn(t,'links','リンク')+tpAddBtn(t,'task','カルテ')+
         tpAddBtn(t,'log','当日メモ')+tpAddBtn(t,'result','決まったこと')+`</div>`+
-      `<button class="delrow" data-del="${esca(t.id)}" title="このお題を削除">🗑 このお題を削除</button>`+
+      `<div class="tpfoot"><span class="mvbtns">順番 <button data-mv="${esca(t.id)}|-1" title="上へ">▲ 上へ</button>`+
+      `<button data-mv="${esca(t.id)}|1" title="下へ">▼ 下へ</button></span>`+
+      `<button class="delrow" data-del="${esca(t.id)}" title="このお題を削除">🗑 このお題を削除</button></div>`+
     `</div>`;
   }
   return h+`</div>`;
@@ -2708,6 +2769,9 @@ function renderMeetingTable(box){
     `<div class="tpmoved">`+movedOut.map(t=>`<span class="mv">・${esc(t.todo||'(無題)')}</span>`).join('')+`</div></div>`;
   box.innerHTML=h;
   autoGrowNote();
+  if(_flashTid){ const el=box.querySelector('.tpcard[data-tid="'+_flashTid+'"]');
+    if(el){ el.classList.add('flash'); el.scrollIntoView({block:'nearest'}); }
+    _flashTid=null; }
 }
 // 概要欄は中身のぶんだけ伸ばす（会議中にスクロールさせない）
 function autoGrowNote(){ const ta=document.querySelector('#topicBody [data-mtnote]'); if(!ta) return;
