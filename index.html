@@ -94,8 +94,8 @@
   tbody tr:hover .sl{background:var(--rowhover);}
   td.no{text-align:center; color:var(--muted); font-size:11px;}  /* position:relativeはstickyを潰すので付けない */
   .item-cell{padding:3px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; position:relative;}
-  .row-big   .item-cell{font-weight:700; background:#dbe2ec!important;}
-  .row-big   .sl{background:#dbe2ec;}
+  .row-big   .item-cell{font-weight:700; background:#d6e2f4!important;}
+  .row-big   .sl{background:#d6e2f4;}
   .row-mid   .item-cell{font-weight:600; color:#33506e;}
   /* サブタスク行 */
   .row-task td{background:#fcfdff;}
@@ -289,8 +289,8 @@
   td.datecell{color:var(--muted);} td.datecell.none{color:var(--dim);}
   tbody tr:hover td{background:var(--rowhover);} tbody tr:hover .sl{background:var(--rowhover);}
   td.no{color:var(--dim);}
-  .row-big .item-cell{background:#202d3d!important; color:var(--text);}
-  .row-big .sl{background:#202d3d;}
+  .row-big .item-cell{background:#20304a!important; color:var(--text);}
+  .row-big .sl{background:#20304a;}
   .row-mid .item-cell{color:#bcd2ee;}
   .row-mid{background:rgba(255,255,255,.022);}
   .row-task td{background:#131d29;}
@@ -299,12 +299,18 @@
   /* ── 段取り工程グループ：作業(親)＋サブタスクを一体に見せる ── */
   .row-small.has-kids > td{ background:#1b2836; }
   .row-small.has-kids .sl{ background:#1b2836; }
-  .row-small.has-kids .c-item{ box-shadow: inset 3px 0 0 var(--teal); }   /* 親＝グループの頭：太いティール線 */
+  .row-small.has-kids .c-item{ box-shadow: inset 3px 0 0 #6b7d93; }   /* 作業に段取りがある目印（階層の色とは別）*/
   .row-task > td{ background:#141f2c; }
   .row-task .c-item{ box-shadow: inset 3px 0 0 rgba(47,182,176,.5); }      /* 子＝工程：細いティール線でつながって見える */
-  /* 階層の深さを色の濃さで表す（大項目＝濃い→中項目→作業。作業より下は同じ）*/
-  .row-big  > td{ background:#1e2b3a; }
-  .row-mid  > td{ background:#1a2532; }
+  /* ── 階層のカテゴリ分け：親＝藍、子＝青緑、孫以降＝無色 ──
+     濃さだけだと「分類」に見えないので、段ごとに色味と左の帯を変える。 */
+  .row-big  > td{ background:#20304a; }
+  .row-big  .c-item{ box-shadow: inset 5px 0 0 #4d90e0; }
+  .row-big  .iname{ color:#cfe0f6; letter-spacing:.03em; }
+  .row-mid  > td{ background:#162c2f; }
+  .row-mid  .c-item{ box-shadow: inset 4px 0 0 #2fb6b0; }
+  .row-mid  .iname{ color:#bfe8e4; }
+  .row-mid  .sl{ background:#162c2f; }
   .row-small > td{ background:#16202c; }
   .stepno{ display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px;
     padding:0 4px; margin-right:6px; border-radius:8px; background:var(--teal); color:#04222b;
@@ -927,13 +933,19 @@
   body.theme-light header{background:linear-gradient(180deg,#f2f4f8,#e6eaf0); box-shadow:0 1px 0 rgba(0,0,0,.05);}
   body.theme-light header h1{color:#1b2432;}
   body.theme-light .band-navy,body.theme-light .band-teal,body.theme-light .band-cream,body.theme-light .band-crimson{color:#28405f!important; background-image:linear-gradient(180deg,rgba(0,0,0,.03),transparent);}
-  body.theme-light .row-big .item-cell, body.theme-light .row-big .sl{background:#dbe2ec!important; color:var(--text);}
+  body.theme-light .row-big .item-cell, body.theme-light .row-big .sl{background:#d6e2f4!important; color:var(--text);}
   body.theme-light .row-mid .item-cell{color:#345178;}
   body.theme-light .row-task td, body.theme-light .row-task>td{background:#f4f6fa;}
-  /* 階層の深さを色の濃さで表す（大項目＝濃い→中項目→作業。作業より下は同じ）*/
-  body.theme-light .row-big  > td{background:#dbe2ec;}
-  body.theme-light .row-mid  > td{background:#eaeef5;}
-  body.theme-light .row-small > td{background:#f7f9fc;}
+  /* ── 階層のカテゴリ分け：親＝藍、子＝青緑、孫以降＝無色 ── */
+  body.theme-light .row-big  > td{background:#d6e2f4;}
+  body.theme-light .row-big  .c-item{box-shadow: inset 5px 0 0 #3f6fb0;}
+  body.theme-light .row-big  .iname{color:#1c3d6b;}
+  body.theme-light .row-mid  > td{background:#dcefec;}
+  body.theme-light .row-mid  .c-item{box-shadow: inset 4px 0 0 #2f9a92;}
+  body.theme-light .row-mid  .iname{color:#175e57;}
+  body.theme-light .row-mid  .sl{background:#dcefec;}
+  body.theme-light .row-small > td{background:#fbfcfe;}
+  body.theme-light .row-small.has-kids .c-item{box-shadow: inset 3px 0 0 #93a3b6;}
   body.theme-light .row-task .iname{color:#4a5666;}
   body.theme-light .row-small.has-kids>td, body.theme-light .row-small.has-kids .sl{background:#e6ecf4;}
   body.theme-light .kpibar{background:#e6eaf0;}
