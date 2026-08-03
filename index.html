@@ -708,8 +708,8 @@
   .mthead .mini:hover{border-color:var(--teal); color:var(--text);}
   /* ★入口：まずここに一言書く */
   .tpquick{display:flex; gap:7px; margin-top:2px;}
-  .tpquick input{flex:1; min-width:0; background:var(--panel3); color:var(--text); border:1px solid var(--line);
-    border-radius:9px; padding:11px 13px; font-family:inherit; font-size:14px;}
+  .tpquick input{flex:1; min-width:0; background:#fff; color:var(--text); border:1px solid var(--topic-bd);
+    border-radius:9px; padding:12px 14px; font-family:inherit; font-size:14px; box-shadow:0 1px 3px rgba(0,0,0,.04);}
   .tpquick input::placeholder{color:var(--dim);}
   .tpquick input:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
   .tpquick button{flex:none; background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:9px;
@@ -737,12 +737,21 @@
   .tpnote textarea{width:100%; min-height:74px; resize:vertical; background:var(--panel3); color:var(--text);
     border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13.5px; line-height:1.7;}
   .tpnote textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
+  /* ─── 色の意味 ───────────────────────────────
+     ティール = 会議で書くもの（お題・当日メモ）
+     青       = カルテ（ガントの作業）＝別の世界のもの
+     アンバー = 持ち越し
+     この3色以外は使わない。色が増えると「どこに何を書くか」が伝わらなくなる。 */
+  :root{
+    --topic-bg:rgba(47,182,176,.045); --topic-bd:rgba(47,182,176,.30);
+    --karte-bg:rgba(76,141,255,.07);  --karte-bd:rgba(76,141,255,.34); --karte-fg:#3d6fd0;
+  }
   /* お題＝1件1カード（狭いパネルでも書きやすいように表をやめてカードにした）*/
   .tpgrp{margin-bottom:16px;}
   .tpgrp .gh{display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:700; color:var(--muted); margin:0 0 8px;}
   .tpgrp .gh .n{background:var(--panel3); border-radius:9px; padding:1px 8px; font-size:11px; color:var(--text);}
   .tpgrp.carry .gh{color:#a8710a;}
-  .tpcard{border:1px solid var(--line); border-radius:10px; background:var(--panel2); padding:9px 10px; margin-bottom:8px;}
+  .tpcard{border:1px solid var(--topic-bd); border-radius:10px; background:var(--topic-bg); padding:9px 10px; margin-bottom:8px;}
   .tpcard:focus-within{border-color:var(--teal);}
   .tpcard.done{opacity:.55;}
   .tpcard.carried{border-left:3px solid #e0a12c;}
@@ -765,9 +774,11 @@
   /* 「書ける場所」は入力欄に見せる：ホバーで枠が浮き、フォーカスで青くなる */
   .tpcard .cell{outline:none; white-space:pre-wrap; word-break:break-word; border-radius:7px; padding:6px 8px;
     border:1px solid transparent; cursor:text; transition:border-color .12s, background-color .12s;}
-  .tpcard:hover .cell{border-color:var(--line); background:var(--panel3);}
-  .tpcard .cell:focus{border-color:var(--teal); background:var(--panel3); box-shadow:0 0 0 1px var(--teal);}
+  /* 空＝まだ書かれていない欄だけ、点線の箱にして「ここに書ける」と見せる */
+  .tpcard .cell:empty{border:1px dashed var(--line); background:rgba(255,255,255,.5);}
   .tpcard .cell:empty:before{content:attr(data-ph); color:var(--dim);}
+  .tpcard:hover .cell{border-color:var(--line); background:rgba(255,255,255,.55);}
+  .tpcard .cell:focus{border-color:var(--teal); background:#fff; box-shadow:0 0 0 1px var(--teal);}
   /* 「押して開く場所」は右上の定位置に固定。開いていても閉じていても同じ場所・同じ形 */
   .tpcard .exp{background:var(--panel3); border:1px solid var(--line); color:var(--muted);}
   .tpcard .exp:hover{border-color:var(--teal); color:var(--teal); background:var(--panel2);}
@@ -802,11 +813,12 @@
     border-radius:9px; padding:1px 8px; max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .exphint{font-size:10.5px; color:var(--dim); padding:5px 8px 2px;}
   .tpcard:hover .exphint{color:var(--teal);}
-  .tpx-body{margin-top:9px; padding-top:10px; border-top:1px dashed var(--line);}
+  .tpx-body{margin-top:9px; padding-top:10px; border-top:1px dashed var(--topic-bd);}
   .tpfld{margin-bottom:11px;} .tpfld:last-child{margin-bottom:2px;}
   .tpfld label{display:flex; align-items:center; gap:8px; font-size:11px; font-weight:700; color:var(--muted); margin-bottom:4px;}
   .tpfld label .sm{font-weight:400; color:var(--dim); font-size:10.5px;}
-  .tpfld .cell{background:var(--panel3); border:1px solid var(--line); border-radius:8px; min-height:40px; font-size:13px; line-height:1.7; color:var(--text);}
+  .tpfld .cell{background:#fff; border:1px solid var(--line); border-radius:8px; min-height:40px; font-size:13px; line-height:1.7; color:var(--text);}
+  .tpfld .cell:empty{background:rgba(255,255,255,.55); border-style:dashed;}
   .tpfld .cell.log{min-height:64px;} .tpfld .cell.links{min-height:28px; font-size:12px;}
   .tplinks{display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;}
   .tplinks:empty{display:none;}
@@ -822,27 +834,28 @@
   .tpsug .sug:hover{border-style:solid; border-color:var(--teal); color:var(--text);}
   .ksug{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 7px;}
   .ksug .lb{font-size:10.5px; color:var(--dim); white-space:nowrap;}
-  .ksug .sug{background:rgba(47,182,176,.10); border:1px dashed rgba(47,182,176,.6); color:var(--teal);
+  .ksug .sug{background:var(--karte-bg); border:1px dashed var(--karte-bd); color:var(--karte-fg);
     border-radius:8px; padding:4px 10px; cursor:pointer; font-family:inherit; font-size:11.5px; max-width:100%;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .ksug .sug:hover{border-style:solid; background:rgba(47,182,176,.18);}
+  .ksug .sug:hover{border-style:solid; background:rgba(76,141,255,.16);}
   .kpick{margin-top:7px; border:1px solid var(--line); border-radius:9px; background:var(--panel2); padding:8px;}
   .kpick input{width:100%; font-family:inherit; font-size:12.5px; padding:7px 9px; border-radius:7px;
     border:1px solid var(--line); background:var(--panel3); color:var(--text);}
-  .kpick input:focus{outline:none; border-color:var(--teal);}
+  .kpick input:focus{outline:none; border-color:var(--karte-bd);}
   .kplist{max-height:210px; overflow:auto; margin-top:7px;}
   .kplist .kpgrp{font-size:10px; font-weight:700; color:var(--dim); letter-spacing:.5px; margin:8px 0 3px;}
   .kplist .kpgrp:first-child{margin-top:0;}
   .kplist .kpitem{display:flex; width:100%; align-items:center; gap:8px; text-align:left; background:none;
     border:1px solid transparent; border-radius:7px; padding:5px 8px; cursor:pointer; font-family:inherit; font-size:12.5px; color:var(--text);}
-  .kplist .kpitem:hover{border-color:var(--teal); background:var(--panel3);}
+  .kplist .kpitem:hover{border-color:var(--karte-bd); background:var(--karte-bg);}
   .kplist .kpitem .nm{flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .kplist .kpitem .rl{flex:none; font-size:10.5px; color:var(--dim);}
   .tplinked{display:flex; flex-direction:column; gap:5px; margin-bottom:7px;}
-  .tplinked .lk{display:flex; align-items:center; gap:7px; background:var(--panel3); border:1px solid var(--line); border-radius:8px; padding:3px 5px 3px 3px;}
+  .tplinked .lk{display:flex; align-items:center; gap:7px; background:var(--karte-bg); border:1px solid var(--karte-bd); border-radius:8px; padding:3px 5px 3px 3px;}
   .tplinked .nmb{flex:1; min-width:0; text-align:left; background:none; border:none; color:var(--text); font-family:inherit;
     font-size:12.5px; cursor:pointer; padding:3px 6px; border-radius:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
-  .tplinked .nmb:hover{background:var(--panel2); color:var(--teal);}
+  .tplinked .nmb{color:var(--karte-fg); font-weight:600;}
+  .tplinked .nmb:hover{background:rgba(76,141,255,.14);}
   .tplinked .pg{flex:none; font-size:10.5px; color:var(--muted); font-variant-numeric:tabular-nums;}
   .tplinked .x{flex:none; background:none; border:none; color:var(--dim); cursor:pointer; font-size:12px; padding:2px 5px;}
   .tplinked .x:hover{color:#f2585f;}
@@ -2609,7 +2622,9 @@ function kartSuggest(t){
     for(let L=Math.min(nm.length,10); L>=3 && !best; L--){
       for(let i=0;i+L<=nm.length;i++){
         if(text.indexOf(nm.slice(i,i+L).toLowerCase())>=0){ best=L; break; } } }
-    if(!best) return;
+    // カルテ名の「半分以上」が一致していないと候補にしない。
+    // これが無いと「リストの」だけ一致した無関係な作業が並ぶ。
+    if(best < Math.max(4, Math.ceil(nm.length*0.5))) return;
     let score=best;
     const who=String(t.name||t.owner||'').replace(/[（(].*/,'').trim();
     if(who && String(nd.role||'').indexOf(who)>=0) score+=2;      // 担当が一致していれば押し上げる
@@ -2619,7 +2634,7 @@ function kartSuggest(t){
   if(!out.length) return [];
   // 一番強い一致に比べて弱いものは落とす（「リストの作成」だけ一致、のような誤爆を防ぐ）
   const best=out[0].score;
-  return out.filter(x=>x.score>=Math.max(4, best*0.7)).slice(0,3);
+  return out.filter(x=>x.score>=best*0.6).slice(0,3);
 }
 // 探すとき用の一覧（領域ごとにまとめる）
 function kartPickList(t){
@@ -2784,14 +2799,14 @@ function tpCard(t){
     h+=tpChips(t);
   }else{
     h+=`<div class="tpx-body">`+
-      tpFld('メモ・背景', tpCell(t,'detail','memo','この件の背景、共有しておきたいこと'))+
+      tpFld('メモ・背景 <span class="sm">会議前に共有しておきたいこと</span>', tpCell(t,'detail','memo','この件の背景、共有しておきたいこと'))+
       (tpOn(t,'links')?tpFld('参考リンク <span class="sm">1行に1つ／下の候補は押すだけで入ります</span>',
             tpCell(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links)+tpLinkSuggest(t)):'')+
       (tpOn(t,'task')?tpFld('関連するカルテ <span class="sm">📌を押すとカルテが開きます</span>',
             tpLinkedTasks(t)+tpKartPicker(t)):'')+
-      (tpOn(t,'log')?tpFld(`当日メモ <button class="act" data-today="${esca(t.id)}" title="今日の日付と自分の名前を入れて書き始める">＋ 今日の記録</button>`,
+      (tpOn(t,'log')?tpFld(`当日メモ <span class="sm">会議中に話が出たらここへ</span><button class="act" data-today="${esca(t.id)}" title="今日の日付と自分の名前を入れて書き始める">＋ 今日の記録</button>`,
             tpCell(t,'log','log','会議中に出た話・その場で決まったことをここに')):'')+
-      (tpOn(t,'result')?tpFld('決まったこと・次アクション',
+      (tpOn(t,'result')?tpFld('決まったこと・次アクション <span class="sm">会議のあとに埋める</span>',
             tpCell(t,'result','result','何が決まったか／次に誰が何をするか')+
             `<div class="tprow mt"><span class="lb">担当</span><input class="mtedit" data-tfield="owner" data-tid="${esca(t.id)}" value="${esca(t.owner||'')}" placeholder="例）伊藤(真)">`+
             `<span class="lb">期限</span><input class="mtedit" type="date" data-tfield="due" data-tid="${esca(t.id)}" value="${esca(t.due||'')}"></div>`):'')+
