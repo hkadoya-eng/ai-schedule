@@ -94,8 +94,8 @@
   tbody tr:hover .sl{background:var(--rowhover);}
   td.no{text-align:center; color:var(--muted); font-size:11px;}  /* position:relativeはstickyを潰すので付けない */
   .item-cell{padding:3px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; position:relative;}
-  .row-big   .item-cell{font-weight:700; background:#e9eef4!important;}
-  .row-big   .sl{background:#e9eef4;}
+  .row-big   .item-cell{font-weight:700; background:#dbe2ec!important;}
+  .row-big   .sl{background:#dbe2ec;}
   .row-mid   .item-cell{font-weight:600; color:#33506e;}
   /* サブタスク行 */
   .row-task td{background:#fcfdff;}
@@ -302,6 +302,10 @@
   .row-small.has-kids .c-item{ box-shadow: inset 3px 0 0 var(--teal); }   /* 親＝グループの頭：太いティール線 */
   .row-task > td{ background:#141f2c; }
   .row-task .c-item{ box-shadow: inset 3px 0 0 rgba(47,182,176,.5); }      /* 子＝工程：細いティール線でつながって見える */
+  /* 階層の深さを色の濃さで表す（大項目＝濃い→中項目→作業。作業より下は同じ）*/
+  .row-big  > td{ background:#1e2b3a; }
+  .row-mid  > td{ background:#1a2532; }
+  .row-small > td{ background:#16202c; }
   .stepno{ display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px;
     padding:0 4px; margin-right:6px; border-radius:8px; background:var(--teal); color:#04222b;
     font-size:10px; font-weight:700; line-height:1; }
@@ -748,8 +752,10 @@
      アンバー = 持ち越し
      この3色以外は使わない。色が増えると「どこに何を書くか」が伝わらなくなる。 */
   :root{
-    --topic-bg:rgba(47,182,176,.045); --topic-bd:rgba(47,182,176,.30);
-    --karte-bg:rgba(76,141,255,.07);  --karte-bd:rgba(76,141,255,.34); --karte-fg:#3d6fd0;
+    /* お題は緑味、カルテは青味。どちらも「ごく薄く」。色相を離すことで
+       同じカードの中でも「ここだけカルテの話」が一目で分かる。 */
+    --topic-bg:rgba(63,157,92,.055);  --topic-bd:rgba(63,157,92,.30);  --topic-fg:#2f7d4c;
+    --karte-bg:rgba(66,124,214,.075); --karte-bd:rgba(66,124,214,.36); --karte-fg:#3767bf;
   }
   /* お題＝1件1カード（狭いパネルでも書きやすいように表をやめてカードにした）*/
   .tpgrp{margin-bottom:16px;}
@@ -921,10 +927,13 @@
   body.theme-light header{background:linear-gradient(180deg,#f2f4f8,#e6eaf0); box-shadow:0 1px 0 rgba(0,0,0,.05);}
   body.theme-light header h1{color:#1b2432;}
   body.theme-light .band-navy,body.theme-light .band-teal,body.theme-light .band-cream,body.theme-light .band-crimson{color:#28405f!important; background-image:linear-gradient(180deg,rgba(0,0,0,.03),transparent);}
-  body.theme-light .row-big .item-cell, body.theme-light .row-big .sl{background:#e0e5ee!important; color:var(--text);}
-  body.theme-light .row-mid{background:rgba(0,0,0,.02);}
+  body.theme-light .row-big .item-cell, body.theme-light .row-big .sl{background:#dbe2ec!important; color:var(--text);}
   body.theme-light .row-mid .item-cell{color:#345178;}
-  body.theme-light .row-task td, body.theme-light .row-task>td{background:#eef1f5;}
+  body.theme-light .row-task td, body.theme-light .row-task>td{background:#f4f6fa;}
+  /* 階層の深さを色の濃さで表す（大項目＝濃い→中項目→作業。作業より下は同じ）*/
+  body.theme-light .row-big  > td{background:#dbe2ec;}
+  body.theme-light .row-mid  > td{background:#eaeef5;}
+  body.theme-light .row-small > td{background:#f7f9fc;}
   body.theme-light .row-task .iname{color:#4a5666;}
   body.theme-light .row-small.has-kids>td, body.theme-light .row-small.has-kids .sl{background:#e6ecf4;}
   body.theme-light .kpibar{background:#e6eaf0;}
