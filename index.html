@@ -348,6 +348,9 @@
   .smstat b{display:block; font-size:22px; font-weight:750; font-variant-numeric:tabular-nums; line-height:1.1;}
   .smstat span{font-size:11px; color:var(--muted);}
   .smstat .bad b{color:#ff6b6b;}
+  .htag{font-size:10px; font-weight:700; background:var(--panel3); border:1px solid var(--line);
+    border-radius:8px; padding:1px 7px; color:var(--muted); white-space:nowrap;}
+  .htag.del{color:#c2555f; border-color:rgba(194,85,99,.45);}
   .smrow{display:flex; align-items:center; gap:10px; padding:6px 8px; border-bottom:1px solid var(--line2); font-size:12.5px;}
   .smrow .smn{flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .smrow .smmeta{color:var(--muted); font-size:11px; font-variant-numeric:tabular-nums; white-space:nowrap;}
@@ -753,6 +756,11 @@
   .tpcard.done .cell.todo{text-decoration:line-through;}
   /* 開閉と、開いたときの記入欄 */
   .tpcard{cursor:pointer;} .tpcard.open{cursor:auto;} .tpcard .cell, .tpcard a{cursor:auto;}
+  .tpcard .ord{flex:none; display:inline-flex; gap:2px; opacity:0; transition:opacity .12s;}
+  .tpcard:hover .ord, .tpcard.open .ord{opacity:1;}
+  .tpcard .ord button{background:none; border:1px solid transparent; color:var(--dim); cursor:pointer;
+    font-size:9px; line-height:1; padding:4px 5px; border-radius:5px; font-family:inherit;}
+  .tpcard .ord button:hover{border-color:var(--teal); color:var(--teal);}
   .tpcard .exp{flex:none; cursor:pointer; font-size:11.5px; padding:3px 9px; border-radius:6px; white-space:nowrap; font-family:inherit;}
   .tpcard.open{border-color:var(--teal); box-shadow:0 2px 14px rgba(0,0,0,.06);}
   .memoprev{font-size:12.5px; color:var(--muted); line-height:1.6; padding:2px 8px 2px 32px; cursor:pointer;
@@ -1309,11 +1317,23 @@ function __indexSig(node, map){ map[node.id]=__ownSig(node); (node.children||[])
 window.__stampChanges=function(prevJson){
   let prev=null; try{ prev=prevJson?JSON.parse(prevJson):null; }catch(e){}
   const prevMap={}; if(prev&&prev.tree) prev.tree.forEach(n=>__indexSig(n,prevMap));
-  const now=Date.now(), by=(window.__user||localStorage.getItem('ai_sched_user')||'');
+  const now=Date.now(), by=(typeof meAuthor==='function'&&meAuthor())||window.__user||localStorage.getItem('ai_sched_user')||'';
   (function walk(nodes){ (nodes||[]).forEach(n=>{ const sig=__ownSig(n);
     if(prevMap[n.id]===undefined || prevMap[n.id]!==sig){ n._u=now; if(by) n._by=by; }
     if(n.children) walk(n.children); }); })(state.tree);
+  // 定例・お題にも同じように「誰がいつ変えたか」を刻む（変更履歴で追えるようにするため）
+  ['meetings','topics'].forEach(key=>{
+    const pm={}; if(prev && Array.isArray(prev[key])) prev[key].forEach(x=>{ if(x&&x.id) pm[x.id]=__ownSig(x); });
+    (state[key]||[]).forEach(x=>{ if(!x||!x.id) return; const sig=__ownSig(x);
+      if(pm[x.id]===undefined || pm[x.id]!==sig){ x._u=now; if(by) x._by=by; } });
+  });
 };
+// 消したものは残らないので、削除だけは別に記録する（誰が何を消したか追えるように）
+function logAct(kind, name){
+  if(!Array.isArray(state.log)) state.log=[];
+  state.log.push({ t:Date.now(), by:((typeof meAuthor==='function'&&meAuthor())||window.__user||''), kind, name:String(name||'').slice(0,80) });
+  if(state.log.length>200) state.log=state.log.slice(-200);
+}
 // remote と local を ID 単位でマージ（各ノードは _u が新しい方を採用・両者の追加は保持）
 function __ownFields(n){ const o={}; Object.keys(n).forEach(k=>{ if(k!=='children') o[k]=n[k]; }); return o; }
 function __mergeNode(rn, ln){ const ru=+rn._u||0, lu=+ln._u||0;
@@ -2546,6 +2566,27 @@ function tpHas(t,f){
 }
 function tpOn(t,f){ return tpHas(t,f) || _tpShow.has(t.id+':'+f); }
 function tpAddBtn(t,f,label){ return tpOn(t,f)?'':`<button class="addfld" data-addfld="${esca(t.id)}|${f}">＋ ${label}</button>`; }
+// 会議は「話す順」があるので、お題は ord の順に並べる（未設定は後ろ＝追加順のまま）
+function tpOrdered(rows){
+  return rows.slice().sort((a,b)=>{
+    const ao=(typeof a.ord==='number')?a.ord:1e9, bo=(typeof b.ord==='number')?b.ord:1e9;
+    return ao-bo; });
+}
+function tpSiblings(t){   // 同じ定例・同じグループ（持ち越し／この回）の中で入れ替える
+  return tpOrdered(state.topics.filter(x=>x&&x.meetingId===t.meetingId && (!!x.from)===(!!t.from)));
+}
+function moveTopic(id, d){
+  const t=state.topics.find(x=>x&&x.id===id); if(!t) return;
+  const g=tpSiblings(t), i=g.findIndex(x=>x.id===id), j=i+d;
+  if(i<0 || j<0 || j>=g.length) return;
+  g.splice(j,0,g.splice(i,1)[0]);
+  g.forEach((x,k)=>{ if(x.ord!==k){ x.ord=k; x._u=Date.now(); } });
+  save(); renderTopics();
+}
+function nextOrd(meetingId){    // 追加したものは末尾に置く
+  const g=state.topics.filter(x=>x&&x.meetingId===meetingId);
+  return g.reduce((mx,x)=>Math.max(mx, (typeof x.ord==='number')?x.ord:-1), -1)+1;
+}
 function tpCard(t){
   const src=t.from ? state.meetings.find(x=>x&&x.id===t.from) : null;
   const open=_tpOpenCards.has(t.id);
@@ -2554,6 +2595,8 @@ function tpCard(t){
     `<div class="r1">`+
       `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'「まだ話していない」に戻す':'この回で話した（済）にする。タスクの完了ではありません'}">${t.done?'✓':''}</button>`+
       tpCell(t,'todo','todo','やること・話したいこと')+
+      `<span class="ord"><button data-mv="${esca(t.id)}|-1" title="上へ（話す順を変える）">▲</button>`+
+      `<button data-mv="${esca(t.id)}|1" title="下へ（話す順を変える）">▼</button></span>`+
       `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'メモ・リンク・カルテなどを書く'}">${open?'▾ とじる':'▸ 詳細'}</button>`+
     `</div>`+
     `<div class="r2">`+
@@ -2592,7 +2635,7 @@ function tpCard(t){
 function addTopicQuick(){
   const el=document.getElementById('tpQuick'); if(!el||!_openMeeting) return;
   const v=el.value.trim(); if(!v){ el.focus(); return; }
-  state.topics.push({ id:uid('tp'), meetingId:_openMeeting, done:false, name:meAuthor(), todo:v, detail:'', _u:Date.now() });
+  state.topics.push({ id:uid('tp'), meetingId:_openMeeting, done:false, name:meAuthor(), todo:v, detail:'', ord:nextOrd(_openMeeting), _u:Date.now() });
   save(); renderTopics();
   const n=document.getElementById('tpQuick'); if(n){ n.value=''; n.focus(); }
 }
@@ -2614,7 +2657,7 @@ function tpGroup(rows, label, cls){
 function renderMeetingTable(box){
   const m=state.meetings.find(x=>x.id===_openMeeting);
   const rows=state.topics.filter(t=>t&&t.meetingId===_openMeeting);
-  const carried=rows.filter(t=>t.from), own=rows.filter(t=>!t.from);
+  const carried=tpOrdered(rows.filter(t=>t.from)), own=tpOrdered(rows.filter(t=>!t.from));
   const movedOut=state.topics.filter(t=>t&&t.from===m.id);   // この回から次回へ移したもの（痕跡として残す）
   let h=`<div class="tphd"><button class="tpback" id="tpBack">← 定例一覧</button>`+
         `<button class="tpgcal" id="tpGcal" title="Googleカレンダーに予定を作成（概要とお題を説明欄に、ログイン済みメンバーを招待先に自動セット）">📅 カレンダー登録</button></div>`+
@@ -2683,7 +2726,7 @@ function carryOlderCount(m){
 // 候補を「この回」へ入れる（前の回からの持ち越しとして記録）
 function carryTopicTo(id, mtId){
   const t=state.topics.find(x=>x&&x.id===id); if(!t||!mtId||t.meetingId===mtId) return;
-  t.from=t.meetingId; t.meetingId=mtId; t.done=false; t._u=Date.now();
+  t.from=t.meetingId; t.meetingId=mtId; t.done=false; t.ord=nextOrd(mtId); t._u=Date.now();
   save(); renderTopics();
 }
 // 未対応のまま終わったお題を次の定例へ移す。元の回には「→次回へ持ち越した」痕跡が残る（t.from）。
@@ -2692,7 +2735,7 @@ function carryTopic(id){
   const cur=state.meetings.find(x=>x&&x.id===t.meetingId); if(!cur) return;
   const nx=mtSorted().find(x=>String(x.date||'')>String(cur.date||''));
   if(!nx){ alert('次の定例がまだ登録されていません。\n「← 定例一覧」→「＋ 定例を追加」で次回を登録してから移してください。'); return; }
-  t.from=cur.id; t.meetingId=nx.id; t.done=false; t._u=Date.now();
+  t.from=cur.id; t.meetingId=nx.id; t.done=false; t.ord=nextOrd(nx.id); t._u=Date.now();
   save(); renderTopics();                        // 画面はこの回のまま（下の「→ 次回へ持ち越したお題」に出る）
   tpToast(`「${(t.todo||'このお題')}」を ${mtWhenLine(nx)} の${nx.title||'定例'}へ送りました`);
 }
@@ -2720,17 +2763,19 @@ function setMtField(field, val){ const m=state.meetings.find(x=>x.id===_openMeet
   if((m[field]||'')===val) return; m[field]=val; m._u=Date.now(); save(); renderTopics(); }
 function delMeeting(id){ const m=state.meetings.find(x=>x.id===id); if(!m) return; const c=mtCounts(id);
   if(!confirm('定例「'+(m.title||'')+' '+(m.date||'')+'」を削除しますか？\nこの定例のお題 '+c.total+'件も一緒に削除されます。')) return;
+  logAct('定例', (m.title||'')+' '+(m.date||''));
   state.meetings=state.meetings.filter(x=>x.id!==id);
   state.topics=state.topics.filter(t=>!(t&&t.meetingId===id));
   if(_openMeeting===id) _openMeeting=null;
   save(); renderTopics(); }
 function addRow(){ if(!_openMeeting) return;
-  const t={ id:uid('tp'), meetingId:_openMeeting, done:false, name:meAuthor(), todo:'', detail:'', _u:Date.now() };
+  const t={ id:uid('tp'), meetingId:_openMeeting, done:false, name:meAuthor(), todo:'', detail:'', ord:nextOrd(_openMeeting), _u:Date.now() };
   state.topics.push(t); save(); renderTopics();
   const cell=document.querySelector('#topicBody [data-edit="'+t.id+'"][data-field="todo"]'); if(cell) cell.focus(); }
 function toggleTopic(id){ const t=state.topics.find(x=>x&&x.id===id); if(!t) return; t.done=!t.done; t._u=Date.now(); save(); renderTopics(); }
 function delTopic(id){ const t=state.topics.find(x=>x&&x.id===id); if(!t) return;
-  if((t.name||t.todo||t.detail) && !confirm('この行を削除しますか？')) return;
+  if((t.name||t.todo||t.detail) && !confirm('このお題を削除しますか？')) return;
+  logAct('お題', t.todo||t.name||'(無題)');
   state.topics=state.topics.filter(x=>x&&x.id!==id); save(); renderTopics(); }
 function editCell(id, field, text){ const t=state.topics.find(x=>x&&x.id===id); if(!t||!field) return;
   const v=String(text==null?'':text), cur=(t[field]==null?'':String(t[field]));
@@ -2883,6 +2928,7 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   const ct=e.target.closest('[data-carryto]'); if(ct){ carryTopicTo(ct.dataset.carryto, _openMeeting); return; }
   const uc=e.target.closest('[data-uncarry]'); if(uc){ uncarryTopic(uc.dataset.uncarry); return; }
   const dl=e.target.closest('[data-del]'); if(dl){ delTopic(dl.dataset.del); return; }
+  const mv=e.target.closest('[data-mv]'); if(mv){ const [i,d]=mv.dataset.mv.split('|'); moveTopic(i, +d); return; }
   const ex=e.target.closest('[data-expand]'); if(ex){ toggleCard(ex.dataset.expand); return; }
   const td=e.target.closest('[data-today]'); if(td){ addTodayLog(td.dataset.today); return; }
   const ul=e.target.closest('[data-unlink]'); if(ul){ delTaskLink(ul.dataset.unlink, ul.dataset.node); return; }
@@ -3043,11 +3089,17 @@ document.getElementById('myModal').addEventListener('click', e=>{ if(e.target.id
 
 // ===== 変更履歴 =====
 function renderHistory(){ const box=document.getElementById('histBody'); if(!box) return;
-  const arr=[]; walkAll(state.tree, n=>{ if(n&&n._u) arr.push(n); });
-  arr.sort((a,b)=>(+b._u||0)-(+a._u||0));
-  const top=arr.slice(0,60);
+  const arr=[];
+  walkAll(state.tree, n=>{ if(n&&n._u) arr.push({ t:+n._u, by:n._by, label:n.name||'(無題)', tag:'' }); });
+  (state.meetings||[]).forEach(m=>{ if(m&&m._u) arr.push({ t:+m._u, by:m._by, label:(m.title||'定例'), tag:'定例' }); });
+  (state.topics||[]).forEach(t=>{ if(t&&t._u) arr.push({ t:+t._u, by:t._by, label:(t.todo||'(無題のお題)'), tag:'お題' }); });
+  (state.log||[]).forEach(l=>{ if(l&&l.t) arr.push({ t:+l.t, by:l.by, label:l.name||'(無題)', tag:l.kind, del:true }); });
+  arr.sort((a,b)=>(b.t||0)-(a.t||0));
+  const top=arr.slice(0,80);
   let h=`<div class="tpsec">最近の変更（${top.length}）</div>`;
-  h+= top.length? top.map(n=>`<div class="smrow"><span class="smn">${esc(n.name||'(無題)')}</span><span class="smmeta">${esc((String(n._by||'').split('@')[0])||'—')} ／ ${fmtBkTime(+n._u)}</span></div>`).join('')
+  h+= top.length? top.map(x=>`<div class="smrow"><span class="smn">`+
+        (x.tag?`<span class="htag${x.del?' del':''}">${esc(x.del?('削除 '+x.tag):x.tag)}</span> `:'')+
+        `${esc(x.label)}</span><span class="smmeta">${esc((String(x.by||'').split('@')[0])||'—')} ／ ${fmtBkTime(x.t)}</span></div>`).join('')
     : '<div class="tpempty">変更履歴はまだありません（編集すると記録されます）。</div>';
   box.innerHTML=h; }
 document.getElementById('histBtn').addEventListener('click', ()=>{ closeMore(); renderHistory(); document.getElementById('histModal').classList.add('on'); });
