@@ -972,7 +972,6 @@
 </div></div>
 <header>
   <h1>AI推進スケジューラ</h1>
-  <span class="sub" id="subtitle"></span>
   <div class="toolbar">
     <!-- 表示（期間の見せ方）-->
     <span class="seg" id="viewSeg">
@@ -1040,7 +1039,7 @@
   <button id="noteToggle" title="備考カラムの表示／非表示">備考 ▼</button>
   <button id="depToggle" title="依存関係の矢印を表示／非表示（詳細パネルの「依存」に先行No.を入力）">🔗 依存線 ▷</button>
   <button id="barLabelToggle" title="ガントのバーに作業名を表示／非表示">🏷 バーに名前 ▼</button>
-  <div class="mrow">📅 期間 <input type="date" id="pStart"><span>〜</span><input type="date" id="pEnd"></div>
+  <div class="mrow">📅 表示する期間 <input type="date" id="pStart"><span>〜</span><input type="date" id="pEnd"></div>
   <div class="mlabel">ビュー・履歴</div>
   <button id="myBtn" title="自分が担当の作業だけをまとめて表示">👤 自分の作業</button>
   <button id="histBtn" title="誰がいつ何を変えたかの履歴">📜 変更履歴</button>
@@ -1919,8 +1918,7 @@ function renderLegend(){
     items.map(([c,l])=>`<span class="item"><span class="swatch" style="background:${c}"></span>${l}</span>`).join('');
 }
 function renderSubtitle(){
-  const v={month:'マンスリー',week:'ウィークリー',day:'デイリー'}[state.view];
-  document.getElementById('subtitle').textContent=`${v}ガント（${state.projectStart} 〜 ${state.projectEnd}）`;
+  // 期間は「⚙管理 → 📅 期間」に、ビューの種類は月/週/日ボタンに出ているので見出し横には出さない
   const bi=document.getElementById('baseInfo');   // ベースファイル名は⚙管理の中に表示
   if(bi){ const nm=state.baseFile?String(state.baseFile).split(/[\\/]/).pop():'（未取込）'; bi.textContent='ベース: '+nm; }
 }
