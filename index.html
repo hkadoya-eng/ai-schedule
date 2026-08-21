@@ -370,6 +370,9 @@
   .tpfold:hover{border-color:var(--teal); color:var(--text);}
   .tpfold .n{margin-left:auto; font-variant-numeric:tabular-nums;}
   .tpfold .cx{width:12px; display:inline-block;}
+  .tpfold.warn{border-color:rgba(242,199,96,.45); color:var(--text);}
+  .tpfold.warn .n{color:#f2c760; font-weight:700;}
+  body.theme-light .tpfold.warn .n{color:#9a6d05;}
   /* サマリーの人別ブロック */
   .psseg{display:flex; gap:6px; margin-bottom:14px;}
   .psseg button{flex:1; padding:7px 10px; font-size:12.5px; border:1px solid var(--line); background:var(--panel2);
@@ -2513,9 +2516,9 @@ let _mtEdit=false, _noteEdit=false;   // 定例の日時／概要を「書き換
 function _foldGet(k,def){ try{ const v=localStorage.getItem(k); return v==null?def:(v==='1'); }catch(e){ return def; } }
 let _mtFoldPast=_foldGet('ai_sched_mtfoldpast', true);     // 定例一覧：過ぎた回を畳む
 let _tpFoldDone=_foldGet('ai_sched_tpfolddone', true);     // 開いた回：済んだお題を畳む
-function foldHead(kind, label, n, folded){
-  return `<button class="tpfold" data-fold="${kind}" title="${folded?'開いて表示します':'畳んで隠します'}">`+
-    `<span class="cx">${folded?'▸':'▾'}</span>${label}<span class="n">${n}件</span></button>`;
+function foldHead(kind, label, n, folded, warn){
+  return `<button class="tpfold${warn?' warn':''}" data-fold="${kind}" title="${folded?'開いて表示します':'畳んで隠します'}">`+
+    `<span class="cx">${folded?'▸':'▾'}</span>${label}<span class="n">${warn?warn+' ／ ':''}${n}件</span></button>`;
 }
 function tpFoldGroup(rows, kind, label, cls, folded){
   if(!rows.length) return '';
@@ -2538,8 +2541,10 @@ function roomOpts(sel){ let o='<option value="">（会議室なし）</option>';
   if(sel && !found) o+=`<option value="${esca(sel)}" selected>${esc(sel)}（その他）</option>`;
   return o; }
 function roomRes(name){ const r=ROOMS.find(x=>x.k===name); return r?r.res:''; }
-function tpFoldPast(inner, n){
-  return foldHead('past','🗂 過去ログ（終わった定例）', n, _mtFoldPast)+(_mtFoldPast?'':inner);
+// 畳んだままだと「終わった回に未対応が残っている」ことに気づけなくなるので、見出しに件数を出す。
+function tpFoldPast(inner, n, pending){
+  return foldHead('past','🗂 過去ログ（終わった定例）', n, _mtFoldPast,
+                  pending?('⚠ 未対応 '+pending+'件が残っています'):'')+(_mtFoldPast?'':inner);
 }
 function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
@@ -2566,7 +2571,11 @@ function renderMeetingList(box){
   else {
     h+= up.length ? up.map(mtRow).join('')
       : `<div class="tpempty">これからの定例が登録されていません。</div>`;
-    if(past.length) h+=tpFoldPast(past.slice().reverse().map(mtRow).join(''), past.length);
+    if(past.length){
+      const pastIds=new Set(past.map(m=>m.id));
+      const pend=state.topics.filter(t=>t&&!t.done&&pastIds.has(t.meetingId)).length;
+      h+=tpFoldPast(past.slice().reverse().map(mtRow).join(''), past.length, pend);
+    }
   }
   // 全部過ぎている＝次回が未登録。前回を引き継いだ登録を促す
   if(list.length && !nextId) h+=`<div class="tpempty">直近の定例は終了しています。「＋ 定例を追加」で次回を登録してください。<b>日付は直近の開催間隔からの推定値</b>なので、招待メール・カレンダーで確認してから追加してください。</div>`;
