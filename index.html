@@ -2589,6 +2589,12 @@ function renderMeetingList(box){
        `<input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）" value="${esca(d.title||'')}">`+
        `<input id="mtDate" type="date" title="日付" value="${esca(d.date||'')}"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts(d.start||'','開始')}</select><span class="mtsep">〜</span>`+
        `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts(d.end||'','終了')}</select><select id="mtRoom" class="tsel rmsel" title="会議室">${roomOpts(d.room||'')}</select>`+
+       // 「次回を登録」は毎サイクル必ず人がやる操作。ここにSlack通知を相乗りさせることで、
+       // 「週1で誰かがボタンを押す係」を作らずに進捗共有が回る。既定ON・チェックは端末に記憶。
+       `<label id="mtNotifyWrap" title="追加すると同時に、次回の日程＋いまの進捗＋人別の要対応をSlackの所定のチャンネルに1本投稿します" `+
+         `style="display:${slackReady()?'inline-flex':'none'};align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap">`+
+         `<input type="checkbox" id="mtNotify"${mtNotifyPref()?' checked':''} style="margin:0"> 登録したらSlackで知らせる`+
+       `</label>`+
        `<button id="mtAddBtn">追加</button>`+
      `</div></div>`;
   box.innerHTML=h;
@@ -3138,8 +3144,19 @@ function addMeeting(){ const g=id=>document.getElementById(id);
   const title=(g('mtTitle')&&g('mtTitle').value.trim())||'', date=(g('mtDate')&&g('mtDate').value)||'';
   const start=(g('mtStart')&&g('mtStart').value)||'', end=(g('mtEnd')&&g('mtEnd').value)||'', room=(g('mtRoom')&&g('mtRoom').value.trim())||'';
   if(!title && !date){ alert('定例名か日付を入れてください。'); return; }
+  // チェック状態は renderTopics() で DOM が作り直される前に読む（後で読むと必ず null になる）
+  const nb=g('mtNotify'), want=!!(nb&&nb.checked&&slackReady());
+  if(nb){ try{ localStorage.setItem('ai_sched_mtnotify', nb.checked?'1':'0'); }catch(e){} }
   state.meetings.push({ id:uid('mt'), title:title||'定例', date, start, end, room, _u:Date.now() });
-  save(); renderTopics(); }
+  save(); renderTopics();
+  if(!want) return;
+  // 日付の打ち直し等で短時間に2回登録することは実際にある。そのまま投げると二重投稿になるので確認する。
+  const lp=(state.slack&&state.slack.last)||null;
+  if(lp && lp.t && (Date.now()-lp.t) < 60*60*1000){
+    if(!confirm('定例を登録しました。\n\nただしSlackへは '+fmtBkTime(lp.t)+' に投稿済みです（1時間以内）。\n'+
+                'もう一度投稿するとチャンネルに2本並びます。投稿しますか？')) return;
+  }
+  postToSlack(slackText()); }
 function setMtField(field, val){ const m=state.meetings.find(x=>x.id===_openMeeting); if(!m||!field) return;
   if((m[field]||'')===val) return; m[field]=val; m._u=Date.now(); save(); renderTopics(); }
 // 定例の削除。中止・日程変更は必ず起きるので、お題を巻き添えで消さないことを最優先にする。
@@ -3965,6 +3982,11 @@ function slackText(){
     });
     if(mm.nextTp.length>SL_TP_MAX) L.push('・ほか '+(mm.nextTp.length-SL_TP_MAX)+'件（ボードで見られます）');
     L.push('_話したいことがあれば、当日までにボードに足しておいてください。_');
+  } else if(mm.next){
+    // 「次回を登録」直後はお題が0件。ここを空欄にすると投稿の意味が薄くなるので、お題募集の呼びかけにする。
+    L.push('');
+    L.push('*次回のお題*　まだ登録がありません');
+    L.push('_話したいことがあれば、当日までにボードに足しておいてください。_');
   }
   L.push('');
   const rows=co.people.map(p=>({p, ci:coItems(p)})).filter(v=>v.ci.act>0);
@@ -3988,6 +4010,11 @@ function slackText(){
 //   「単純リクエスト」）。プリフライトが無いぶん送信そのものは必ず飛ぶが、Slackが応答に
 //   CORSヘッダを付けないため fetch は reject することがある。**その場合も送信は届いている**ので、
 //   ここで絶対に再送してはいけない（二重投稿になる）。結果が読めないことは正直に画面に出す。
+// Webhookが登録済みか。未登録なら通知系のUIはそもそも出さない（押せないボタンを見せない）
+function slackReady(){ ensureBoards();
+  return /^https:\/\/hooks\.slack\.com\//.test(String((state.slack&&state.slack.url)||'').trim()); }
+// 「登録したらSlackで知らせる」の記憶。共有ボードに入れず端末ローカル（人によって好みが違う操作なので）
+function mtNotifyPref(){ try{ return localStorage.getItem('ai_sched_mtnotify')!=='0'; }catch(e){ return true; } }
 async function postToSlack(text){
   ensureBoards();
   const url=String((state.slack&&state.slack.url)||'').trim();
