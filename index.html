@@ -3951,6 +3951,8 @@ function callOutText(){
   return L.join('\n');
 }
 // ===== Slack（所定のチャンネルに1本投げる） =====
+// 投稿画面で人が直した文面。null＝未編集（自動生成のまま）。開き直す／送信できた時点で破棄する。
+let _slackDraft=null;
 // チャンネルは全員が見るので、メンションID（<@U…>）は使わず名前の文字だけにしている。
 // 通知で急かすのではなく「並んでいるのが見える」ことを狙う。だから文面は短く、名前が縦に並ぶ形。
 function slackNums(){ const co=callOutData(); return { pct:co.d.pct, done:co.d.done, total:co.d.total, late:co.d.late.length, stale:co.st.length }; }
@@ -4053,18 +4055,28 @@ function renderSlackCfg(){
       +(sl.last.confirmed?'':'（送信結果は未確認）')+'</span><span class="smmeta">全体 '+sl.last.pct+'% ／ 遅延 '+sl.last.late+' ／ 停滞 '+sl.last.stale+'</span></div>';
     h+='<div class="smnote">次の投稿では、この数字との差分（前回 7 → −2 など）が文面に入ります。</div>';
   }
-  h+='<div class="tpsec">いま投稿するとこうなります</div>';
-  h+='<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;margin:0">'+esc(slackText())+'</pre>';
+  // 文面はそのまま直せる。「ツールを入れました」等のひとことを冒頭に足したい、が実際の要求だった。
+  // 自動生成はあくまで下書き＝人が最後に整える。編集内容は _slackDraft に持つ（開き直すと作り直し）。
+  h+='<div class="tpsec">投稿する文面（そのまま直せます）'
+    +'<button class="ghost" id="slackReset" style="float:right;font-size:11px;padding:1px 6px" title="編集を捨てて、いまのボードから文面を作り直します">↺ 自動生成に戻す</button></div>';
+  h+='<textarea id="slackMsg" spellcheck="false" style="width:100%;box-sizing:border-box;min-height:220px;resize:vertical;'
+    +'white-space:pre-wrap;font-size:12px;line-height:1.6;font-family:inherit;background:var(--panel2);'
+    +'border:1px solid var(--line);border-radius:8px;padding:10px;margin:0;color:inherit">'+esc(_slackDraft!=null?_slackDraft:slackText())+'</textarea>';
+  h+='<div class="smnote">*太字* ／ _斜体_ ／ &lt;URL|表示文字&gt; はSlackの書式です。改行はそのまま反映されます。</div>';
   if(!ok) h+='<div class="smnote warn">URLが未登録（または形式ちがい）です。投稿ボタンは押せません。</div>';
   box.innerHTML=h;
   const u=document.getElementById('slackUrl'), l=document.getElementById('slackLabel');
   const put=()=>{ state.slack.url=u.value.trim(); state.slack.label=l.value.trim(); state.slack._u=Date.now(); save(); };
   if(u) u.addEventListener('change', ()=>{ put(); renderSlackCfg(); });
   if(l) l.addEventListener('change', put);
+  // 編集は共有ボードに入れない（1回きりの文面なので、他の人の画面に出す意味がない）
+  const ta=document.getElementById('slackMsg');
+  if(ta) ta.addEventListener('input', ()=>{ _slackDraft=ta.value; });
   const post=document.getElementById('slackPost'), test=document.getElementById('slackTest');
   if(post) post.disabled=!ok; if(test) test.disabled=!ok;
 }
-function openSlackCfg(){ closeMore(); renderSlackCfg(); document.getElementById('slackModal').classList.add('on'); }
+// 開くたびに文面を作り直す。前回の編集を残すと、古い数字のまま投稿してしまう事故が起きる。
+function openSlackCfg(){ closeMore(); _slackDraft=null; renderSlackCfg(); document.getElementById('slackModal').classList.add('on'); }
 // ===== 人ベースのサマリー =====
 // 作業ベースだと「誰がどれだけ抱えているか／手が空いているか」が読めない。
 // 呼びかけにも人員配分にも使うので、要対応が多い人＝呼びかける順に並べる。
@@ -4228,7 +4240,15 @@ document.getElementById('sumBtn').addEventListener('click', ()=>{ renderSummary(
 document.getElementById('slackBtn').addEventListener('click', openSlackCfg);
 document.getElementById('slackModal').addEventListener('click', e=>{
   if(e.target.id==='slackModal'||e.target.id==='slackClose'){ document.getElementById('slackModal').classList.remove('on'); return; }
-  if(e.target.closest('#slackPost')){ postToSlack(slackText()); return; }
+  if(e.target.closest('#slackReset')){ _slackDraft=null; renderSlackCfg(); return; }
+  if(e.target.closest('#slackPost')){
+    // 投稿するのは「画面に見えている文面」。自動生成ではなく人が確認した文が飛ぶ。
+    const ta=document.getElementById('slackMsg');
+    const txt=String((ta? ta.value : (_slackDraft!=null?_slackDraft:slackText()))||'').trim();
+    if(!txt){ alert('文面が空です。'); return; }
+    if(!confirm('Slack'+(state.slack.label?('の '+state.slack.label):'の所定のチャンネル')+'に、この文面を投稿します。よろしいですか？')) return;
+    postToSlack(txt).then(ok=>{ if(ok){ _slackDraft=null; renderSlackCfg(); } });   // 送れたら下書きは破棄
+    return; }
   if(e.target.closest('#slackTest')){ postToSlack('🧪 テスト投稿です（AI推進スケジューラ）。これが見えていれば設定はOKです。'); return; }
 });
 document.getElementById('summaryModal').addEventListener('click', e=>{
