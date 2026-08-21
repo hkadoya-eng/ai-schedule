@@ -3990,7 +3990,9 @@ function slackText(){
   // 「次回のお題」とは別枠で必ず出す。次回へ移した分は上の一覧に「／持ち越し」で出るので二重にならない。
   if(mm.prev && mm.prevOpen.length){
     L.push('');
-    L.push('*前回（'+mtWhenLine(mm.prev)+'）で片づいていないお題*（'+mm.prevOpen.length+'件）');
+    // 文言は「片づいていない」→「前回から続いている」。チャンネルで人の目に触れるので、
+    // 状態の説明だけにして責める語感を残さない（ユーザー指示・2026-08-21）。
+    L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いているお題*（'+mm.prevOpen.length+'件）');
     mm.prevOpen.slice(0,SL_TP_MAX).forEach(t=>{
       L.push('・'+(t.todo||'(無題)')+(t.name?'（'+t.name+'）':''));
     });
