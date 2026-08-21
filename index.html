@@ -3881,6 +3881,7 @@ function callOutData(){
   return { d, st, people };
 }
 const CO_MAX=10;                                   // 長い一覧は切るが、切ったことは必ず書く
+const SL_TP_MAX=6;                                 // Slackに載せる次回のお題の上限（長いと読まれない）
 function coName(x){ return String(x.n.name||''); }
 function coDue(x){ const e=effEnd(x.n); return e?mdNum(parse(e)):null; }
 // 同じ作業が「遅延」「停滞」「今週」に3重で並ぶと読む気が失せるので、1作業=1行にまとめる。
@@ -3952,6 +3953,19 @@ function slackText(){
   { const a=actualHours(); if(a.cnt) L.push('AI工数削減（実績）'+a.old+'h → '+a.act+'h ＝ *'+a.pct+'%減*'); }
   if(mm.next) L.push('次回の定例　'+mtWhenLine(mm.next));
   L.push('<'+APP_URL+'|▶ ボードを開く>');
+  // 次回のお題も載せる。当日いきなり集まるより、事前に見ておいてもらう方が呼びかけとして効く。
+  if(mm.next && mm.nextTp.length){
+    const open=mm.nextTp.filter(t=>!t.done).length;
+    L.push('');
+    L.push('*次回のお題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
+    const note=String(mm.next.note||'').replace(/\s+/g,' ').trim();
+    if(note) L.push('_ねらい：'+(note.length>90?note.slice(0,90)+'…':note)+'_');
+    mm.nextTp.slice(0,SL_TP_MAX).forEach(t=>{
+      L.push('・'+(t.done?'[済] ':'')+(t.todo||'(無題)')+(t.name?'（'+t.name+'）':'')+(t.from?'／持ち越し':''));
+    });
+    if(mm.nextTp.length>SL_TP_MAX) L.push('・ほか '+(mm.nextTp.length-SL_TP_MAX)+'件（ボードで見られます）');
+    L.push('_話したいことがあれば、当日までにボードに足しておいてください。_');
+  }
   L.push('');
   const rows=co.people.map(p=>({p, ci:coItems(p)})).filter(v=>v.ci.act>0);
   if(!rows.length) L.push('*要対応なし* 🎉 全部きちんと動いています');
