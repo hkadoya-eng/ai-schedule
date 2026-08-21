@@ -1071,6 +1071,7 @@
   <button id="myBtn" title="自分が担当の作業だけをまとめて表示">👤 自分の作業</button>
   <button id="histBtn" title="誰がいつ何を変えたかの履歴">📜 変更履歴</button>
   <div class="mlabel">メンバー・予定</div>
+  <button id="actBtn" title="誰が動いていないか。担当欄の全員×ログイン・記入・担当の動きを突き合わせます">👥 稼働状況（誰が動いていない？）</button>
   <button id="memBtn" title="アプリにログインした人の一覧（打合せの招待先候補）">👥 ログイン済みメンバー</button>
   <button id="msBtn" title="申請日・納期などの締切をガントに縦線で表示">🚩 マイルストーン</button>
   <button id="slackBtn" title="進捗の要約をSlackの所定のチャンネルに投稿する（Incoming Webhook）">💬 Slack投稿の設定</button>
@@ -1159,6 +1160,12 @@
   <div class="mh"><div class="t">🚩 マイルストーン</div><div class="s">申請日・納期・審査など「締切の日」を登録すると、ガント上に縦線とKPI下の帯で表示されます。</div></div>
   <div class="mb" id="msBody"></div>
   <div class="mf"><button class="ghost" id="msClose">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="actModal"><div class="m">
+  <div class="mh"><div class="t">👥 稼働状況</div><div class="s">担当欄に名前がある人ぜんぶを名簿にして、アプリを開いたか・記入したか・担当が動いているかを突き合わせます。<b>まだ開いていない人</b>が上に来ます。</div></div>
+  <div class="mb" id="actBody"></div>
+  <div class="mf"><button class="ghost" id="actClose">閉じる</button></div>
 </div></div>
 
 <div class="modal" id="slackModal"><div class="m">
@@ -3538,12 +3545,98 @@ document.getElementById('findModal').addEventListener('click', e=>{
   if(mt){ document.getElementById('findModal').classList.remove('on'); openTopics(mt.dataset.findmt); return; }
   if(e.target.closest('[data-detail]')) document.getElementById('findModal').classList.remove('on');   // カルテは既存の仕組みが開く
 });
+// ===== 稼働状況（誰が動いていないか） =====
+// 「👥 ログイン済みメンバー」は"来た人"の名簿なので、肝心の"来ていない人"が出てこない。
+// ここでは担当欄に名前がある全員を名簿にして、ログイン・編集・担当の動きを突き合わせる。
+function rosterNames(){                       // 担当欄に出てくる人＝本来アプリを使うべき人の全員
+  const set=new Map();                        // name -> 担当件数（完了以外も含む全件）
+  collectLeafInfo().forEach(x=>{ ownersOf(x.role).forEach(nm=>set.set(nm,(set.get(nm)||0)+1)); });
+  return set;
+}
+// 担当欄の「山根」と、ログイン名簿の Google表示名「山根 大輔」を突き合わせる。
+// メールのローカル部はローマ字（d_yamane 等）で漢字と当たらないので、表示名だけで照合する。
+// 空白と記号だけ落として括弧の中身は残す（「伊藤(真)」→伊藤真 が「伊藤 真」→伊藤真 と一致する）。
+function normName(v){ return String(v||'').replace(/[\s　()（）・･,、.]/g,''); }
+// 2人以上に当たるときは決めない（勘で当てると別人を「記入済み」にしてしまう）。ambiguousで返す。
+function matchMember(name){
+  const k=normName(name); if(!k) return { m:null, ambiguous:false };
+  const cand=(state.members||[]).map(m=>({m, nm:normName(m.name)})).filter(v=>v.nm);
+  const exact=cand.filter(v=>v.nm===k); if(exact.length===1) return { m:exact[0].m, ambiguous:false };
+  const hit=cand.filter(v=>v.nm.indexOf(k)>=0 || k.indexOf(v.nm)>=0);
+  return hit.length===1 ? { m:hit[0].m, ambiguous:false } : { m:null, ambiguous:hit.length>1 };
+}
+// この人が実際に何かを編集した最後の時刻（_by は最後に編集した人のメール）
+function lastEditBy(email){
+  let t=0;
+  if(!email) return 0;
+  walkAll(state.tree, n=>{ if(n && n._by===email && (+n._u||0)>t) t=+n._u; });
+  (state.topics||[]).forEach(x=>{ if(x && x._by===email && (+x._u||0)>t) t=+x._u; });
+  (state.meetings||[]).forEach(x=>{ if(x && x._by===email && (+x._u||0)>t) t=+x._u; });
+  (state.log||[]).forEach(x=>{ if(x && x.by===email && (+x.t||0)>t) t=+x.t; });
+  return t;
+}
+function activityData(){
+  ensureBoards();
+  const roster=rosterNames(), st=staleList(), d=summaryData();
+  const cnt=(arr,pick)=>{ const m=new Map(); arr.forEach(v=>{ ownersOf(pick(v)).forEach(nm=>m.set(nm,(m.get(nm)||0)+1)); }); return m; };
+  const staleBy=cnt(st, v=>v.x.role), lateBy=cnt(d.late, x=>x.role);
+  const doneBy=new Map(); collectLeafInfo().forEach(x=>{ if(getStage(x.n)==='完了') ownersOf(x.role).forEach(nm=>doneBy.set(nm,(doneBy.get(nm)||0)+1)); });
+  const rows=[...roster.entries()].map(([name,total])=>{
+    const mm=matchMember(name), m=mm.m, le=m?lastEditBy(m.id):0;
+    return { name, total, done:doneBy.get(name)||0, late:lateBy.get(name)||0, stale:staleBy.get(name)||0,
+             member:m, ambiguous:mm.ambiguous, lastSeen:m?(+m.lastSeen||0):0, lastEdit:le };
+  });
+  // 呼びかける順：未ログイン → 一度も編集していない → 停滞が多い
+  const rank=r=> r.member?(r.lastEdit?2:1):0;
+  rows.sort((a,b)=> rank(a)-rank(b) || b.stale-a.stale || b.late-a.late || a.name.localeCompare(b.name,'ja'));
+  const never=rows.filter(r=>!r.member&&!r.ambiguous), noEdit=rows.filter(r=>r.member&&!r.lastEdit);
+  const amb=rows.filter(r=>r.ambiguous);
+  // 担当欄に名前が無いのにログインしている人（管理側・見るだけの人）も出す
+  const known=new Set(rows.map(r=>r.member&&r.member.id).filter(Boolean));
+  const others=(state.members||[]).filter(m=>m&&!known.has(m.id));
+  return { rows, never, noEdit, amb, others };
+}
+function renderActivity(){
+  const box=document.getElementById('actBody'); if(!box) return;
+  const a=activityData();
+  let h='';
+  h+=`<div class="smstat"><div><b>${a.rows.length}</b><span>担当がいる人</span></div>`
+   + `<div class="${a.never.length?'bad':''}"><b>${a.never.length}</b><span>まだ開いていない</span></div>`
+   + `<div class="${a.noEdit.length?'bad':''}"><b>${a.noEdit.length}</b><span>開いたが未記入</span></div>`
+   + `<div><b>${a.rows.length-a.never.length-a.noEdit.length}</b><span>動いている</span></div></div>`;
+  if(a.never.length) h+=`<div class="smnote warn">まず声をかける相手：<b>${a.never.map(r=>esc(r.name)).join('・')}</b>（アプリを一度も開いていません）</div>`;
+  else if(a.noEdit.length) h+=`<div class="smnote warn">開いたけれど何も書いていない：<b>${a.noEdit.map(r=>esc(r.name)).join('・')}</b></div>`;
+  else h+=`<div class="smnote">担当がいる全員がアプリを開いて、記入もしています 🎉</div>`;
+  h+=`<div class="tpsec">担当がいる人（呼びかける順）</div>`;
+  h+= a.rows.length ? a.rows.map(r=>{
+        const state1 = r.ambiguous ? '<b style="color:#f2c760">判定できず（同名候補が複数）</b>'
+                     : !r.member ? '<b style="color:#ff6b6b">未ログイン</b>'
+                     : !r.lastEdit ? '<b style="color:#f2c760">ログインのみ</b>'
+                     : '記入あり '+fmtBkTime(r.lastEdit);
+        return `<div class="smrow"><span class="smn">${esc(r.name)}`
+             + (r.member?` <span style="color:var(--muted);font-size:11px">${esc(String(r.member.id||'').split('@')[0])}</span>`:'')
+             + `</span><span class="smmeta">${state1} ／ 担当 ${r.total}（完了 ${r.done}`
+             + (r.late?` ・遅延 ${r.late}`:'') + (r.stale?` ・停滞 ${r.stale}`:'') + `）`
+             + (r.lastSeen?` ／ 最終ログイン ${fmtBkTime(r.lastSeen)}`:'') + `</span></div>`;
+      }).join('')
+    : `<div class="tpempty">担当欄に名前がある人が見つかりません。担当欄が空か「（要検討）」だけの可能性があります。</div>`;
+  if(a.others.length){
+    h+=`<div class="tpsec">担当欄に名前がないログイン者（${a.others.length}）</div>`
+     + a.others.map(m=>`<div class="smrow"><span class="smn">${esc(m.name||'(名前未取得)')} <span style="color:var(--muted);font-size:11px">${esc(String(m.id||'').split('@')[0])}</span></span><span class="smmeta">最終ログイン ${m.lastSeen?fmtBkTime(m.lastSeen):'—'}</span></div>`).join('');
+  }
+  if(a.amb.length) h+=`<div class="smnote warn">名前が複数人に当たって判定できませんでした：<b>${a.amb.map(r=>esc(r.name)).join('・')}</b>（担当欄の表記を分けてください）</div>`;
+  h+=`<div class="smnote">「未ログイン」の判定は<b>担当欄の名前と、ログインした人のGoogle表示名の突き合わせ</b>です。`
+   + `表示名が違う書き方（旧姓・英字など）だと未ログイン扱いになります。その場合はヘッダーの「👤 氏名」を担当欄と同じ表記にしてもらってください。</div>`;
+  box.innerHTML=h;
+}
 function renderMembers(){ ensureBoards(); const box=document.getElementById('memberBody'); if(!box) return;
   const list=(state.members||[]).slice().sort((a,b)=>(b.lastSeen||0)-(a.lastSeen||0));
   let h=`<div class="tpsec">${list.length}名がログイン済み</div>`;
   h+= list.length ? list.map(m=>`<div class="bkrow"><div class="bt"><b>${esc(m.name||'(名前未取得)')}</b> <span style="color:var(--muted)">${esc(m.id||'')}</span></div><div style="color:var(--dim);font-size:11px;white-space:nowrap">${m.lastSeen?fmtBkTime(m.lastSeen):''}</div></div>`).join('')
     : `<div class="tpempty">まだログインした人がいません。各自がログインすると自動で表示されます。</div>`;
   box.innerHTML=h; }
+document.getElementById('actBtn').addEventListener('click', ()=>{ closeMore(); renderActivity(); document.getElementById('actModal').classList.add('on'); });
+document.getElementById('actModal').addEventListener('click', e=>{ if(e.target.id==='actModal'||e.target.id==='actClose') document.getElementById('actModal').classList.remove('on'); });
 document.getElementById('memBtn').addEventListener('click', ()=>{ closeMore(); renderMembers(); document.getElementById('memberModal').classList.add('on'); });
 document.getElementById('memberModal').addEventListener('click', e=>{ if(e.target.id==='memberModal'||e.target.id==='memberClose') document.getElementById('memberModal').classList.remove('on'); });
 
