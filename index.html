@@ -363,6 +363,24 @@
   .msadd input[type=text]{flex:1; min-width:160px; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px;}
   .msadd input[type=date]{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; color-scheme:dark;}
   .msadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px;}
+  /* サマリーの人別ブロック */
+  .psseg{display:flex; gap:6px; margin-bottom:14px;}
+  .psseg button{flex:1; padding:7px 10px; font-size:12.5px; border:1px solid var(--line); background:var(--panel2);
+    color:var(--muted); border-radius:8px; cursor:pointer;}
+  .psseg button.on{background:var(--teal); color:#04222b; border-color:transparent; font-weight:700;}
+  .psrow{padding:9px 2px 11px; border-bottom:1px solid var(--line2);}
+  .psh{display:flex; align-items:baseline; gap:8px; flex-wrap:wrap;}
+  .psh b{font-size:14px;}
+  .psmeta{color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; margin-left:auto; white-space:nowrap;}
+  .pstag{font-size:10.5px; padding:1px 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted);}
+  .pstag.ng{border-color:transparent; background:rgba(214,69,80,.18); color:#ff8a92;}
+  .pstag.wn{border-color:transparent; background:rgba(242,199,96,.18); color:#f2c760;}
+  .psbar{height:6px; border-radius:99px; background:var(--panel3); overflow:hidden; margin:6px 0 4px;}
+  .psbar i{display:block; height:100%; background:var(--teal);}
+  .pssub{font-size:12px; line-height:1.6; color:var(--text); margin-top:3px;}
+  .pssub em{color:var(--muted); font-style:normal;}
+  body.theme-light .pstag.ng{background:#fbe3e6; color:#c0313f;}
+  body.theme-light .pstag.wn{background:#fbf0d8; color:#9a6d05;}
   /* 週次サマリー */
   .smstat{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px;}
   .smstat>div{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:11px 12px; text-align:center;}
@@ -1175,9 +1193,9 @@
 </div></div>
 
 <div class="modal" id="summaryModal"><div class="m">
-  <div class="mh"><div class="t">📊 今週のサマリー</div><div class="s">全体進捗・遅延・今週やること・直近マイルストーン。会議でそのまま共有できます。</div></div>
+  <div class="mh"><div class="t">📊 今週のサマリー</div><div class="s"><b>作業ベース</b>＝全体進捗・遅延・動いていない作業・今週やること。<b>人ベース</b>＝誰が何件抱えていて、どこが止まっているか。どちらも下のボタンでコピー・印刷できます。</div></div>
   <div class="mb" id="summaryBody"></div>
-  <div class="mf"><button class="ghost" id="sumSlack" title="Slackの所定のチャンネルに投稿（未設定なら設定画面が開きます）">💬 Slackに投稿</button><button class="ghost" id="sumCallout" title="メールにそのまま貼れる「呼びかけ文」（人別つき）をコピーします">📣 呼びかけ文をコピー</button><button class="ghost" id="sumCopy">📋 テキストでコピー</button><button class="ghost" id="sumPrint">🖨 印刷／PDF</button><button class="big" id="summaryClose">閉じる</button></div>
+  <div class="mf" style="flex-wrap:wrap"><button class="ghost" id="sumSlack" title="Slackの所定のチャンネルに投稿します（未設定なら設定画面が開きます）">💬 Slack</button><button class="ghost" id="sumCallout" title="メールにそのまま貼れる「呼びかけ文」（人別・更新のやり方つき）をコピーします">📣 呼びかけ文</button><button class="ghost" id="sumCopy" title="いま表示しているサマリー（作業ベース／人ベース）をテキストでコピーします">📋 コピー</button><button class="ghost" id="sumPrint" title="このサマリーだけを白地で印刷／PDF保存します">🖨 印刷</button><button class="big" id="summaryClose">閉じる</button></div>
 </div></div>
 
 <div class="modal" id="myModal"><div class="m">
@@ -3924,10 +3942,98 @@ function renderSlackCfg(){
   if(post) post.disabled=!ok; if(test) test.disabled=!ok;
 }
 function openSlackCfg(){ closeMore(); renderSlackCfg(); document.getElementById('slackModal').classList.add('on'); }
+// ===== 人ベースのサマリー =====
+// 作業ベースだと「誰がどれだけ抱えているか／手が空いているか」が読めない。
+// 呼びかけにも人員配分にも使うので、要対応が多い人＝呼びかける順に並べる。
+function personRows(){
+  const leaves=collectLeafInfo().filter(x=> !(x.n.kind==='small' && x.n.status && x.n.status!=='normal'));
+  const stMap=new Map(); staleList().forEach(v=>stMap.set(v.x.n.id, v));   // 担当名ではなく作業idで持つ（担当未定でも拾える）
+  const today=new Date(); today.setHours(0,0,0,0);
+  const ws=startOfWeek(today), we=addDays(ws,6);
+  const by=new Map(), none={ name:'（担当未定）', items:[] };
+  leaves.forEach(x=>{ const os=ownersOf(x.role);
+    if(!os.length){ none.items.push(x); return; }
+    os.forEach(nm=>{ if(!by.has(nm)) by.set(nm,{ name:nm, items:[] }); by.get(nm).items.push(x); }); });
+  const build=p=>{
+    let sum=0, done=0, wip=0, todo=0, hold=0;
+    const late=[], stale=[], week=[];
+    p.items.forEach(x=>{ const stg=getStage(x.n); sum+=getProgress(x.n);
+      if(stg==='完了') done++; else if(stg==='保留') hold++; else if(stg==='未着手') todo++; else wip++;
+      if(schedStatus(x.n)) late.push(x);
+      const sv=stMap.get(x.n.id); if(sv) stale.push({x, sv});
+      if(stg!=='完了' && x.n.start && x.n.end){ const a=parse(x.n.start), b=parse(x.n.end); if(a<=we&&b>=ws) week.push(x); } });
+    const lateIds=new Set(late.map(x=>x.n.id));
+    const act=late.map(x=>({x, sv:stMap.get(x.n.id)||null}))
+      .concat(stale.filter(v=>!lateIds.has(v.x.n.id)));          // 遅延と停滞で二重に数えない
+    const mm=matchMember(p.name);
+    return Object.assign(p, { total:p.items.length, pct:p.items.length?Math.round(sum/p.items.length):0,
+      done, wip, todo, hold, late, stale, week, act, member:mm.m, ambiguous:mm.ambiguous,
+      weekOnly:week.filter(x=>!lateIds.has(x.n.id) && !stMap.has(x.n.id)) }); };
+  const rows=[...by.values()].map(build)
+    .sort((a,b)=> b.act.length-a.act.length || b.total-a.total || a.name.localeCompare(b.name,'ja'));
+  if(none.items.length) rows.push(build(none));
+  return rows;
+}
+function psActLabel(v){
+  const t=[]; if(schedStatus(v.x.n)) t.push(schedStatus(v.x.n)==='overdue'?'期限超過':'予定より遅れ');
+  if(v.sv) t.push(staleLabel(v.sv));
+  return t.join('・');
+}
+let _sumMode=(()=>{ try{ return localStorage.getItem('ai_sched_summode')==='person'?'person':'task'; }catch(e){ return 'task'; } })();
+function sumSeg(){
+  return `<div class="psseg">`
+    +`<button data-summode="task" class="${_sumMode==='task'?'on':''}">📋 作業ベース</button>`
+    +`<button data-summode="person" class="${_sumMode==='person'?'on':''}">👤 人ベース</button></div>`;
+}
+function renderSummaryPerson(){
+  const box=document.getElementById('summaryBody'); if(!box) return;
+  const rows=personRows(), d=summaryData();
+  const withAct=rows.filter(r=>r.act.length).length;
+  const free=rows.filter(r=>!r.act.length && !r.week.length && r.name!=='（担当未定）').length;
+  let h=sumSeg();
+  h+=`<div class="smstat"><div><b>${rows.filter(r=>r.name!=='（担当未定）').length}</b><span>担当がいる人</span></div>`
+   + `<div class="${withAct?'bad':''}"><b>${withAct}</b><span>要対応がある人</span></div>`
+   + `<div><b>${free}</b><span>今週の予定なし</span></div>`
+   + `<div><b>${d.pct}%</b><span>全体進捗</span></div></div>`;
+  h+= rows.length? rows.map(r=>{
+    const tag = r.name==='（担当未定）' ? '<span class="pstag wn">担当が決まっていません</span>'
+             : r.ambiguous ? '<span class="pstag wn">同名候補が複数</span>'
+             : !r.member ? '<span class="pstag ng">アプリ未ログイン</span>'
+             : '';
+    let b=`<div class="psrow"><div class="psh"><b>${esc(r.name)}</b>${tag}`
+      +`<span class="psmeta">${r.total}件 ／ 進捗 ${r.pct}% ／ 完了 ${r.done}・進行中 ${r.wip}・未着手 ${r.todo}`
+      +(r.hold?`・保留 ${r.hold}`:'')+`</span></div>`
+      +`<div class="psbar"><i style="width:${r.pct}%"></i></div>`;
+    if(r.act.length) b+=`<div class="pssub">⚠ <b>要対応 ${r.act.length}件</b>　`
+      + r.act.slice(0,CO_MAX).map(v=>`${esc(coName(v.x))}<em>（${esc(psActLabel(v))}・${getProgress(v.x.n)}%）</em>`).join('／ ')
+      + (r.act.length>CO_MAX?` ほか${r.act.length-CO_MAX}件`:'') + `</div>`;
+    if(r.weekOnly.length) b+=`<div class="pssub">📅 今週 ${r.weekOnly.length}件　`
+      + r.weekOnly.slice(0,CO_MAX).map(x=>esc(coName(x))).join('／ ')
+      + (r.weekOnly.length>CO_MAX?` ほか${r.weekOnly.length-CO_MAX}件`:'') + `</div>`;
+    if(!r.act.length && !r.week.length) b+=`<div class="pssub"><em>要対応なし・今週の予定もありません</em></div>`;
+    return b+`</div>`; }).join('')
+   : `<div class="tpempty">担当欄に名前がある人が見つかりません。</div>`;
+  box.innerHTML=h;
+}
+function personText(){
+  const rows=personRows(), d=summaryData(), t=new Date(), L=[];
+  L.push('【AI推進 人別サマリー '+ymd(t)+'】');
+  L.push('全体 '+d.pct+'% ／ 完了 '+d.done+'/'+d.total+' ／ 遅延 '+d.late.length+'件');
+  rows.forEach(r=>{
+    L.push('');
+    L.push('■ '+r.name+'　'+r.total+'件 ／ 進捗 '+r.pct+'%（完了 '+r.done+'・進行中 '+r.wip+'・未着手 '+r.todo+(r.hold?'・保留 '+r.hold:'')+'）'
+      + (r.name==='（担当未定）'?'':(!r.member&&!r.ambiguous?'　※アプリ未ログイン':'')));
+    if(r.act.length) L.push('　要対応 '+r.act.length+'件：'+r.act.slice(0,CO_MAX).map(v=>coName(v.x)+'（'+psActLabel(v)+'・'+getProgress(v.x.n)+'%）').join(' ／ ')+(r.act.length>CO_MAX?' ほか'+(r.act.length-CO_MAX)+'件':''));
+    if(r.weekOnly.length) L.push('　今週 '+r.weekOnly.length+'件：'+r.weekOnly.slice(0,CO_MAX).map(x=>coName(x)).join(' ／ ')+(r.weekOnly.length>CO_MAX?' ほか'+(r.weekOnly.length-CO_MAX)+'件':''));
+    if(!r.act.length && !r.week.length) L.push('　要対応なし・今週の予定もありません');
+  });
+  return L.join('\n');
+}
 function renderSummary(){ ensureBoards(); const box=document.getElementById('summaryBody'); if(!box) return;
+  if(_sumMode==='person') return renderSummaryPerson();
   const d=summaryData();
   const row=x=>{ const ss=schedStatus(x.n); return `<div class="smrow ${ss||''}"><span class="smn">${lateMark(ss)}${esc(x.n.name)}</span><span class="smmeta">${esc(x.role||'—')} ／ ${x.n.start?mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):'日付未設定'} ／ ${getProgress(x.n)}%</span></div>`; };
-  let h=`<div class="smstat"><div><b>${d.pct}%</b><span>全体進捗</span></div><div><b>${d.done}/${d.total}</b><span>完了</span></div><div class="${d.late.length?'bad':''}"><b>${d.late.length}</b><span>遅延</span></div><div><b>${d.week.length}</b><span>今週</span></div></div>`;
+  let h=sumSeg()+`<div class="smstat"><div><b>${d.pct}%</b><span>全体進捗</span></div><div><b>${d.done}/${d.total}</b><span>完了</span></div><div class="${d.late.length?'bad':''}"><b>${d.late.length}</b><span>遅延</span></div><div><b>${d.week.length}</b><span>今週</span></div></div>`;
   { const a=actualHours(); if(a.cnt) h+=`<div class="smnote">⏱ AI工数削減（実績）：<b>${a.old}h → ${a.act}h ＝ ${a.pct}%減</b>（実績を入れた ${a.cnt}件で計測）</div>`; }
   h+=`<div class="tpsec">⚠ 遅延している作業（${d.late.length}）</div>`+(d.late.length?d.late.map(row).join(''):'<div class="tpempty">なし。順調です 👍</div>');
   h+=`<div class="tpsec">📅 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}・${d.week.length}件）</div>`+(d.week.length?d.week.map(row).join(''):'<div class="tpempty">今週に期間がかかる未完作業はありません。</div>');
@@ -4010,7 +4116,10 @@ document.getElementById('summaryModal').addEventListener('click', e=>{
     } else openSlackCfg();
     return; }
   const cob=e.target.closest('#sumCallout'); if(cob){ try{ navigator.clipboard.writeText(callOutText()); const o=cob.textContent; cob.textContent='✓ コピーしました（メールに貼ってください）'; setTimeout(()=>{cob.textContent=o;},1800); }catch(err){ alert('コピーできませんでした'); } return; }
-  const cp=e.target.closest('#sumCopy'); if(cp){ try{ navigator.clipboard.writeText(summaryText()); const o=cp.textContent; cp.textContent='✓ コピーしました'; setTimeout(()=>{cp.textContent=o;},1500); }catch(err){ alert('コピーできませんでした'); } return; }
+  const sg=e.target.closest('[data-summode]'); if(sg){ _sumMode=sg.dataset.summode;
+    try{ localStorage.setItem('ai_sched_summode', _sumMode); }catch(err){}
+    renderSummary(); return; }
+  const cp=e.target.closest('#sumCopy'); if(cp){ try{ navigator.clipboard.writeText(_sumMode==='person'?personText():summaryText()); const o=cp.textContent; cp.textContent='✓ コピーしました'; setTimeout(()=>{cp.textContent=o;},1500); }catch(err){ alert('コピーできませんでした'); } return; }
   if(e.target.closest('#sumPrint')){ window.print(); return; }
 });
 
