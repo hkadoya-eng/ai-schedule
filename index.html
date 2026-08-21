@@ -2589,11 +2589,12 @@ function renderMeetingList(box){
        `<input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）" value="${esca(d.title||'')}">`+
        `<input id="mtDate" type="date" title="日付" value="${esca(d.date||'')}"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts(d.start||'','開始')}</select><span class="mtsep">〜</span>`+
        `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts(d.end||'','終了')}</select><select id="mtRoom" class="tsel rmsel" title="会議室">${roomOpts(d.room||'')}</select>`+
-       // 「次回を登録」は毎サイクル必ず人がやる操作。ここにSlack通知を相乗りさせることで、
-       // 「週1で誰かがボタンを押す係」を作らずに進捗共有が回る。既定ON・チェックは端末に記憶。
-       `<label id="mtNotifyWrap" title="追加すると同時に、次回の日程＋いまの進捗＋人別の要対応をSlackの所定のチャンネルに1本投稿します" `+
+       // 「次回を登録」は毎サイクル必ず人がやる操作なので、ここを進捗共有の起動点にする。
+       // ただし**自動送信はしない**（ユーザーが「自動は怖い」と明言）。文面プレビュー付きの
+       // 投稿画面を開くところまでで止め、送るかどうかは必ず人が決める。既定ON・端末に記憶。
+       `<label id="mtNotifyWrap" title="追加したあと、Slack投稿の画面を開きます（次回の日程＋いまの進捗＋人別の要対応の文面プレビュー付き）。投稿するかどうかはそこで選べます。自動では送りません。" `+
          `style="display:${slackReady()?'inline-flex':'none'};align-items:center;gap:4px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap">`+
-         `<input type="checkbox" id="mtNotify"${mtNotifyPref()?' checked':''} style="margin:0"> 登録したらSlackで知らせる`+
+         `<input type="checkbox" id="mtNotify"${mtNotifyPref()?' checked':''} style="margin:0"> 登録後にSlack投稿の画面を出す`+
        `</label>`+
        `<button id="mtAddBtn">追加</button>`+
      `</div></div>`;
@@ -3149,14 +3150,9 @@ function addMeeting(){ const g=id=>document.getElementById(id);
   if(nb){ try{ localStorage.setItem('ai_sched_mtnotify', nb.checked?'1':'0'); }catch(e){} }
   state.meetings.push({ id:uid('mt'), title:title||'定例', date, start, end, room, _u:Date.now() });
   save(); renderTopics();
-  if(!want) return;
-  // 日付の打ち直し等で短時間に2回登録することは実際にある。そのまま投げると二重投稿になるので確認する。
-  const lp=(state.slack&&state.slack.last)||null;
-  if(lp && lp.t && (Date.now()-lp.t) < 60*60*1000){
-    if(!confirm('定例を登録しました。\n\nただしSlackへは '+fmtBkTime(lp.t)+' に投稿済みです（1時間以内）。\n'+
-                'もう一度投稿するとチャンネルに2本並びます。投稿しますか？')) return;
-  }
-  postToSlack(slackText()); }
+  // ここでは**開くだけ**。投稿は画面のボタンを人が押したときだけ起きる（勝手に送らない）。
+  // 画面には文面プレビューと「前回の投稿」の日時が出るので、二重投稿もそこで気づける。
+  if(want) openSlackCfg(); }
 function setMtField(field, val){ const m=state.meetings.find(x=>x.id===_openMeeting); if(!m||!field) return;
   if((m[field]||'')===val) return; m[field]=val; m._u=Date.now(); save(); renderTopics(); }
 // 定例の削除。中止・日程変更は必ず起きるので、お題を巻き添えで消さないことを最優先にする。
