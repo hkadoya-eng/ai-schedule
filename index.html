@@ -115,6 +115,12 @@
   .iname.opener:hover{text-decoration:underline; text-decoration-color:var(--teal); text-underline-offset:2px;}
   .linkmark{font-size:10px; margin-left:5px; opacity:.75; cursor:pointer;}
   .ctrls{display:none; gap:2px; margin-left:7px;}
+  /* 親の行に常時出す「完了を隠す／出す」チップ（hoverしないと見えないと誰も気づかないので常時表示） */
+  .hdbtn{margin-left:7px; border:1px solid var(--line); background:transparent; color:var(--muted);
+    font-size:10.5px; line-height:1; padding:2px 5px; border-radius:999px; cursor:pointer; white-space:nowrap;
+    font-variant-numeric:tabular-nums;}
+  .hdbtn:hover{border-color:var(--teal); color:var(--text);}
+  .hdbtn.on{border-color:transparent; background:rgba(47,182,176,.18); color:var(--teal); font-weight:700;}
   tr:hover .ctrls{display:inline-flex;}
   .mini{border:none; background:#dde5ef; color:#3a4b60; width:17px; height:17px; line-height:15px;
     border-radius:4px; cursor:pointer; font-size:11px; padding:0;}
@@ -1312,6 +1318,24 @@ function fmtWhen(iso){ if(!iso) return ''; const d=new Date(iso); if(isNaN(d)) r
 function rollupProgress(node){ let total=0, sum=0, done=0;
   eachLeaf(node, s=>{ total++; sum+=getProgress(s); if(getStage(s)==='完了') done++; });
   return total ? { total, done, pct: Math.round(sum/total) } : null; }
+// 完了項目の表示／非表示（親の行のチップで切り替え）。
+// 共有ボードには入れず localStorage に持つ＝自分の画面だけ・他の人の見え方を変えない。
+const HIDEDONE_KEY='ai_sched_hidedone';
+let hideDoneSet=(()=>{ try{ const a=JSON.parse(localStorage.getItem(HIDEDONE_KEY)||'[]'); return new Set(Array.isArray(a)?a:[]); }catch(e){ return new Set(); } })();
+function saveHideDone(){ try{ localStorage.setItem(HIDEDONE_KEY, JSON.stringify([...hideDoneSet])); }catch(e){} }
+let _hidden=new Set();      // この描画で隠す行のid。render() の先頭で作り直す
+function buildHidden(){ _hidden=new Set();
+  const mark=n=>{ (n.children||[]).forEach(c=>{ if(getStage(c)==='完了') _hidden.add(c.id); else mark(c); }); };
+  (function w(ns){ (ns||[]).forEach(n=>{ if(hideDoneSet.has(n.id)) mark(n); if(n.children) w(n.children); }); })(state.tree||[]);
+}
+// 隠せる件数＝直下から見て最初に見つかる「完了」の数（その中の子は丸ごと消えるので数えない）
+function countDoneDesc(n){ let c=0; (n.children||[]).forEach(ch=>{ if(getStage(ch)==='完了') c++; else c+=countDoneDesc(ch); }); return c; }
+function hideDoneChip(n){
+  if(!hasKids(n)) return '';
+  const on=hideDoneSet.has(n.id), c=countDoneDesc(n);
+  if(!c && !on) return '';
+  return `<button class="hdbtn${on?' on':''}" data-hidedone="${n.id}" title="${on?('完了した '+c+' 件を出す'):('完了した '+c+' 件を隠す')}（この中だけ／自分の画面だけに効きます）">${on?'👁':'✓'}${c}</button>`;
+}
 // フィルタ状態（同期しない一時プレファレンス）
 let fMine=false, fOpen=false, fLate=false;
 function filterActive(){ return fMine || fOpen || fLate; }
@@ -1540,6 +1564,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;',
 let COLS=[]; let _todayCol=-1; let _msByCol={};
 
 function render(){
+  buildHidden();                 // 親の「完了を隠す」設定から、今回隠す行を先に確定させる
   COLS=buildColumns();
   { const _t=new Date(); _t.setHours(0,0,0,0); _todayCol=COLS.findIndex(c=> c.start<=_t && _t<=c.end); }
   _msByCol={}; (state.milestones||[]).forEach(ms=>{ if(!ms||!ms.date) return; const d=parse(ms.date);
@@ -1695,9 +1720,10 @@ function autoSizeColumns(){
   const measure=(s,bold)=>{ ctx.font=(bold?'700 ':'')+'13px Meiryo,"Segoe UI",sans-serif'; return ctx.measureText(String(s||'')).width; };
   let item=0, role=0, prog=0, date=0;
   walkAll(state.tree, n=>{
+    if(_hidden.has(n.id)) return;                      // 隠している行は列幅の計算にも入れない
     if(n.kind==='big' || n.kind==='mid'){
       const indent = n.kind==='big'?6:22;
-      item=Math.max(item, indent + measure(n.name, true));
+      item=Math.max(item, indent + measure(n.name, true) + (hideDoneChip(n)?42:0));   // 完了チップぶん
       const agg=rollupProgress(n); if(agg) prog=Math.max(prog, measure(`${agg.done}/${agg.total}・${agg.pct}%`)+16);
       const rr=rollupRange(n); if(rr) date=Math.max(date, measure(`${mdNum(rr.lo)}〜${mdNum(rr.hi)}`));
     } else if(n.kind==='small'){
@@ -1746,6 +1772,7 @@ function fixStickyLefts(){
 }
 
 function nodeHTML(node, counter, depth, stepNo){
+  if(_hidden.has(node.id)) return '';                 // 親側で「完了を隠す」中（子ごと消す）
   if(node.kind==='small') return smallRowHTML(node, counter);
   if(node.kind==='task') return taskRowHTML(node, counter, depth||0, stepNo);
   // 先に子を組み立て（フィルタ時に空の親を隠すため）。折りたたみ時は子を出さない
@@ -1762,6 +1789,7 @@ function nodeHTML(node, counter, depth, stepNo){
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:${pad}px">`+
      caretHTML(node)+
      `<span class="iname opener" data-detail="${node.id}" title="${esc(node.name)} ／ クリックで詳細・並べ替え・削除">${esc(node.name)}</span>`+
+     hideDoneChip(node)+
      `<span class="ctrls">`+
        `<button class="mini add" data-addchild="${node.id}" title="${childKindLabel}">＋</button>`+
      `</span></div></td>`;
@@ -1863,6 +1891,7 @@ function smallRowHTML(t, counter){
      pdotHTML(t)+ chgTagHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
+     hideDoneChip(t)+
      `<span class="ctrls">`+
        `<button class="mini add" data-addchild="${t.id}" title="＋タスク（サブタスク追加）">＋</button>`+
      `</span></div></td>`;
@@ -1962,6 +1991,9 @@ document.addEventListener('click', e=>{
     if(r){ const n=r.node, CY=['','ai','collab','human']; n.charge=CY[(CY.indexOf(n.charge||'')+1)%CY.length]; touch(n); save(); render(); } return; }
   const pg=e.target.closest('[data-prog]'); if(pg){ openProgPop(pg,pg.dataset.prog); return; }
   const dc=e.target.closest('[data-date]'); if(dc){ openDatePop(dc, dc.dataset.date); return; }
+  const hd=e.target.closest('[data-hidedone]'); if(hd){ const id=hd.dataset.hidedone;   // 完了の表示／非表示
+    if(hideDoneSet.has(id)) hideDoneSet.delete(id); else hideDoneSet.add(id);
+    saveHideDone(); render(); return; }
   const dbtn=e.target.closest('[data-detail]'); if(dbtn){ openDetail(dbtn.dataset.detail); return; }
   const ob=e.target.closest('[data-open]'); if(ob){ openViaPath(ob.dataset.open); return; }
   const ac=e.target.closest('[data-addchild]'); if(ac){ addChild(ac.dataset.addchild); return; }
@@ -2358,12 +2390,16 @@ document.getElementById('helpBody').innerHTML=`
 document.getElementById('helpBtn').addEventListener('click', ()=>document.getElementById('helpModal').classList.add('on'));
 document.getElementById('helpModal').addEventListener('click', e=>{ if(e.target.id==='helpModal'||e.target.id==='helpClose') document.getElementById('helpModal').classList.remove('on'); });
 // 今日の位置へスクロール
-function scrollToToday(){ const wrap=grid.parentElement; if(!wrap) return;
+// silent=true は起動時用（今日が期間外でもアラートを出さず、アニメーションもしない）
+function scrollToToday(silent){ const wrap=grid.parentElement; if(!wrap) return false;
   const cell=grid.querySelector('th.unit.today')||grid.querySelector('td.tl.today');
-  if(!cell){ alert('今日はプロジェクト期間外です。'); return; }
+  if(!cell){ if(!silent) alert('今日はプロジェクト期間外です。'); return false; }
   const firstUnit=grid.querySelector('thead th.unit'); const stickyW=firstUnit?firstUnit.offsetLeft:0;
-  wrap.scrollTo({ left:Math.max(0, cell.offsetLeft - stickyW - 24), behavior:'smooth' }); }
-(function(){ const b=document.getElementById('todayBtn'); if(b) b.addEventListener('click', scrollToToday); })();
+  wrap.scrollTo({ left:Math.max(0, cell.offsetLeft - stickyW - 24), behavior:silent?'auto':'smooth' }); return true; }
+(function(){ const b=document.getElementById('todayBtn'); if(b) b.addEventListener('click', ()=>scrollToToday(false)); })();
+// 起動直後は「今日」が見えている位置から始める（プロジェクト開始=6月まで巻き戻ると誰も自分の週を探せない）。
+// render() 直後はまだレイアウトが確定せず offsetLeft が 0 になることがあるので rAF 2回ぶん待つ。
+function scrollToTodayOnBoot(){ requestAnimationFrame(()=>requestAnimationFrame(()=>{ try{ scrollToToday(true); }catch(e){} })); }
 
 // ===== お題・議題ボード（定例ごとにExcel風テーブルで記入・全員共有・マージ対応）=====
 function ensureBoards(){
@@ -4460,6 +4496,7 @@ window.__initApp = function(board){
   if(board && board.tree) state=board;          // Supabaseの保存内容で開始（無ければ現stateのまま）
   try{ applySeeds(); }catch(e){ console.error('[seed]', e); }   // 確定済みの予定を1回だけ投入
   lastSnap=snap(); updateUndoUI(); syncToolbar(); render();
+  try{ scrollToTodayOnBoot(); }catch(e){}          // 起動位置を「今日」に合わせる
 };
 window.__applyRemote = function(board){          // 他の人の更新を反映（入力中は上書きしない）
   if(!board || !board.tree) return;
