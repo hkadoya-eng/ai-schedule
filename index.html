@@ -1073,6 +1073,7 @@
   <div class="mlabel">メンバー・予定</div>
   <button id="memBtn" title="アプリにログインした人の一覧（打合せの招待先候補）">👥 ログイン済みメンバー</button>
   <button id="msBtn" title="申請日・納期などの締切をガントに縦線で表示">🚩 マイルストーン</button>
+  <button id="slackBtn" title="進捗の要約をSlackの所定のチャンネルに投稿する（Incoming Webhook）">💬 Slack投稿の設定</button>
   <div class="mlabel">データ（管理者向け）</div>
   <div class="minfo" id="baseInfo"></div>
   <button id="excelBtn" title="ベースExcel（作業分担一覧）を取り込む（管理者向け）">📊 ベース取込</button>
@@ -1160,10 +1161,16 @@
   <div class="mf"><button class="ghost" id="msClose">閉じる</button></div>
 </div></div>
 
+<div class="modal" id="slackModal"><div class="m">
+  <div class="mh"><div class="t">💬 Slack投稿の設定</div><div class="s">所定のチャンネルに、進捗の要約を1本投げます。メンション（通知）は使わず名前の文字だけなので、急かさずに「並んでいるのが見える」形にしています。</div></div>
+  <div class="mb" id="slackBody"></div>
+  <div class="mf"><button class="ghost" id="slackTest" title="ごく短いテスト文だけを投稿して、ちゃんと届くか確かめます">🧪 テスト投稿</button><button class="ghost" id="slackClose">閉じる</button><button class="big" id="slackPost">💬 このままチャンネルに投稿</button></div>
+</div></div>
+
 <div class="modal" id="summaryModal"><div class="m">
   <div class="mh"><div class="t">📊 今週のサマリー</div><div class="s">全体進捗・遅延・今週やること・直近マイルストーン。会議でそのまま共有できます。</div></div>
   <div class="mb" id="summaryBody"></div>
-  <div class="mf"><button class="ghost" id="sumCallout" title="メールにそのまま貼れる「呼びかけ文」（人別つき）をコピーします">📣 呼びかけ文をコピー</button><button class="ghost" id="sumCopy">📋 テキストでコピー</button><button class="ghost" id="sumPrint">🖨 印刷／PDF</button><button class="big" id="summaryClose">閉じる</button></div>
+  <div class="mf"><button class="ghost" id="sumSlack" title="Slackの所定のチャンネルに投稿（未設定なら設定画面が開きます）">💬 Slackに投稿</button><button class="ghost" id="sumCallout" title="メールにそのまま貼れる「呼びかけ文」（人別つき）をコピーします">📣 呼びかけ文をコピー</button><button class="ghost" id="sumCopy">📋 テキストでコピー</button><button class="ghost" id="sumPrint">🖨 印刷／PDF</button><button class="big" id="summaryClose">閉じる</button></div>
 </div></div>
 
 <div class="modal" id="myModal"><div class="m">
@@ -1499,7 +1506,11 @@ window.__mergeBoards=function(remote, local){
   out.topics=__mergeList(remote.topics, local.topics);       // お題も同時編集で消えないようマージ
   out.members=__mergeList(remote.members, local.members);    // メンバー名簿(ログイン者)もマージ
   out.milestones=__mergeList(remote.milestones, local.milestones); // マイルストーンもマージ
+  out.slack=__mergePlain(remote.slack, local.slack);         // Slack設定は_uが新しい方（下記の注意参照）
   return out; };
+// 単体オブジェクトのマージ。out=Object.assign({},local) だけだと、Slack設定を知らない人が
+// 保存した瞬間に他の人が登録したWebhook URLを空で上書きしてしまう。_uで新しい方を残す。
+function __mergePlain(r,l){ if(!r) return l; if(!l) return r; return (+r._u||0)>(+l._u||0)?r:l; }
 // マージ結果を反映（入力中はUI再描画を控える）
 window.__applyMerged=function(merged){
   state=merged; lastSnap=snap();
@@ -2403,6 +2414,7 @@ function scrollToTodayOnBoot(){ requestAnimationFrame(()=>requestAnimationFrame(
 
 // ===== お題・議題ボード（定例ごとにExcel風テーブルで記入・全員共有・マージ対応）=====
 function ensureBoards(){
+  if(!state.slack || typeof state.slack!=='object') state.slack={ url:'', label:'', last:null, _u:0 };
   if(!Array.isArray(state.meetings)) state.meetings=[];
   if(!Array.isArray(state.topics)) state.topics=[];
   if(!Array.isArray(state.members)) state.members=[];
@@ -3727,6 +3739,98 @@ function callOutText(){
   L.push('※ 期間や担当がちがっていたら、その場で直してもらって大丈夫です。');
   return L.join('\n');
 }
+// ===== Slack（所定のチャンネルに1本投げる） =====
+// チャンネルは全員が見るので、メンションID（<@U…>）は使わず名前の文字だけにしている。
+// 通知で急かすのではなく「並んでいるのが見える」ことを狙う。だから文面は短く、名前が縦に並ぶ形。
+function slackNums(){ const co=callOutData(); return { pct:co.d.pct, done:co.d.done, total:co.d.total, late:co.d.late.length, stale:co.st.length }; }
+function slackText(){
+  ensureBoards();
+  const co=callOutData(), d=co.d, st=co.st, mm=summaryMeetings(), t=new Date();
+  const last=(state.slack&&state.slack.last)||null, L=[];
+  // 前回投稿時との差分。「動いた／動いていない」が一目で分かるのが、毎週読まれる唯一の理由になる。
+  const dl=(cur,key)=>{ if(!last || last[key]==null) return '';
+    const v=cur-last[key]; return v===0?'（前回と同じ）':'（前回 '+last[key]+' → '+(v>0?'+':'−')+Math.abs(v)+'）'; };
+  L.push('📊 *AI推進 進捗共有　'+(t.getMonth()+1)+'/'+t.getDate()+'*');
+  L.push('全体 '+d.pct+'%'+dl(d.pct,'pct')+'　｜　完了 '+d.done+'/'+d.total+'　｜　遅延 '+d.late.length+'件'+dl(d.late.length,'late')+'　｜　'+STALE_DAYS+'日以上動いてない '+st.length+'件'+dl(st.length,'stale'));
+  { const a=actualHours(); if(a.cnt) L.push('AI工数削減（実績）'+a.old+'h → '+a.act+'h ＝ *'+a.pct+'%減*'); }
+  if(mm.next) L.push('次回の定例　'+mtWhenLine(mm.next));
+  L.push('<'+APP_URL+'|▶ ボードを開く>');
+  L.push('');
+  const rows=co.people.map(p=>({p, ci:coItems(p)})).filter(v=>v.ci.act>0);
+  if(!rows.length) L.push('*要対応なし* 🎉 全部きちんと動いています');
+  else {
+    L.push('*要対応*');
+    rows.slice(0,CO_MAX).forEach(v=>{
+      // チャンネルで効くのは「名前」と「件数」。中身は代表1件だけにして1行に収める（詳細はボードで見る）
+      const top=v.ci.rows.filter(r=>r.late||r.stale)[0];
+      const ex=top?('例）'+coName(top.x)+(top.stale?'（'+staleLabel(top.stale)+'）':'')):'';
+      L.push('・*'+v.p.name+'*　'+v.ci.act+'件　'+ex);
+    });
+    if(rows.length>CO_MAX) L.push('・ほか '+(rows.length-CO_MAX)+'人（ボードでご確認ください）');
+  }
+  L.push('');
+  L.push('_更新は30秒：ボードを開く → 自分の行の「進捗」バッジ → % を選ぶだけ（保存ボタンはありません）_');
+  return L.join('\n');
+}
+// Incoming Webhook にPOSTする。
+// ⚠ 本文は application/x-www-form-urlencoded の payload= 形式（＝CORSのプリフライトが起きない
+//   「単純リクエスト」）。プリフライトが無いぶん送信そのものは必ず飛ぶが、Slackが応答に
+//   CORSヘッダを付けないため fetch は reject することがある。**その場合も送信は届いている**ので、
+//   ここで絶対に再送してはいけない（二重投稿になる）。結果が読めないことは正直に画面に出す。
+async function postToSlack(text){
+  ensureBoards();
+  const url=String((state.slack&&state.slack.url)||'').trim();
+  if(!/^https:\/\/hooks\.slack\.com\//.test(url)){
+    alert('先に ⚙管理 →「💬 Slack投稿の設定」で Incoming Webhook の URL を登録してください。');
+    openSlackCfg(); return false; }
+  const body='payload='+encodeURIComponent(JSON.stringify({ text:text }));
+  let res='sent';                                    // 'ok' 確認できた / 'sent' 届いたはずだが確認不可 / 'ng'
+  let msg='';
+  try{
+    const r=await fetch(url,{ method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body:body });
+    if(r.ok){ res='ok'; }
+    else { res='ng'; msg='Slackが '+r.status+' を返しました（Webhook URLが失効している可能性があります）'; }
+  }catch(e){
+    // ネットワーク断もCORSも同じ例外になるため区別できない。再送はしない。
+    res='sent'; msg='ブラウザの制限で送信結果を読み取れませんでした。チャンネルをご確認ください。';
+  }
+  if(res!=='ng'){
+    state.slack.last=Object.assign({ t:Date.now(), by:currentUser()||'', confirmed:(res==='ok') }, slackNums());
+    state.slack._u=Date.now(); save(); }
+  alert(res==='ok' ? '💬 Slackに投稿しました。'
+      : res==='sent' ? '💬 Slackに送信しました。\n'+msg
+      : '投稿できませんでした。\n'+msg);
+  renderSlackCfg();
+  return res!=='ng';
+}
+function renderSlackCfg(){
+  ensureBoards(); const box=document.getElementById('slackBody'); if(!box) return;
+  const sl=state.slack, ok=/^https:\/\/hooks\.slack\.com\//.test(String(sl.url||'').trim());
+  let h='';
+  h+='<div class="mlabel">Incoming Webhook の URL</div>';
+  h+='<div class="mrow"><input id="slackUrl" style="flex:1" placeholder="https://hooks.slack.com/services/..." value="'+esc(sl.url||'')+'"></div>';
+  h+='<div class="smnote">Slack →「アプリを追加」→ <b>Incoming Webhooks</b> → 投稿したいチャンネルを選ぶと発行されます。'
+    +'URLは<b>チャンネル1つに固定</b>。ここに入れると<b>全員のボードで使えます</b>（ボードは @key-cre.co.jp のログイン者だけが読めます）。</div>';
+  h+='<div class="mlabel">チャンネル名（表示用・任意）</div>';
+  h+='<div class="mrow"><input id="slackLabel" style="flex:1" placeholder="#ai-suishin" value="'+esc(sl.label||'')+'"></div>';
+  if(sl.last){
+    h+='<div class="tpsec">前回の投稿</div>';
+    h+='<div class="smrow"><span class="smn">'+fmtBkTime(sl.last.t)+'　'+esc(String(sl.last.by||'').split('@')[0]||'—')
+      +(sl.last.confirmed?'':'（送信結果は未確認）')+'</span><span class="smmeta">全体 '+sl.last.pct+'% ／ 遅延 '+sl.last.late+' ／ 停滞 '+sl.last.stale+'</span></div>';
+    h+='<div class="smnote">次の投稿では、この数字との差分（前回 7 → −2 など）が文面に入ります。</div>';
+  }
+  h+='<div class="tpsec">いま投稿するとこうなります</div>';
+  h+='<pre style="white-space:pre-wrap;font-size:12px;line-height:1.6;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:10px;margin:0">'+esc(slackText())+'</pre>';
+  if(!ok) h+='<div class="smnote warn">URLが未登録（または形式ちがい）です。投稿ボタンは押せません。</div>';
+  box.innerHTML=h;
+  const u=document.getElementById('slackUrl'), l=document.getElementById('slackLabel');
+  const put=()=>{ state.slack.url=u.value.trim(); state.slack.label=l.value.trim(); state.slack._u=Date.now(); save(); };
+  if(u) u.addEventListener('change', ()=>{ put(); renderSlackCfg(); });
+  if(l) l.addEventListener('change', put);
+  const post=document.getElementById('slackPost'), test=document.getElementById('slackTest');
+  if(post) post.disabled=!ok; if(test) test.disabled=!ok;
+}
+function openSlackCfg(){ closeMore(); renderSlackCfg(); document.getElementById('slackModal').classList.add('on'); }
 function renderSummary(){ ensureBoards(); const box=document.getElementById('summaryBody'); if(!box) return;
   const d=summaryData();
   const row=x=>{ const ss=schedStatus(x.n); return `<div class="smrow ${ss||''}"><span class="smn">${lateMark(ss)}${esc(x.n.name)}</span><span class="smmeta">${esc(x.role||'—')} ／ ${x.n.start?mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):'日付未設定'} ／ ${getProgress(x.n)}%</span></div>`; };
@@ -3799,8 +3903,19 @@ function summaryText(){ const d=summaryData(); const L=[];
   return L.join('\n'); }
 document.getElementById('topicBtn').addEventListener('click', ()=>{ _tpOpen() ? closeTopics() : openTopics(); });
 document.getElementById('sumBtn').addEventListener('click', ()=>{ renderSummary(); document.getElementById('summaryModal').classList.add('on'); });
+document.getElementById('slackBtn').addEventListener('click', openSlackCfg);
+document.getElementById('slackModal').addEventListener('click', e=>{
+  if(e.target.id==='slackModal'||e.target.id==='slackClose'){ document.getElementById('slackModal').classList.remove('on'); return; }
+  if(e.target.closest('#slackPost')){ postToSlack(slackText()); return; }
+  if(e.target.closest('#slackTest')){ postToSlack('🧪 テスト投稿です（AI推進スケジューラ）。これが見えていれば設定はOKです。'); return; }
+});
 document.getElementById('summaryModal').addEventListener('click', e=>{
   if(e.target.id==='summaryModal'||e.target.id==='summaryClose'){ document.getElementById('summaryModal').classList.remove('on'); return; }
+  if(e.target.closest('#sumSlack')){ ensureBoards();
+    if(/^https:\/\/hooks\.slack\.com\//.test(String(state.slack.url||'').trim())){
+      if(confirm('Slack'+(state.slack.label?('の '+state.slack.label):'の所定のチャンネル')+'に、いまの進捗要約を投稿します。よろしいですか？')) postToSlack(slackText());
+    } else openSlackCfg();
+    return; }
   const cob=e.target.closest('#sumCallout'); if(cob){ try{ navigator.clipboard.writeText(callOutText()); const o=cob.textContent; cob.textContent='✓ コピーしました（メールに貼ってください）'; setTimeout(()=>{cob.textContent=o;},1800); }catch(err){ alert('コピーできませんでした'); } return; }
   const cp=e.target.closest('#sumCopy'); if(cp){ try{ navigator.clipboard.writeText(summaryText()); const o=cp.textContent; cp.textContent='✓ コピーしました'; setTimeout(()=>{cp.textContent=o;},1500); }catch(err){ alert('コピーできませんでした'); } return; }
   if(e.target.closest('#sumPrint')){ window.print(); return; }
