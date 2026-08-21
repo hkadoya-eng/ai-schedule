@@ -363,6 +363,13 @@
   .msadd input[type=text]{flex:1; min-width:160px; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px;}
   .msadd input[type=date]{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; color-scheme:dark;}
   .msadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px;}
+  /* 過去ログの折りたたみ見出し（定例一覧の過去分・済んだお題） */
+  .tpfold{display:flex; align-items:center; gap:8px; width:100%; margin:12px 0 6px; padding:7px 10px;
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px; color:var(--muted);
+    font-size:12px; cursor:pointer; text-align:left;}
+  .tpfold:hover{border-color:var(--teal); color:var(--text);}
+  .tpfold .n{margin-left:auto; font-variant-numeric:tabular-nums;}
+  .tpfold .cx{width:12px; display:inline-block;}
   /* サマリーの人別ブロック */
   .psseg{display:flex; gap:6px; margin-bottom:14px;}
   .psseg button{flex:1; padding:7px 10px; font-size:12.5px; border:1px solid var(--line); background:var(--panel2);
@@ -2501,6 +2508,20 @@ function mtWhenLine(m){ const d=m.date?parse(m.date):null;                      
   return (d?`${d.getMonth()+1}/${d.getDate()}(${_WD[d.getDay()]})`:'日付未定')+
     (m.start?` ${m.start}${m.end?'〜'+m.end:''}`:'')+(m.room?` ／ ${m.room}`:''); }
 let _mtEdit=false, _noteEdit=false;   // 定例の日時／概要を「書き換えモード」にしているか（画面の状態）
+// 過去ログの畳み方（自分の画面だけ・共有ボードには入れない）。既定は畳む＝いま話すことに集中させる。
+// 一度開いたら開いたままにする（過去の議事録を読みに来た人が毎回開き直さなくていいように）。
+function _foldGet(k,def){ try{ const v=localStorage.getItem(k); return v==null?def:(v==='1'); }catch(e){ return def; } }
+let _mtFoldPast=_foldGet('ai_sched_mtfoldpast', true);     // 定例一覧：過ぎた回を畳む
+let _tpFoldDone=_foldGet('ai_sched_tpfolddone', true);     // 開いた回：済んだお題を畳む
+function foldHead(kind, label, n, folded){
+  return `<button class="tpfold" data-fold="${kind}" title="${folded?'開いて表示します':'畳んで隠します'}">`+
+    `<span class="cx">${folded?'▸':'▾'}</span>${label}<span class="n">${n}件</span></button>`;
+}
+function tpFoldGroup(rows, kind, label, cls, folded){
+  if(!rows.length) return '';
+  return foldHead(kind, label, rows.length, folded)
+    + (folded ? '' : `<div class="tpgrp ${cls||''}">`+rows.map(tpCard).join('')+`</div>`);
+}
 function timeOpts(sel, ph){ let o=`<option value=""${sel?'':' selected'}>${ph||'--:--'}</option>`;   // 15分刻みの時刻オプション（8:00〜21:45）
   for(let h=8;h<=21;h++) for(const mm of ['00','15','30','45']){ const v=String(h).padStart(2,'0')+':'+mm; o+=`<option value="${v}"${v===sel?' selected':''}>${v}</option>`; }
   return o; }
@@ -2517,12 +2538,14 @@ function roomOpts(sel){ let o='<option value="">（会議室なし）</option>';
   if(sel && !found) o+=`<option value="${esca(sel)}" selected>${esc(sel)}（その他）</option>`;
   return o; }
 function roomRes(name){ const r=ROOMS.find(x=>x.k===name); return r?r.res:''; }
+function tpFoldPast(inner, n){
+  return foldHead('past','🗂 過去ログ（終わった定例）', n, _mtFoldPast)+(_mtFoldPast?'':inner);
+}
 function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
   const todayY=ymd(new Date());
   const nextId=(list.find(m=>m.date&&m.date>=todayY)||{}).id;   // 当日を含む直近の1件が「次回」
-  let h=`<div class="tpsec">定例一覧（クリックで概要・お題を記入／📅でカレンダー登録）</div>`;
-  h+= list.length ? list.map(m=>{ const c=mtCounts(m.id), co=carryCount(m.id);
+  const mtRow=m=>{ const c=mtCounts(m.id), co=carryCount(m.id);
       const past=!!(m.date&&m.date<todayY), isNext=(m.id===nextId);
       return `<div class="mtrow${past?' past':''}${isNext?' next':''}" data-open-mt="${esca(m.id)}">`+
         `<div class="l1"><span class="mtt">${esc(m.title||'(無題の定例)')}</span>`+
@@ -2533,8 +2556,18 @@ function renderMeetingList(box){
         `<span class="mtc">お題 ${c.total}件${c.open?'（未対応 '+c.open+'）':''}`+
           (co?` ／ <span class="co">🔁 持ち越し ${co}件</span>`:'')+`</span>`+
         (m.note?`<div class="mtn">${esc(m.note)}</div>`:'')+
-      `</div>`;
-    }).join('') : `<div class="tpempty">定例がまだありません。下の「＋ 定例を追加」から登録してください。</div>`;
+      `</div>`; };
+  // 過ぎた回は下に畳む（日付昇順のままだと、古い回が上に積み上がって次回が見えなくなる）。
+  // 日付未設定は「これから」に入れる（消えると気づけない）。
+  const past=list.filter(m=>m.date&&m.date<todayY);
+  const up=list.filter(m=>!(m.date&&m.date<todayY));
+  let h=`<div class="tpsec">定例一覧（クリックで概要・お題を記入／📅でカレンダー登録）</div>`;
+  if(!list.length) h+=`<div class="tpempty">定例がまだありません。下の「＋ 定例を追加」から登録してください。</div>`;
+  else {
+    h+= up.length ? up.map(mtRow).join('')
+      : `<div class="tpempty">これからの定例が登録されていません。</div>`;
+    if(past.length) h+=tpFoldPast(past.slice().reverse().map(mtRow).join(''), past.length);
+  }
   // 全部過ぎている＝次回が未登録。前回を引き継いだ登録を促す
   if(list.length && !nextId) h+=`<div class="tpempty">直近の定例は終了しています。「＋ 定例を追加」で次回を登録してください。<b>日付は直近の開催間隔からの推定値</b>なので、招待メール・カレンダーで確認してから追加してください。</div>`;
   // 追加はボタン → 押すとフォームが開く。_mtDraft があれば最初から開いてプリセット表示
@@ -2989,8 +3022,14 @@ function renderMeetingTable(box){
      ` placeholder="話したいこと・相談したいことを書く"><button id="tpQuickAdd">追加</button></div>`+
      `<div class="tpquickhint">Enterでも追加できます${meAuthor()?`／名前は「${esc(meAuthor())}」で入ります`:''}。詳しいメモは追加したあと「▸ 詳細」から。`+
      (meAuthorIsRaw()?`<br><b>表示名がメールのIDのままです。</b>上の「氏名」欄に名前を入れると、以降の書き込みに反映されます。`:'')+`</div>`;
-  h+=tpGroup(carried,'🔁 前回からの持ち越し','carry');
-  h+=tpGroup(own, carried.length?'この回のお題':'お題','');
+  // 済んだお題（✓）はまとめて下に畳む。議事録として残すので消さない＝「過去ログ」扱い。
+  const carOpen=carried.filter(t=>!t.done), ownOpen=own.filter(t=>!t.done);
+  const doneRows=carried.filter(t=>t.done).concat(own.filter(t=>t.done));
+  h+=tpGroup(carOpen,'🔁 前回からの持ち越し','carry');
+  h+=tpGroup(ownOpen, carOpen.length?'この回のお題':'お題','');
+  if(!carOpen.length && !ownOpen.length && doneRows.length)
+    h+=`<div class="tpnote-sm">この回のお題はすべて「話した（✓）」になっています。中身は下の過去ログから読めます。</div>`;
+  h+=tpFoldGroup(doneRows,'tpdone','✓ この回で話した（記録）','done',_tpFoldDone);
   if(rows.length) h+=`<div class="tpnote-sm">✓ は「この回で話した」の印です（タスクの完了ではありません）。話せなかったものは「▶ ◯/◯の定例へ送る」で次に回せます。</div>`;
   if(!rows.length) h+=`<div class="tpempty">まだお題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
   // 前の回で未対応のまま終わったお題＝この回に入れるかどうかを、ここで一覧して選べるようにする
@@ -3240,6 +3279,11 @@ document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target
     if(k==='half'){ try{ localStorage.removeItem(KEY); }catch(err){} } else store(cur); });
 })();
 document.getElementById('topicBody').addEventListener('click', e=>{
+  const fd=e.target.closest('[data-fold]');
+  if(fd){ const k=fd.dataset.fold;
+    if(k==='past'){ _mtFoldPast=!_mtFoldPast; try{ localStorage.setItem('ai_sched_mtfoldpast', _mtFoldPast?'1':'0'); }catch(err){} }
+    else { _tpFoldDone=!_tpFoldDone; try{ localStorage.setItem('ai_sched_tpfolddone', _tpFoldDone?'1':'0'); }catch(err){} }
+    renderTopics(); return; }
   if(e.target.closest('#tpBack')){ _openMeeting=null; _mtEdit=_noteEdit=false; renderTopics(); return; }
   if(e.target.closest('#mtAddToggle')){ const f=document.getElementById('mtAddForm');
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
