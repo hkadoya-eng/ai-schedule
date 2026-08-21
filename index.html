@@ -2638,6 +2638,19 @@ function nextMeetingDraft(){ ensureBoards();
            start:base.start||'', end:base.end||'', room:base.room||'',
            basis:mdNum(parse(base.date))+' の '+span+'（これまでの開催間隔から推定）'
                  +(skip?'／'+skip+'回ぶん先送りして今日以降にしています':'') }; }
+// Googleカレンダーの「予定を作成」画面を開く。
+// ⚠ このアプリはカレンダーを読めない（そういう権限を取っていない）ので、既に予定があるかは判定できない。
+//   定例は隔週の繰り返し予約で入っていることが多く、ここから作ると二重に予定が立つ。だから毎回確認する。
+//   お題を既存の予定に足したいだけなら「📋 説明欄をコピー」を使う。
+function openGcal(m){
+  const g=(state.members||[]).length;
+  if(!confirm('Googleカレンダーの「予定を作成」画面を開きます。\n\n'+
+    '・保存はGoogleの画面でご自分で押してください（自動では作られません）\n'+
+    '・招待先はこのアプリにログインした '+g+'名 だけです（未ログインの人は入りません）\n'+
+    '・⚠ この定例が繰り返し予約などで既にカレンダーに入っている場合、ここから作ると二重になります\n\n'+
+    'お題を既存の予定に足したいだけなら「📋 説明欄をコピー」を使ってください。\n\n続けますか？')) return;
+  window.open(gcalUrl(m),'_blank','noopener');
+}
 function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _openMeeting=null; renderTopics(); showTopicPanel();
   const t=document.getElementById('mtTitle'); if(t) t.focus(); }
 // ===== 決まっている予定のワンタイム投入（seed）=====
@@ -3018,7 +3031,8 @@ function renderMeetingTable(box){
   const carried=tpOrdered(rows.filter(t=>t.from)), own=tpOrdered(rows.filter(t=>!t.from));
   const movedOut=state.topics.filter(t=>t&&t.from===m.id);   // この回から次回へ移したもの（痕跡として残す）
   let h=`<div class="tphd"><button class="tpback" id="tpBack">← 定例一覧</button>`+
-        `<button class="tpgcal" id="tpGcal" title="Googleカレンダーに予定を作成（概要とお題を説明欄に、ログイン済みメンバーを招待先に自動セット）">📅 カレンダー登録</button></div>`+
+        `<button class="tpgcal" id="tpDesc" title="この回の「概要＋お題」をコピーします。すでにカレンダーに入っている予定（繰り返し予約など）の説明欄に貼ってください">📋 説明欄をコピー</button>`+
+        `<button class="tpgcal" id="tpGcal" title="Googleカレンダーの「予定を作成」画面を開きます（保存はご自分で。繰り返し予約が既にある定例だと二重になります）">📅 新しく予定を作る</button></div>`+
         `<div class="mthead"><div class="ttl">${esc(m.title||'定例')}</div>`+
           `<div class="whenline">${esc(mtWhenLine(m))}`+
           `<button class="mini" id="mtEditToggle" title="定例名・日時・会議室を直す">${_mtEdit?'とじる':'✎ 直す'}</button></div></div>`;
@@ -3170,10 +3184,14 @@ function editCell(id, field, text){ const t=state.topics.find(x=>x&&x.id===id); 
   const v=String(text==null?'':text), cur=(t[field]==null?'':String(t[field]));
   if(v===cur) return; t[field]=v; t._u=Date.now(); save(); }
 function _plus1h(hhmm){ const a=String(hhmm).split(':'); const h=(+a[0]+1)%24; return String(h).padStart(2,'0')+':'+String(+a[1]||0).padStart(2,'0'); }
+// カレンダーの説明欄に貼る本文（概要＋お題）。予定作成URLと「説明欄をコピー」で共用する。
+function gcalDetails(m){
+  const rows=tpOrdered(state.topics.filter(t=>t&&t.meetingId===m.id));
+  return (m.note?'■会議の概要\n'+m.note+'\n\n':'')+
+    '■お題\n'+(rows.length? rows.map(t=>`・${t.done?'[済]':''}${t.from?'[持ち越し]':''}[${t.name||''}] ${t.todo||''}${t.detail?' — '+t.detail:''}`).join('\n') : '（お題未記入）');
+}
 function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレートURL（認証不要・入力済みで開く）
-  const rows=state.topics.filter(t=>t&&t.meetingId===m.id);
-  const det=(m.note?'■会議の概要\n'+m.note+'\n\n':'')+
-    '■お題\n'+(rows.length? rows.map(t=>`・${t.from?'[持ち越し]':''}[${t.name||''}] ${t.todo||''}${t.detail?' — '+t.detail:''}`).join('\n') : '（お題未記入）');
+  const det=gcalDetails(m);
   const p=new URLSearchParams(); p.set('action','TEMPLATE'); p.set('text', m.title||'定例');
   if(m.date){ const d=String(m.date).replace(/-/g,'');
     const st=(m.start||'14:00'), en=(m.end||(m.start?_plus1h(m.start):'15:00'));
@@ -3310,7 +3328,10 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
       if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
-  if(e.target.closest('#tpGcal')){ const m=state.meetings.find(x=>x.id===_openMeeting); if(m) window.open(gcalUrl(m),'_blank','noopener'); return; }
+  if(e.target.closest('#tpDesc')){ const m=state.meetings.find(x=>x.id===_openMeeting);
+    if(m){ try{ navigator.clipboard.writeText(gcalDetails(m)); tpToast('説明欄用のテキストをコピーしました。カレンダーの予定を開いて貼ってください'); }
+           catch(err){ alert('コピーできませんでした'); } } return; }
+  if(e.target.closest('#tpGcal')){ const m=state.meetings.find(x=>x.id===_openMeeting); if(m) openGcal(m); return; }
   if(e.target.closest('#tpAddRow')){ addRow(); return; }
   if(e.target.closest('#tpQuickAdd')){ addTopicQuick(); return; }
   if(e.target.closest('#mtEditToggle')){ _mtEdit=!_mtEdit; renderTopics(); return; }
@@ -3321,7 +3342,7 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   if(af){ const [tid,f]=af.dataset.addfld.split('|'); _tpShow.add(tid+':'+f); renderTopics();
     const sel='#topicBody '+(f==='task'?`[data-addtask="${tid}"]`:`[data-edit="${tid}"][data-field="${f}"]`);
     const el=document.querySelector(sel); if(el){ el.focus(); el.scrollIntoView({block:'nearest'}); } return; }
-  const gmt=e.target.closest('[data-gcal-mt]'); if(gmt){ e.stopPropagation(); const m=state.meetings.find(x=>x.id===gmt.dataset.gcalMt); if(m) window.open(gcalUrl(m),'_blank','noopener'); return; }
+  const gmt=e.target.closest('[data-gcal-mt]'); if(gmt){ e.stopPropagation(); const m=state.meetings.find(x=>x.id===gmt.dataset.gcalMt); if(m) openGcal(m); return; }
   const dmt=e.target.closest('[data-del-mt]'); if(dmt){ e.stopPropagation(); delMeeting(dmt.dataset.delMt); return; }
   const omt=e.target.closest('[data-open-mt]'); if(omt){ _openMeeting=omt.dataset.openMt; _mtEdit=_noteEdit=false; renderTopics(); return; }
   const tg=e.target.closest('[data-toggle]'); if(tg){ toggleTopic(tg.dataset.toggle); return; }
