@@ -1163,7 +1163,7 @@
 <div class="modal" id="summaryModal"><div class="m">
   <div class="mh"><div class="t">📊 今週のサマリー</div><div class="s">全体進捗・遅延・今週やること・直近マイルストーン。会議でそのまま共有できます。</div></div>
   <div class="mb" id="summaryBody"></div>
-  <div class="mf"><button class="ghost" id="sumCopy">📋 テキストでコピー</button><button class="ghost" id="sumPrint">🖨 印刷／PDF</button><button class="big" id="summaryClose">閉じる</button></div>
+  <div class="mf"><button class="ghost" id="sumCallout" title="メールにそのまま貼れる「呼びかけ文」（人別つき）をコピーします">📣 呼びかけ文をコピー</button><button class="ghost" id="sumCopy">📋 テキストでコピー</button><button class="ghost" id="sumPrint">🖨 印刷／PDF</button><button class="big" id="summaryClose">閉じる</button></div>
 </div></div>
 
 <div class="modal" id="myModal"><div class="m">
@@ -3623,6 +3623,110 @@ function summaryMeetings(){
     prevOpen: prev?of(prev.id).filter(t=>!t.done && !String(t.result||'').trim()):[]
   };
 }
+// ===== 呼びかけ（週次でメールに貼る文面をつくる） =====
+// 全体サマリーだけ配っても読み飛ばされる。効くのは「自分の名前が書いてある」ことと、
+// 「遅れてる」ではなく「情報が古い」で催促できること。この2つをここで用意する。
+const APP_URL='https://ai-schedule-delta.vercel.app/';
+const STALE_DAYS=14;      // 定例が隔週なので「1サイクル丸ごと触られていない」が目安
+// 停滞＝開始日が来ているのに STALE_DAYS 以上だれも触っていない未完了の作業。
+// 開始前のものを入れると未着手が全部並んで誰も読まなくなるので外す。
+function staleInfo(x){
+  const n=x.n; if(getStage(n)==='完了') return null;
+  if(n.kind==='small' && n.status && n.status!=='normal') return null;   // AI対象外・未割当などは対象外
+  const st=effStart(n); if(!st) return null;
+  const today=new Date(); today.setHours(0,0,0,0);
+  if(parse(st)>today) return null;                                       // まだ始まっていない
+  const u=+n._u||0;
+  const days = u ? Math.floor((today-u)/86400000) : null;                // null＝一度も更新されていない
+  if(days!==null && days<STALE_DAYS) return null;
+  return { x, days, u };
+}
+function staleList(){ return collectLeafInfo().map(staleInfo).filter(Boolean).sort((a,b)=>(a.u||0)-(b.u||0)); }
+function staleLabel(v){ return v.days===null ? '更新の記録なし' : (v.days+'日 更新なし'); }
+// 担当欄から呼びかけ先の名前を取り出す。
+// 全角（）は副担当（例「蔵本（山根）」）＝別の人として拾う。
+// 半角()は名前の一部（例「伊藤(真)」）＝くっつけたまま。実データがこの使い分けになっている。
+// ただし全角（）に人名でない注記が入ることもある（例「山口（単独）」）ので下の語は落とす。
+const CO_NOT_PERSON=/^(単独|要検討|検討中|未定|未割当|予定|兼任|サブ|補助|確認|調整中|応相談|TBD|[-—―?？])$/;
+function ownersOf(role){
+  let t=String(role||'').trim(); if(!t) return [];
+  t=t.replace(/（([^）]*)）/g, '・$1');
+  return t.split(/[・,、\/／]|\s+or\s+/)
+    .map(v=>v.trim().replace(/[？?]+$/,'').replace(/T$/,'').trim())
+    .filter(v=>v && !CO_NOT_PERSON.test(v));
+}
+function callOutData(){
+  const d=summaryData(), st=staleList();
+  const by=new Map();
+  const push=(nm,key,item)=>{ if(!by.has(nm)) by.set(nm,{name:nm,late:[],week:[],stale:[]}); by.get(nm)[key].push(item); };
+  d.late.forEach(x=> ownersOf(x.role).forEach(nm=>push(nm,'late',x)));
+  d.week.forEach(x=> ownersOf(x.role).forEach(nm=>push(nm,'week',x)));
+  st.forEach(v=> ownersOf(v.x.role).forEach(nm=>push(nm,'stale',v)));
+  // 担当が読み取れない遅延・停滞は「担当未定」に集める（誰も拾わないと文面から消えてしまう）
+  const none={name:'（担当未定）',late:[],week:[],stale:[]};
+  d.late.forEach(x=>{ if(!ownersOf(x.role).length) none.late.push(x); });
+  st.forEach(v=>{ if(!ownersOf(v.x.role).length) none.stale.push(v); });
+  const people=[...by.values()].sort((a,b)=>
+    (b.late.length+b.stale.length)-(a.late.length+a.stale.length) || a.name.localeCompare(b.name,'ja'));
+  if(none.late.length||none.stale.length) people.push(none);
+  return { d, st, people };
+}
+const CO_MAX=10;                                   // 長い一覧は切るが、切ったことは必ず書く
+function coName(x){ return String(x.n.name||''); }
+function coDue(x){ const e=effEnd(x.n); return e?mdNum(parse(e)):null; }
+// 同じ作業が「遅延」「停滞」「今週」に3重で並ぶと読む気が失せるので、1作業=1行にまとめる。
+// 並び順は 遅延 → 停滞 → 今週だけ。要対応（遅延・停滞）と今週だけの分は数も分けて数える。
+function coItems(p){
+  const seen=new Map();
+  const get=x=>{ const id=x.n.id; if(!seen.has(id)) seen.set(id,{x, late:false, stale:null, week:false}); return seen.get(id); };
+  p.late.forEach(x=>{ get(x).late=true; });
+  p.stale.forEach(v=>{ get(v.x).stale=v; });
+  p.week.forEach(x=>{ get(x).week=true; });
+  const rank=r=> r.late?0:(r.stale?1:2);
+  const rows=[...seen.values()].sort((a,b)=>rank(a)-rank(b));
+  return { rows, act:rows.filter(r=>r.late||r.stale).length, wk:rows.filter(r=>!r.late&&!r.stale).length };
+}
+function coTags(r){
+  const t=[];
+  if(r.late) t.push('遅延'+(coDue(r.x)?' 〜'+coDue(r.x):'')+'・'+getProgress(r.x.n)+'%');
+  if(r.stale) t.push(staleLabel(r.stale));
+  if(!r.late && !r.stale && r.week) t.push('今週');
+  return t.join(' ／ ');
+}
+function callOutText(){
+  const co=callOutData(), d=co.d, st=co.st, people=co.people;
+  const mm=summaryMeetings(), t=new Date(), L=[];
+  L.push('【AI推進 進捗共有 '+(t.getMonth()+1)+'/'+t.getDate()+'】');
+  L.push('');
+  L.push('全体 '+d.pct+'％ ／ 完了 '+d.done+'/'+d.total+' ／ 遅延 '+d.late.length+'件 ／ '+STALE_DAYS+'日以上動いていない '+st.length+'件');
+  { const a=actualHours(); if(a.cnt) L.push('AI工数削減（実績）'+a.old+'h → '+a.act+'h ＝ '+a.pct+'％減'); }
+  if(mm.next) L.push('次回の定例 '+mtWhenLine(mm.next)+(mm.next.title?'（'+mm.next.title+'）':''));
+  L.push('ボード '+APP_URL);
+  L.push('');
+  L.push('■ '+STALE_DAYS+'日以上だれも触っていない作業（'+st.length+'件）');
+  if(!st.length) L.push('・なし。ありがとうございます');
+  else {
+    st.slice(0,CO_MAX).forEach(v=>L.push('・'+coName(v.x)+'（'+(v.x.role||'担当未定')+'・'+getProgress(v.x.n)+'％・'+staleLabel(v)+'）'));
+    if(st.length>CO_MAX) L.push('・ほか '+(st.length-CO_MAX)+'件（ボードでご確認ください）');
+  }
+  L.push('');
+  L.push('■ 人別');
+  if(!people.length) L.push('・呼びかける項目はありません');
+  people.forEach(p=>{
+    const ci=coItems(p);
+    L.push('＠'+p.name+'　要対応 '+ci.act+'件'+(ci.wk?'（ほかに今週の予定 '+ci.wk+'件）':''));
+    ci.rows.slice(0,CO_MAX).forEach(r=>{ const tg=coTags(r); L.push('　・'+coName(r.x)+(tg?'　… '+tg:'')); });
+    if(ci.rows.length>CO_MAX) L.push('　・ほか '+(ci.rows.length-CO_MAX)+'件（ボードでご確認ください）');
+    L.push('');
+  });
+  L.push('');
+  L.push('■ 更新のやり方（30秒）');
+  L.push('　1. '+APP_URL+' を開く（Googleアカウントでそのまま入れます）');
+  L.push('　2. 自分の行の「進捗」バッジをクリック');
+  L.push('　3. ％と状態を選ぶだけ。保存ボタンはありません（自動で全員に反映されます）');
+  L.push('※ 期間や担当がちがっていたら、その場で直してもらって大丈夫です。');
+  return L.join('\n');
+}
 function renderSummary(){ ensureBoards(); const box=document.getElementById('summaryBody'); if(!box) return;
   const d=summaryData();
   const row=x=>{ const ss=schedStatus(x.n); return `<div class="smrow ${ss||''}"><span class="smn">${lateMark(ss)}${esc(x.n.name)}</span><span class="smmeta">${esc(x.role||'—')} ／ ${x.n.start?mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):'日付未設定'} ／ ${getProgress(x.n)}%</span></div>`; };
@@ -3630,6 +3734,18 @@ function renderSummary(){ ensureBoards(); const box=document.getElementById('sum
   { const a=actualHours(); if(a.cnt) h+=`<div class="smnote">⏱ AI工数削減（実績）：<b>${a.old}h → ${a.act}h ＝ ${a.pct}%減</b>（実績を入れた ${a.cnt}件で計測）</div>`; }
   h+=`<div class="tpsec">⚠ 遅延している作業（${d.late.length}）</div>`+(d.late.length?d.late.map(row).join(''):'<div class="tpempty">なし。順調です 👍</div>');
   h+=`<div class="tpsec">📅 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}・${d.week.length}件）</div>`+(d.week.length?d.week.map(row).join(''):'<div class="tpempty">今週に期間がかかる未完作業はありません。</div>');
+  { const st=staleList();
+    h+=`<div class="tpsec">⏸ ${STALE_DAYS}日以上だれも触っていない作業（${st.length}）</div>`+
+       (st.length? st.slice(0,CO_MAX).map(v=>`<div class="smrow"><span class="smn">${esc(coName(v.x))}</span><span class="smmeta">${esc(v.x.role||'担当未定')} ／ ${getProgress(v.x.n)}% ／ ${esc(staleLabel(v))}</span></div>`).join('')
+         +(st.length>CO_MAX?`<div class="smnote">ほか ${st.length-CO_MAX}件（呼びかけ文には全件の件数が入ります）</div>`:'')
+         : '<div class="tpempty">なし。全部きちんと動いています 👍</div>'); }
+  { const co=callOutData();
+    h+=`<div class="tpsec">📣 呼びかけの宛先（${co.people.length}人）</div>`+
+       (co.people.length? co.people.map(p=>{ const ci=coItems(p);
+            return `<div class="smrow"><span class="smn">＠${esc(p.name)}</span><span class="smmeta">`+
+              [ci.act?'要対応 '+ci.act:'', ci.wk?'今週 '+ci.wk:''].filter(Boolean).join(' ／ ')+`</span></div>`; }).join('')
+            +`<div class="smnote">下の「📣 呼びかけ文をコピー」で、メールに貼れる文面（人別つき）が取れます。</div>`
+         : '<div class="tpempty">呼びかける項目はありません。</div>'); }
   if(d.ums.length) h+=`<div class="tpsec">🚩 この先のマイルストーン</div>`+d.ums.map(m=>`<div class="smrow"><span class="smn">🚩 ${esc(m.label||'')}</span><span class="smmeta">${esc(m.date)}</span></div>`).join('');
   // ここから定例（打合せ予定に書かれた内容をそのまま持ってくる）
   const mm=summaryMeetings();
@@ -3659,6 +3775,8 @@ function summaryText(){ const d=summaryData(); const L=[];
   { const a=actualHours(); if(a.cnt) L.push(`AI工数削減（実績）${a.old}h → ${a.act}h＝${a.pct}%減（${a.cnt}件で計測）`); }
   L.push(''); L.push('■ 遅延している作業');
   L.push(d.late.length?d.late.map(x=>`・${x.n.name}（${x.role||'—'}・${getProgress(x.n)}%・${schedStatus(x.n)==='overdue'?'超過':'遅れ'}）`).join('\n'):'・なし');
+  { const st=staleList(); L.push(''); L.push(`■ ${STALE_DAYS}日以上だれも触っていない作業（${st.length}件）`);
+    L.push(st.length? st.slice(0,CO_MAX).map(v=>`・${coName(v.x)}（${v.x.role||'担当未定'}・${getProgress(v.x.n)}%・${staleLabel(v)}）`).join('\n')+(st.length>CO_MAX?`\n・ほか ${st.length-CO_MAX}件`:'') : '・なし'); }
   L.push(''); L.push(`■ 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}）`);
   L.push(d.week.length?d.week.map(x=>`・${x.n.name}（${x.role||'—'}・${getProgress(x.n)}%）`).join('\n'):'・なし');
   if(d.ums.length){ L.push(''); L.push('■ 直近マイルストーン'); L.push(d.ums.map(m=>`・${m.date} ${m.label||''}`).join('\n')); }
@@ -3683,6 +3801,7 @@ document.getElementById('topicBtn').addEventListener('click', ()=>{ _tpOpen() ? 
 document.getElementById('sumBtn').addEventListener('click', ()=>{ renderSummary(); document.getElementById('summaryModal').classList.add('on'); });
 document.getElementById('summaryModal').addEventListener('click', e=>{
   if(e.target.id==='summaryModal'||e.target.id==='summaryClose'){ document.getElementById('summaryModal').classList.remove('on'); return; }
+  const cob=e.target.closest('#sumCallout'); if(cob){ try{ navigator.clipboard.writeText(callOutText()); const o=cob.textContent; cob.textContent='✓ コピーしました（メールに貼ってください）'; setTimeout(()=>{cob.textContent=o;},1800); }catch(err){ alert('コピーできませんでした'); } return; }
   const cp=e.target.closest('#sumCopy'); if(cp){ try{ navigator.clipboard.writeText(summaryText()); const o=cp.textContent; cp.textContent='✓ コピーしました'; setTimeout(()=>{cp.textContent=o;},1500); }catch(err){ alert('コピーできませんでした'); } return; }
   if(e.target.closest('#sumPrint')){ window.print(); return; }
 });
