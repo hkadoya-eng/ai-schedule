@@ -839,6 +839,8 @@
   .delrow:hover{border-color:#d4707a; color:#c2555f;}
   .tpcard .cell.todo{flex:1; min-width:0; font-size:14.5px; font-weight:600; line-height:1.55;}
   .tpcard .cell.memo{font-size:13px; min-height:36px; color:var(--muted); line-height:1.65; margin-top:1px;}   /* class名は memo。detail は左の詳細パネルが使っている */
+  /* 記入欄は改行をそのまま見せる。これが無いと保存されている改行が詰まって1行に見える（ceText と対で必要） */
+  .tpcard .cell{white-space:pre-wrap; overflow-wrap:anywhere;}
   .tpcard.done .cell.todo{text-decoration:line-through;}
   /* 開閉と、開いたときの記入欄 */
   .tpcard{cursor:pointer;} .tpcard.open{cursor:auto;} .tpcard .cell, .tpcard a{cursor:auto;}
@@ -2740,6 +2742,24 @@ function prefillNextIfEmpty(){ const g=id=>document.getElementById(id);
   if(g('mtRoom')) g('mtRoom').value=d.room||''; }
 // お題1件＝1カード。閉じているときは要点だけ、クリックで開くと下に記入欄が出る。
 let _tpOpenCards=new Set();   // 開いているカード（画面の状態なので保存しない）
+// contenteditable の中身を改行つきで取り出す（2026-08-21修正）。
+// ・textContent は Enterで入る <div>／<br> を無視する＝**改行が消えたまま保存されていた**
+// ・innerText はレイアウト依存。畳まれている／非表示のカードでは textContent に落ちて同じ症状になる
+// なので innerHTML から自分で組み立てる。表示側の .tpcard .cell の white-space:pre-wrap と対で必要。
+// 改行はブロック要素の「開始」側で入れる（`1行目<div>2行目</div>` の1行目と2行目の間に必要なので）。
+function ceText(el){
+  if(!el) return '';
+  const h=String(el.innerHTML||'')
+    .replace(/<br\s*\/?>/gi,'\n')
+    .replace(/<(div|p|li|tr|h[1-6]|blockquote|pre)\b[^>]*>/gi,'\n')
+    .replace(/<[^>]*>/g,'');
+  const d=document.createElement('textarea'); d.innerHTML=h;      // &amp; などを文字に戻す
+  return d.value.replace(/\r\n?/g,'\n')
+    .replace(/ /g,' ')
+    .replace(/^\n/,'')          // 先頭が <div> で始まるケース（1行目もブロックに入っている）
+    .replace(/\n{3,}/g,'\n\n')  // 入れ子で増えた分は空行1つまでに抑える
+    .replace(/\n+$/,'');
+}
 function tpCell(t, field, cls, ph){
   return `<div class="cell ${cls}" contenteditable="true" data-edit="${esca(t.id)}" data-field="${field}" data-ph="${esca(ph)}">${esc(t[field]||'')}</div>`;
 }
@@ -2788,7 +2808,7 @@ function tpLinkSuggest(t){
 function addSugLink(tid,u){
   const t=state.topics.find(x=>x&&x.id===tid); if(!t||!u) return;
   const cell=document.querySelector('#topicBody [data-edit="'+tid+'"][data-field="links"]');
-  const cur=String((cell?cell.textContent:t.links)||'').replace(/\s+$/,'');   // 画面に出ている文字を正とする
+  const cur=String((cell?ceText(cell):t.links)||'').replace(/\s+$/,'');   // 画面に出ている文字を正とする（改行を保つ）
   if(urlsIn(cur).indexOf(u)>=0) return;                                        // すでに入っていれば足さない
   t.links=(cur?cur+'\n':'')+u; t._u=Date.now(); _tpShow.add(tid+':links'); save(); renderTopics();
 }
@@ -3419,8 +3439,9 @@ document.getElementById('topicBody').addEventListener('input', e=>{
 document.getElementById('topicBody').addEventListener('blur', e=>{
   const ed=e.target.closest('[data-edit]'); if(ed){
     if(_tpRendering || !ed.isConnected) return;       // 再描画で消える要素のblurは無視（空で上書きしてしまう）
-    editCell(ed.dataset.edit, ed.dataset.field, ed.textContent);
-    if(ed.dataset.field==='links'){ const c=ed.parentElement.querySelector('.tplinks'); if(c) c.innerHTML=tpLinkAnchors(ed.textContent); }
+    const _v=ceText(ed);                             // textContent だと改行が消える（ceText の注記参照）
+    editCell(ed.dataset.edit, ed.dataset.field, _v);
+    if(ed.dataset.field==='links'){ const c=ed.parentElement.querySelector('.tplinks'); if(c) c.innerHTML=tpLinkAnchors(_v); }
     return; }
   if(e.target.closest('[data-mtnote]')){ clearTimeout(_noteTimer); save(); }
 }, true);
