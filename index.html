@@ -3986,18 +3986,37 @@ function slackText(){
     L.push('*次回のお題*　まだ登録がありません');
     L.push('_話したいことがあれば、当日までにボードに足しておいてください。_');
   }
+  // 前の回に残っている未対応（＝まだ次回へ移していないお題）。移し忘れると回を跨いで埋もれるので、
+  // 「次回のお題」とは別枠で必ず出す。次回へ移した分は上の一覧に「／持ち越し」で出るので二重にならない。
+  if(mm.prev && mm.prevOpen.length){
+    L.push('');
+    L.push('*前回（'+mtWhenLine(mm.prev)+'）で片づいていないお題*（'+mm.prevOpen.length+'件）');
+    mm.prevOpen.slice(0,SL_TP_MAX).forEach(t=>{
+      L.push('・'+(t.todo||'(無題)')+(t.name?'（'+t.name+'）':''));
+    });
+    if(mm.prevOpen.length>SL_TP_MAX) L.push('・ほか '+(mm.prevOpen.length-SL_TP_MAX)+'件（ボードで見られます）');
+    L.push('_次回に持ち越すものは、カードの「▶ 次の回へ送る」で移してください。_');
+  }
   L.push('');
   const rows=co.people.map(p=>({p, ci:coItems(p)})).filter(v=>v.ci.act>0);
   if(!rows.length) L.push('*要対応なし* 🎉 全部きちんと動いています');
   else {
-    L.push('*要対応*');
+    L.push('*要対応*　（遅延＝期限を過ぎている／停滞＝'+STALE_DAYS+'日以上だれも触っていない）');
     rows.slice(0,CO_MAX).forEach(v=>{
-      // チャンネルで効くのは「名前」と「件数」。中身は代表1件だけにして1行に収める（詳細はボードで見る）
+      // チャンネルで効くのは「名前」と「件数」。中身は1件だけ添えて1行に収める（詳細はボードで見る）。
+      // 「例）」だけだと何の例なのか伝わらなかったので、内訳（遅延n・停滞n）＋「うち1件：」に変えた。
+      const lt=v.ci.rows.filter(r=>r.late).length, sl=v.ci.rows.filter(r=>!r.late&&r.stale).length;
+      const bd=[lt?'遅延'+lt:'', sl?'停滞'+sl:''].filter(Boolean).join('・');
       const top=v.ci.rows.filter(r=>r.late||r.stale)[0];
-      const ex=top?('例）'+coName(top.x)+(top.stale?'（'+staleLabel(top.stale)+'）':'')):'';
-      L.push('・*'+v.p.name+'*　'+v.ci.act+'件　'+ex);
+      const ex=top?('　うち1件：'+coName(top.x)+'（'+coTags(top)+'）'):'';
+      L.push('・*'+v.p.name+'*　'+v.ci.act+'件'+(bd?'（'+bd+'）':'')+ex);
     });
     if(rows.length>CO_MAX) L.push('・ほか '+(rows.length-CO_MAX)+'人（ボードでご確認ください）');
+    // 出ていない人は「担当が無い」のではなく「遅延も停滞も無い」。名前が消えると
+    // 「自分は関係ない／漏れている」のどちらか分からないので、必ず名前を出す。
+    const acted=new Set(rows.map(v=>v.p.name));
+    const calm=[...rosterNames().keys()].filter(n=>!acted.has(n));
+    if(calm.length) L.push('_遅延・停滞なし：'+calm.join('・')+'_');
   }
   L.push('');
   L.push('_更新は30秒：ボードを開く → 自分の行の「進捗」バッジ → % を選ぶだけ（保存ボタンはありません）_');
