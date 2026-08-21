@@ -2583,6 +2583,8 @@ function renderMeetingList(box){
   const d=_mtDraft||{};
   h+=`<div class="mtaddwrap">`+
      `<button id="mtAddToggle" class="mtaddbtn">＋ 定例を追加</button>`+
+     (d.basis?`<div class="tpquickhint" style="margin:2px 0 6px">📅 <b>${esc(d.date)}</b>＝${esc(d.basis)}。`+
+       `<b>祝日・お盆で1回飛ぶことがあるので、カレンダーの実物で確かめてから追加してください。</b></div>`:'')+
      `<div class="mtadd" id="mtAddForm" style="display:${_mtDraft?'flex':'none'}">`+
        `<input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）" value="${esca(d.title||'')}">`+
        `<input id="mtDate" type="date" title="日付" value="${esca(d.date||'')}"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts(d.start||'','開始')}</select><span class="mtsep">〜</span>`+
@@ -2609,23 +2611,33 @@ function bumpMtTitle(t){ const s=String(t||'');
   const n=_kan2num(m[1]); if(!isFinite(n)) return s;
   const nx=/^\d+$/.test(m[1]) ? String(n+1) : _num2kan(n+1);
   return s.slice(0,m.index)+m[0].replace(m[1],nx)+s.slice(m.index+m[0].length); }
-// 開催間隔は「直近2回の間隔」から推定する（隔週・毎月などプロジェクトごとの実態に自動で合わせる）。
-// 履歴が1回だけ／間隔が不自然なときは隔週(14日)を既定にする。
+// 開催間隔は直近の履歴から「最頻値」で推定する（隔週・毎月などプロジェクトごとの実態に自動で合わせる）。
+// ⚠ 直近1回の間隔だけを見ると、祝日・お盆で1回飛んだだけで周期を誤る。
+//   実例：7/27→8/17 は 8/10 がお盆で飛んで 21日 になり、次回を 9/7（正しくは 8/31）と推定していた。
+//   休みで飛ぶと間隔は必ず「伸びる」＝短い方が本来の周期なので、同数のときは短い方を採る。
 const MT_INTERVAL_DEFAULT=14;
+function mtGaps(mts){
+  const g=[];
+  for(let i=Math.max(1, mts.length-8); i<mts.length; i++){
+    const d=Math.round((parse(mts[i].date)-parse(mts[i-1].date))/86400000);
+    if(d>=3 && d<=70) g.push(d); }
+  return g; }
 function mtInterval(mts){
-  if(mts.length<2) return MT_INTERVAL_DEFAULT;
-  const a=parse(mts[mts.length-2].date), b=parse(mts[mts.length-1].date);
-  const days=Math.round((b-a)/86400000);
-  return (days>=3 && days<=70) ? days : MT_INTERVAL_DEFAULT; }
+  const g=mtGaps(mts); if(!g.length) return MT_INTERVAL_DEFAULT;
+  const cnt=new Map(); g.forEach(v=>cnt.set(v,(cnt.get(v)||0)+1));
+  return [...cnt.entries()].sort((a,b)=> b[1]-a[1] || a[0]-b[0])[0][0]; }
 function nextMeetingDraft(){ ensureBoards();
   const mts=state.meetings.filter(m=>m&&m.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const base=mts[mts.length-1]; if(!base) return {};
   // 推定した間隔で、今日以降になるまで送る（久しぶりに開いても過去日が入らないように）
   const step=mtInterval(mts), todayY=ymd(new Date());
-  let d=addDays(parse(base.date),step), guard=0;
-  while(ymd(d)<todayY && guard++<400) d=addDays(d,step);
+  let d=addDays(parse(base.date),step), skip=0;
+  while(ymd(d)<todayY && skip++<400) d=addDays(d,step);
+  const span=(step%7===0)?((step/7)+'週間後'):(step+'日後');
   return { title:bumpMtTitle(base.title), date:ymd(d),
-           start:base.start||'', end:base.end||'', room:base.room||'' }; }
+           start:base.start||'', end:base.end||'', room:base.room||'',
+           basis:mdNum(parse(base.date))+' の '+span+'（これまでの開催間隔から推定）'
+                 +(skip?'／'+skip+'回ぶん先送りして今日以降にしています':'') }; }
 function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _openMeeting=null; renderTopics(); showTopicPanel();
   const t=document.getElementById('mtTitle'); if(t) t.focus(); }
 // ===== 決まっている予定のワンタイム投入（seed）=====
