@@ -23,7 +23,12 @@
     display:flex; align-items:center; gap:14px; flex:0 0 auto; flex-wrap:wrap;}
   header h1{font-size:16px; margin:0; font-weight:700;}
   header .sub{color:var(--muted); font-size:12px;}
-  .toolbar{display:flex; gap:8px; margin-left:auto; align-items:center; flex-wrap:wrap;}
+  .toolbar{display:flex; gap:8px; margin-left:auto; align-items:center; flex-wrap:nowrap; min-width:0;}
+  /* 打合せパネルを開くと横幅が半分になる。折り返して段が増えると「右上の◯◯」と言えなくなる＝
+     人に説明できなくなるので、段は増やさず、補助ボタンのラベルだけ隠して1段を保つ（位置が動かない）。 */
+  body.tpon .toolbar{gap:5px;}
+  body.tpon .toolbar .lbl{display:none;}
+  body.tpon .toolbar .btn, body.tpon .toolbar .seg button{padding-left:8px; padding-right:8px;}
   .btn{border:1px solid var(--line); background:#fff; color:var(--text); padding:5px 11px;
     border-radius:6px; cursor:pointer; font-size:12px; font-family:inherit;}
   .btn:hover{background:#eef3f9;}
@@ -128,7 +133,8 @@
   .mini.add{background:#cdece8; color:#1f8e8e;} .mini.del{background:#f3d4da; color:#b3303f;}
   .statusdot{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:6px;
     vertical-align:-1px;border:1px solid rgba(0,0,0,.15);cursor:pointer;}
-  td.role.unassigned{background:var(--gold)!important; color:#5b4a22; font-weight:600;}
+  /* 担当未確定は塗らない（オレンジは「遅延」専用にする）。担当欄の文字自体に「？」等が入っているので伝わる。 */
+  td.role.unassigned{color:#8a97a5; font-style:italic;}
   td.role,td.note{padding:3px 7px; vertical-align:middle; line-height:1.35;}
   td.role{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   td.note{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
@@ -224,7 +230,10 @@
   .stage{display:inline-flex; align-items:center; gap:3px; font-size:10px; font-weight:700; color:#fff;
     border-radius:9px; padding:1px 7px; margin-left:6px; vertical-align:1px; white-space:nowrap; cursor:pointer;}
   .stage .pct{opacity:.9; font-weight:600;}
-  .st-todo{background:#9aa6b3;} .st-doing{background:#3b7dd8;} .st-review{background:#6b4b9a;}
+  /* 未着手は「まだ何も起きていない」なので塗らない。全行が同じ色の錠剤で埋まると
+     どこを見ればいいか分からなくなる＝色が付いている＝何か起きている、に統一する。 */
+  .st-todo{background:transparent; color:#8a97a5; border:1px dashed #c7d0da; font-weight:600;}
+  .st-doing{background:#3b7dd8;} .st-review{background:#6b4b9a;}
   .st-done{background:#2e9e6b;} .st-hold{background:#c98a2b;}
   .agg{display:inline-block; font-size:10px; font-weight:700; color:#41607f; background:#e3ebf4;
     border-radius:9px; padding:1px 8px; margin-left:8px; vertical-align:1px;}
@@ -328,7 +337,7 @@
   .mini.add{background:rgba(47,182,176,.18); color:var(--teal);}
   .mini.del{background:rgba(194,85,99,.2); color:#e78a93;}
   .statusdot{border-color:rgba(255,255,255,.22);}
-  td.role.unassigned{background:rgba(242,177,61,.18)!important; color:var(--gold); font-weight:600;}
+  td.role.unassigned{color:#9db0c6; font-style:italic;}
   td.role[contenteditable="true"]:focus,td.note[contenteditable="true"]:focus{background:var(--panel2);}
   body.view-day td.tl.weekend{background:rgba(255,255,255,.028);}
   body.view-day tr:hover td.tl.weekend{background:rgba(255,255,255,.05);}
@@ -476,7 +485,8 @@
   .detailops .btn.danger{color:#e78a93; border-color:rgba(194,85,99,.5);}
   .detailops .btn.danger:hover{background:rgba(194,85,99,.15);}
   /* ステージ色（ダーク調整） */
-  .st-todo{background:#5f7086;} .st-doing{background:#4c8dff;} .st-review{background:#a988f2;}
+  .st-todo{background:transparent; color:#8fa2ba; border:1px dashed rgba(143,162,186,.5);}
+  .st-doing{background:#4c8dff;} .st-review{background:#a988f2;}
   .st-done{background:#37d67a; color:#06231a;} .st-hold{background:#f2b13d; color:#2a1e05;}
   .agg{background:var(--panel3); color:#aebfd3;}
   .agg.full{background:rgba(55,214,122,.16); color:#8fe7b4;}
@@ -772,6 +782,9 @@
     padding:0 20px; cursor:pointer; font-family:inherit; font-size:13.5px;}
   .tpquick button:hover{filter:brightness(1.06);}
   .tpquickhint{font-size:10.5px; color:var(--dim); margin:5px 2px 14px; line-height:1.6;}
+  .qhelp{width:16px; height:16px; border-radius:50%; border:1px solid var(--line); background:var(--panel3);
+    color:var(--muted); font-size:10.5px; line-height:1; cursor:pointer; font-family:inherit; padding:0;}
+  .qhelp:hover{border-color:var(--teal); color:var(--teal);}
   /* 概要：ふだんは本文だけ。押すと書き換えモード */
   .notelab{font-size:10.5px; font-weight:700; color:var(--muted); margin:0 2px 4px;}
   .noteview{position:relative; background:var(--panel2); border:1px solid var(--line); border-radius:10px;
@@ -818,6 +831,8 @@
   .tpcard .r2 .carry{margin-left:auto;}
   .tpcard .chk{flex:none; width:24px; height:24px; border-radius:7px; border:1px solid var(--line); background:var(--panel3);
     color:var(--teal); cursor:pointer; font-size:14px; display:inline-flex; align-items:center; justify-content:center;}
+  .tpcard .chk{color:rgba(47,182,176,.30); border-color:rgba(47,182,176,.45); font-weight:900;}
+  .tpcard .chk:hover{background:rgba(47,182,176,.14); color:var(--teal); border-color:var(--teal);}
   .tpcard.done .chk{background:var(--teal); color:#04222b; border-color:var(--teal);}
   .tpcard .nmic{flex:none; font-size:11px; opacity:.55; cursor:default;}
   .tpcard .nm{flex:0 1 auto; min-width:56px; font-size:12px; color:var(--muted); font-weight:700;}
@@ -826,7 +841,8 @@
   .tpcard .act{flex:none; background:var(--panel3); border:1px solid var(--line); color:var(--muted);
     border-radius:7px; padding:3px 8px; cursor:pointer; font-family:inherit; font-size:11px; white-space:nowrap;}
   .tpcard .act:hover{border-color:var(--teal); color:var(--text);}
-  .tpcard .act.carry{color:#a8710a; border-color:rgba(224,161,44,.55);}
+  /* 「送る」は補助操作。ここを一番目立たせると、会議中に押してほしい「✓ 話した」が埋もれる。
+     オレンジは「遅れている状態」の印だけに使う（持ち越しバッジ・遅延）。 */
   .tpcard .del{flex:none; background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; padding:2px 5px;}
   .tpcard .del:hover{color:#f2585f;}
   /* 「書ける場所」は入力欄に見せる：ホバーで枠が浮き、フォーカスで青くなる */
@@ -1044,18 +1060,18 @@
       <button data-v="day">日</button>
     </span>
     <span class="tsep"></span>
-    <button class="btn" id="filterBtn" title="表示する作業をしぼる（自分のみ・未完のみ・遅延）">🔽 絞り込み</button>
+    <button class="btn" id="filterBtn" title="表示する作業をしぼる（自分のみ・未完のみ・遅延）">🔽<span class="lbl"> 絞り込み</span></button>
     <!-- 操作（元に戻す・モード）-->
     <span class="seg" id="hist">
       <button id="undoBtn" title="元に戻す (Ctrl+Z)" disabled>↶</button>
       <button id="redoBtn" title="やり直し (Ctrl+Y)" disabled>↷</button>
     </span>
     <span class="seg" id="modeSeg" title="🖐スクロール＝既存バーを動かさない／✏編集＝バーを引く・動かす">
-      <button data-m="scroll" class="on" title="スクロール（既存バーを動かさない）">🖐 スクロール</button>
-      <button data-m="edit" title="編集（バーを引く・動かす）">✏ 編集</button>
+      <button data-m="scroll" class="on" title="スクロール（既存バーを動かさない）">🖐<span class="lbl"> スクロール</span></button>
+      <button data-m="edit" title="編集（バーを引く・動かす）">✏<span class="lbl"> 編集</span></button>
     </span>
-    <button class="btn" id="todayBtn" title="今日の位置へスクロール">📍 今日</button>
-    <button class="btn" id="findBtn" title="作業・お題・議事メモをまとめて探す（Ctrl+F）">🔍 検索</button>
+    <button class="btn" id="todayBtn" title="今日の位置へスクロール">📍<span class="lbl"> 今日</span></button>
+    <button class="btn" id="findBtn" title="作業・お題・議事メモをまとめて探す（Ctrl+F）">🔍<span class="lbl"> 検索</span></button>
     <button class="btn" id="topicBtn" title="打合せ予定・お題を開く（話したいことを書く）">📝 打合せ予定</button>
     <button class="btn" id="sumBtn" title="今週のサマリー（進捗・遅延・今週やること）">📊 サマリー</button>
     <span class="tsep"></span>
@@ -1938,7 +1954,7 @@ function smallRowHTML(t, counter){
   const rowcls='row-small'+(stg==='完了'?' done':'')+(stg==='保留'?' hold':'')+(group?' has-kids':'')
     +(t.status==='excluded'?' excluded':'')+(dOver?' overdue':'')+(ss==='behind'?' behind':'')+(ss==='overdue'?' late':'')+(t.priority==='high'?' prio-hi':'');
   let h=`<tr class="${rowcls}" data-id="${t.id}">`;
-  h+=`<td class="sl c-no no" title="${t.no?('マスターNo.'+esc(normNo(t.no))):'マスター未登録'}">${t.no?esc(normNo(t.no)):'—'}</td>`;
+  h+=`<td class="sl c-no no" title="${t.no?('マスターNo.'+esc(normNo(t.no))):'マスター未登録（左の細い赤／橙の線は遅延・遅れの印）'}">${t.no?esc(normNo(t.no)):''}</td>`;
   h+=`<td class="sl c-item"><div class="item-cell" style="padding-left:40px">`+
      caretHTML(t)+
      `<span class="statusdot" data-status="${t.id}" title="状態: ${st.label}（クリックで変更）" style="background:${st.color}"></span>`+
@@ -2521,6 +2537,7 @@ function mtWhenLine(m){ const d=m.date?parse(m.date):null;                      
     (m.start?` ${m.start}${m.end?'〜'+m.end:''}`:'')+(m.room?` ／ ${m.room}`:''); }
 let _mtEdit=false, _noteEdit=false;   // 定例の日時／概要を「書き換えモード」にしているか（画面の状態）
 let _gcMenu=false;                    // 「📅 カレンダー ▾」を開いているか（画面の状態・保存しない）
+let _tpQuickHelp=false;               // お題入力欄の「?」を開いているか（画面の状態・保存しない）
 // 過去ログの畳み方（自分の画面だけ・共有ボードには入れない）。既定は畳む＝いま話すことに集中させる。
 // 一度開いたら開いたままにする（過去の議事録を読みに来た人が毎回開き直さなくていいように）。
 function _foldGet(k,def){ try{ const v=localStorage.getItem(k); return v==null?def:(v==='1'); }catch(e){ return def; } }
@@ -2999,7 +3016,7 @@ function tpCard(t){
   // 1行目＝お題そのもの（主役）。名前などの補足は2行目に小さく置く。
   let h=`<div class="tpcard${t.done?' done':''}${t.from?' carried':''}${open?' open':''}" data-tid="${esca(t.id)}">`+
     `<div class="r1">`+
-      `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'「まだ話していない」に戻す':'この回で話した（済）にする。タスクの完了ではありません'}">${t.done?'✓':''}</button>`+
+      `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'「まだ話していない」に戻す':'この回で話した（済）にする。タスクの完了ではありません'}">✓</button>`+
       tpCell(t,'todo','todo','やること・話したいこと')+
       `<span class="grip" data-grip="${esca(t.id)}" title="つかんで上下にドラッグ＝話す順を変える">⠿</span>`+
       `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'メモ・リンク・カルテなどを書く'}">${open?'▾ とじる':'▸ 詳細'}</button>`+
@@ -3096,8 +3113,14 @@ function renderMeetingTable(box){
   // ★入口：ここに書けばいい、が一目で分かるようにする
   h+=`<div class="tpquick"><input id="tpQuick" type="text" autocomplete="off"`+
      ` placeholder="話したいこと・相談したいことを書く"><button id="tpQuickAdd">追加</button></div>`+
-     `<div class="tpquickhint">Enterでも追加できます${meAuthor()?`／名前は「${esc(meAuthor())}」で入ります`:''}。詳しいメモは追加したあと「▸ 詳細」から。`+
-     (meAuthorIsRaw()?`<br><b>表示名がメールのIDのままです。</b>上の「氏名」欄に名前を入れると、以降の書き込みに反映されます。`:'')+`</div>`;
+     // 注記は常駐させない。読ませないと使えない画面にすると、説明する人が毎回口で言うことになる。
+     // 「?」を押した人にだけ出す（表示名がメールIDのままの警告だけは、直してほしい情報なので常に出す）。
+     `<div class="tpquickhint">`+
+       `<button class="qhelp" id="tpQuickHelp" title="使い方">?</button>`+
+       (_tpQuickHelp?` Enterでも追加できます${meAuthor()?`／名前は「${esc(meAuthor())}」で入ります`:''}。詳しいメモは追加したあと「▸ 詳細」から。`+
+         ` ✓ は「この回で話した」の印です（タスクの完了ではありません）。話せなかったものは「▶ ◯/◯の定例へ送る」で次に回せます。`:'')+
+       (meAuthorIsRaw()?`<br><b>表示名がメールのIDのままです。</b>上の「氏名」欄に名前を入れると、以降の書き込みに反映されます。`:'')+
+     `</div>`;
   // 済んだお題（✓）はまとめて下に畳む。議事録として残すので消さない＝「過去ログ」扱い。
   const carOpen=carried.filter(t=>!t.done), ownOpen=own.filter(t=>!t.done);
   const doneRows=carried.filter(t=>t.done).concat(own.filter(t=>t.done));
@@ -3106,7 +3129,7 @@ function renderMeetingTable(box){
   if(!carOpen.length && !ownOpen.length && doneRows.length)
     h+=`<div class="tpnote-sm">この回のお題はすべて「話した（✓）」になっています。中身は下の過去ログから読めます。</div>`;
   h+=tpFoldGroup(doneRows,'tpdone','✓ この回で話した（記録）','done',_tpFoldDone);
-  if(rows.length) h+=`<div class="tpnote-sm">✓ は「この回で話した」の印です（タスクの完了ではありません）。話せなかったものは「▶ ◯/◯の定例へ送る」で次に回せます。</div>`;
+  // ✓の説明はクイック追加欄の「?」に移した（常駐させない）
   if(!rows.length) h+=`<div class="tpempty">まだお題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
   // 前の回で未対応のまま終わったお題＝この回に入れるかどうかを、ここで一覧して選べるようにする
   const cand=carryCandidates(m);
@@ -3376,6 +3399,7 @@ document.getElementById('topicBody').addEventListener('click', e=>{
       if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
   if(e.target.closest('#tpCalMenu')){ _gcMenu=!_gcMenu; renderTopics(); return; }
+  if(e.target.closest('#tpQuickHelp')){ _tpQuickHelp=!_tpQuickHelp; renderTopics(); return; }
   if(e.target.closest('#tpDesc')){ const m=state.meetings.find(x=>x.id===_openMeeting);
     if(m){ try{ navigator.clipboard.writeText(gcalDetails(m)); tpToast('説明欄用のテキストをコピーしました。カレンダーの予定を開いて貼ってください'); }
            catch(err){ alert('コピーできませんでした'); } } return; }
@@ -4224,13 +4248,17 @@ function personText(){
 function renderSummary(){ ensureBoards(); const box=document.getElementById('summaryBody'); if(!box) return;
   if(_sumMode==='person') return renderSummaryPerson();
   const d=summaryData();
+  // 遅延している作業は「遅延」セクションに出る。同じものが2回並ぶと「何が違うの？」になるので、
+  // 「今週」からは除く。タイルの数字も同じ wk を使う（タイルと本文が食い違うと一番混乱する）。
+  const wk=d.week.filter(x=>!schedStatus(x.n));
   const row=x=>{ const ss=schedStatus(x.n); return `<div class="smrow ${ss||''}"><span class="smn">${lateMark(ss)}${esc(x.n.name)}</span><span class="smmeta">${esc(x.role||'—')} ／ ${x.n.start?mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):'日付未設定'} ／ ${getProgress(x.n)}%</span></div>`; };
-  let h=sumSeg()+`<div class="smstat"><div><b>${d.pct}%</b><span>全体進捗</span></div><div><b>${d.done}/${d.total}</b><span>完了</span></div><div class="${d.late.length?'bad':''}"><b>${d.late.length}</b><span>遅延</span></div><div><b>${d.week.length}</b><span>今週</span></div></div>`;
+  let h=sumSeg()+`<div class="smstat"><div><b>${d.pct}%</b><span>全体進捗</span></div><div><b>${d.done}/${d.total}</b><span>完了</span></div><div class="${d.late.length?'bad':''}"><b>${d.late.length}</b><span>遅延</span></div><div><b>${wk.length}</b><span>今週</span></div></div>`;
   { const a=actualHours(); if(a.cnt) h+=`<div class="smnote">⏱ AI工数削減（実績）：<b>${a.old}h → ${a.act}h ＝ ${a.pct}%減</b>（実績を入れた ${a.cnt}件で計測）</div>`; }
   h+=`<div class="tpsec">⚠ 遅延している作業（${d.late.length}）</div>`+(d.late.length?d.late.map(row).join(''):'<div class="tpempty">なし。順調です 👍</div>');
-  h+=`<div class="tpsec">📅 今週やること（${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}・${d.week.length}件）</div>`+(d.week.length?d.week.map(row).join(''):'<div class="tpempty">今週に期間がかかる未完作業はありません。</div>');
-  { const st=staleList();
-    h+=`<div class="tpsec">⏸ ${STALE_DAYS}日以上だれも触っていない作業（${st.length}）</div>`+
+  h+=`<div class="tpsec">📅 今週やること（遅延分は上に出ているので除く・${d.ws.getMonth()+1}/${d.ws.getDate()}〜${d.we.getMonth()+1}/${d.we.getDate()}・${wk.length}件）</div>`+(wk.length?wk.map(row).join(''):'<div class="tpempty">今週に期間がかかる未完作業はありません。</div>');
+  // 遅延と停滞は同じ作業で二重に数えない（遅延の方が強い情報なので、そちらに一本化する）。
+  { const st=staleList().filter(v=>!schedStatus(v.x.n));
+    h+=`<div class="tpsec">⏸ ${STALE_DAYS}日以上だれも触っていない作業（遅延分を除く・${st.length}）</div>`+
        (st.length? st.slice(0,CO_MAX).map(v=>`<div class="smrow"><span class="smn">${esc(coName(v.x))}</span><span class="smmeta">${esc(v.x.role||'担当未定')} ／ ${getProgress(v.x.n)}% ／ ${esc(staleLabel(v))}</span></div>`).join('')
          +(st.length>CO_MAX?`<div class="smnote">ほか ${st.length-CO_MAX}件（呼びかけ文には全件の件数が入ります）</div>`:'')
          : '<div class="tpempty">なし。全部きちんと動いています 👍</div>'); }
