@@ -3062,7 +3062,7 @@ function renderMeetingTable(box){
         `<button class="tpgcal" id="tpGcal" title="Googleカレンダーの「予定を作成」画面を開きます（保存はご自分で。繰り返し予約が既にある定例だと二重になります）">📅 新しく予定を作る</button></div>`+
         `<div class="mthead"><div class="ttl">${esc(m.title||'定例')}</div>`+
           `<div class="whenline">${esc(mtWhenLine(m))}`+
-          `<button class="mini" id="mtEditToggle" title="定例名・日時・会議室を直す">${_mtEdit?'とじる':'✎ 直す'}</button></div></div>`;
+          `<button class="mini" id="mtEditToggle" title="定例名・日付・時刻・会議室を変更する（Googleカレンダー側は連動しません）">${_mtEdit?'とじる':'✎ 変更'}</button></div></div>`;
   if(_mtEdit) h+=`<div class="tpmeta"><input class="mtedit tpttl-in" data-mt="title" value="${esca(m.title||'')}" placeholder="定例名">`+
           `<div class="mtline"><input class="mtedit" type="date" data-mt="date" value="${esca(m.date||'')}">`+
           `<select class="mtedit tsel" data-mt="start" title="開始">${timeOpts(m.start||'','開始')}</select><span class="mtsep">〜</span>`+
