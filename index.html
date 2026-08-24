@@ -350,7 +350,7 @@
   /* バーに作業名（バー始点セルから右へ流す。後続セルの上に出すため z-index を上げる）*/
   .bar-label{position:absolute; left:3px; top:50%; transform:translateY(-50%); display:none; white-space:nowrap;
     font-size:10px; line-height:1.35; color:#f4f8ff; font-weight:600;
-    background:rgba(8,13,20,.34); padding:1px 5px; border-radius:4px;
+    background:rgba(8,13,20,.22); padding:0 4px; border-radius:4px;
     text-shadow:0 1px 1px rgba(0,0,0,.75); pointer-events:none; z-index:2;}
   td.tl.labelcell{z-index:2;}   /* バーラベルは後続バーの上・ただし左固定列(.sl=z-index:3)より下＝スクロールで固定列が隠す */
   body.show-barlabel .bar-label{display:block;}
@@ -463,7 +463,7 @@
   /* 進捗：済み=はっきり色／残り=ミュート＋ハッチのトラック。境界は明るい線で明確化 */
   .bar.pend{background-image:linear-gradient(rgba(10,16,24,.48),rgba(10,16,24,.48)),repeating-linear-gradient(45deg,rgba(255,255,255,.11) 0 3px,transparent 3px 7px)!important; outline:1px solid rgba(255,255,255,.13);}
   .bar.edge{box-shadow:inset -3px 0 0 rgba(255,255,255,.6);}
-  .bl-over{color:#ffb3b3; font-weight:700;}
+  .bl-over{color:#ffd2d2; font-weight:700;}   /* 期限を過ぎているバーのラベル（文字は足さず色で示す） */
   .roll{background:rgba(146,164,186,.28);}
   tr.hold td.tl .bar{background-image:repeating-linear-gradient(45deg,rgba(255,255,255,.16) 0 3px,transparent 3px 6px)!important;}
   tr.done .iname{color:#6f8093; text-decoration-color:#3a4a5c;}
@@ -1924,13 +1924,12 @@ function barCellsHTML(node, es, ee, pct, editable, group){
   let h='';
   const labelable = (node.kind==='small'||node.kind==='task');
   const _today=new Date(); _today.setHours(0,0,0,0);
-  let labelMeta='';
-  if(labelable && !group){
-    if(pct>0 && pct<100) labelMeta+=' '+pct+'%';
-    if(getStage(node)!=='完了' && node.end){ const dl=Math.round((parse(node.end)-_today)/86400000);
-      labelMeta += dl<0 ? ' ・<span class="bl-over">超過'+(-dl)+'日</span>' : (dl<=14 ? ' ・あと'+dl+'日' : ''); }
-  } else if(labelable && group){
-    if(pct>0 && pct<100) labelMeta+=' '+pct+'%';
+  // バーのラベルは作業名だけにする。「%」は進捗列、「あとN日／超過」は日付列のチップに
+  // 同じものが出ているので、ここに足すとラベルが伸びてバーを覆い、期間が読めなくなる。
+  // 超過だけは色で分かるようにラベル自体に印を付ける（文字は足さない）。
+  let overdueLabel=false;
+  if(labelable && !group && getStage(node)!=='完了' && node.end){
+    overdueLabel = (parse(node.end) - _today) < 0;
   }
   const _chg=chargeInfo(node.charge); const _chgTitle=_chg?('担い手: '+_chg.label):'担い手: 未設定';
   COLS.forEach((c,ci)=>{ const cls=['tl']; if(c.mend)cls.push('mend'); if(c.weekend)cls.push('weekend'); if(ci===_todayCol)cls.push('today'); if(_msByCol[ci])cls.push('mstone');
@@ -1948,7 +1947,7 @@ function barCellsHTML(node, es, ee, pct, editable, group){
     }
     let label='';
     if(isStart && labelable){ cls.push('labelcell');
-      label=`<span class="bar-label">${esc(node.name||'')}${labelMeta}</span>`; }
+      label=`<span class="bar-label${overdueLabel?' bl-over':''}">${esc(node.name||'')}</span>`; }
     const leafAttr = editable ? ` data-leaf="${node.id}" data-ci="${ci}"` : '';
     h+=`<td class="${cls.join(' ')}"${leafAttr}>${bar}${label}</td>`; });
   return h;
@@ -5207,10 +5206,10 @@ function setBarLabel(on){ document.body.classList.toggle('show-barlabel', on);
 const barLabelToggle=document.getElementById('barLabelToggle');
 if(barLabelToggle){
   barLabelToggle.addEventListener('click', ()=> setBarLabel(!document.body.classList.contains('show-barlabel')));
-  // 既定OFF。作業名は左の固定列にいつも出ている（横スクロールしても固定）ので、バーにも出すと二重。
-  // しかもラベルがバーを覆って「いつからいつまでか」が読めなくなる＝ガントとして機能しなくなる。
-  // 名前を重ねたい人は ⚙管理 →「🏷 バーに名前」で戻せる（選択は端末に記憶）。
-  setBarLabel(localStorage.getItem('ai_sched_barlabel')==='1');
+  // 既定ON（名前は消さない）。読めなくなっていた原因はラベルの存在ではなく、
+  // 濃い背景でバーを覆っていたことと、名前のうしろに「%・あとN日」を足して長くしていたこと。
+  // その2つを直したので、名前を出したままバーの長さ（期間）が読める。
+  setBarLabel(localStorage.getItem('ai_sched_barlabel')!=='0');
 }
 // ライト⇄ダーク テーマ切替（既定ライト・端末ごとにlocalStorage記憶）
 function setTheme(light){ document.body.classList.toggle('theme-light', light);
