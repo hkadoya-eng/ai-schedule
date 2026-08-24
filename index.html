@@ -226,6 +226,8 @@
   .detail .openpath{margin-top:5px;}
   .depwarn{color:var(--crimson); font-size:11px; margin-top:3px;}
   .detailops{display:flex; gap:6px;}
+  /* 並べ替え・削除はカルテの一番下。区切り線を入れて本文と分ける（誤って押さないように） */
+  .dtops-foot{margin-top:18px; padding-top:12px; border-top:1px solid var(--line2);}
   .detailops .btn.danger{margin-left:auto; color:var(--crimson); border-color:#e6b8bf;}
   .detailops .btn.danger:hover{background:#fbeaed;}
   .detail .hint{font-size:10.5px; color:var(--muted); margin-top:4px;}
@@ -348,7 +350,7 @@
   /* バーに作業名（バー始点セルから右へ流す。後続セルの上に出すため z-index を上げる）*/
   .bar-label{position:absolute; left:3px; top:50%; transform:translateY(-50%); display:none; white-space:nowrap;
     font-size:10px; line-height:1.35; color:#f4f8ff; font-weight:600;
-    background:rgba(8,13,20,.55); padding:1px 5px; border-radius:4px;
+    background:rgba(8,13,20,.34); padding:1px 5px; border-radius:4px;
     text-shadow:0 1px 1px rgba(0,0,0,.75); pointer-events:none; z-index:2;}
   td.tl.labelcell{z-index:2;}   /* バーラベルは後続バーの上・ただし左固定列(.sl=z-index:3)より下＝スクロールで固定列が隠す */
   body.show-barlabel .bar-label{display:block;}
@@ -395,13 +397,19 @@
   .psh b{font-size:14px;}
   .psmeta{color:var(--muted); font-size:11.5px; font-variant-numeric:tabular-nums; margin-left:auto; white-space:nowrap;}
   .pstag{font-size:10.5px; padding:1px 6px; border-radius:999px; border:1px solid var(--line); color:var(--muted);}
-  .pstag.ng{border-color:transparent; background:rgba(214,69,80,.18); color:#ff8a92;}
+  /* 「アプリ未ログイン」は遅れではないので赤を使わない（赤・オレンジは遅れている状態の印） */
+  .pstag.ng{border-color:var(--line); background:var(--panel3); color:var(--muted);}
+  /* 要対応は1件1行。件数が目で数えられる形にする */
+  .psitem{display:flex; gap:8px; align-items:baseline; font-size:12px; padding:2px 0 2px 16px; color:var(--text);}
+  .psitem .n{flex:1 1 auto; min-width:0;}
+  .psitem em{flex:none; font-style:normal; font-size:11px; color:var(--muted);}
+  .psitem.more{color:var(--dim); font-size:11px;}
   .pstag.wn{border-color:transparent; background:rgba(242,199,96,.18); color:#f2c760;}
   .psbar{height:6px; border-radius:99px; background:var(--panel3); overflow:hidden; margin:6px 0 4px;}
   .psbar i{display:block; height:100%; background:var(--teal);}
   .pssub{font-size:12px; line-height:1.6; color:var(--text); margin-top:3px;}
   .pssub em{color:var(--muted); font-style:normal;}
-  body.theme-light .pstag.ng{background:#fbe3e6; color:#c0313f;}
+  body.theme-light .pstag.ng{background:#eef1f5; color:#6b7787;}
   body.theme-light .pstag.wn{background:#fbf0d8; color:#9a6d05;}
   /* 週次サマリー */
   .smstat{display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px;}
@@ -579,6 +587,12 @@
   .steprow{display:grid; grid-template-columns:1fr auto; align-items:center; gap:8px; background:var(--panel2);
     border:1px solid var(--line2); border-radius:8px; padding:6px 10px; cursor:pointer;}
   .steprow:hover{background:var(--panel3);}
+  /* カルテの「この中の作業」一覧は 名前／担当／進捗 の3つ。steprow の2カラム前提だと
+     進捗が次の行に落ちて全幅に伸び、入力欄のように見えてしまうので1行に固定する。 */
+  .kidrow{display:flex; align-items:center; gap:8px; padding:4px 9px;}
+  .kidrow .snm{flex:1 1 auto; min-width:0;}
+  .kidrow .who{flex:none; font-size:11px; color:var(--muted);}
+  .kidrow .stage{flex:none; margin-left:0;}
   .steprow .snm{font-size:12.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .who{font-size:10px; padding:2px 8px; border-radius:12px; white-space:nowrap; font-weight:700;}
   .who.ai{background:rgba(47,182,176,.16); color:var(--teal);}
@@ -3409,6 +3423,10 @@ document.getElementById('topicModal').addEventListener('click', e=>{ if(e.target
       try{ localStorage.setItem(DKEY, String(dcur)); }catch(e){} });
     dh.addEventListener('dblclick', ()=>{ dcur=dset(DDEF); try{ localStorage.removeItem(DKEY); }catch(e){} });
     window.__reclampDetail=()=>{ dcur=dset(dcur); };     // パネル幅が変わったら はみ出さないよう詰め直す
+    // 中身の量に合わせた既定幅。大項目・中項目は項目が少ないので広く開くと空白だらけになる。
+    // ※ 一度でも手で幅を決めた人（DKEYがある）には触らない。自分で決めた幅が勝手に変わると驚く。
+    let dtManual=false; try{ dtManual=isFinite(parseInt(localStorage.getItem(DKEY)||'',10)); }catch(e){}
+    window.__fitDetail=narrow=>{ if(dtManual) return; dcur=dset(narrow?470:DDEF); };
   })();
   // ドラッグは細くて掴みにくいので、ボタンでも縮められるようにしておく
   const bar=document.querySelector('.tphdr'); if(!bar) return;
@@ -4243,7 +4261,7 @@ function renderSummaryPerson(){
   let h=sumSeg();
   h+=`<div class="smstat"><div><b>${rows.filter(r=>r.name!=='（担当未定）').length}</b><span>担当がいる人</span></div>`
    + `<div class="${withAct?'bad':''}"><b>${withAct}</b><span>要対応がある人</span></div>`
-   + `<div><b>${free}</b><span>今週の予定なし</span></div>`
+   + `<div><b>${free}</b><span>手が空いている人</span></div>`
    + `<div><b>${d.pct}%</b><span>全体進捗</span></div></div>`;
   h+= rows.length? rows.map(r=>{
     const tag = r.name==='（担当未定）' ? '<span class="pstag wn">担当が決まっていません</span>'
@@ -4254,12 +4272,14 @@ function renderSummaryPerson(){
       +`<span class="psmeta">${r.total}件 ／ 進捗 ${r.pct}% ／ 完了 ${r.done}・進行中 ${r.wip}・未着手 ${r.todo}`
       +(r.hold?`・保留 ${r.hold}`:'')+`</span></div>`
       +`<div class="psbar"><i style="width:${r.pct}%"></i></div>`;
-    if(r.act.length) b+=`<div class="pssub">⚠ <b>要対応 ${r.act.length}件</b>　`
-      + r.act.slice(0,CO_MAX).map(v=>`${esc(coName(v.x))}<em>（${esc(psActLabel(v))}・${getProgress(v.x.n)}%）</em>`).join('／ ')
-      + (r.act.length>CO_MAX?` ほか${r.act.length-CO_MAX}件`:'') + `</div>`;
-    if(r.weekOnly.length) b+=`<div class="pssub">📅 今週 ${r.weekOnly.length}件　`
-      + r.weekOnly.slice(0,CO_MAX).map(x=>esc(coName(x))).join('／ ')
-      + (r.weekOnly.length>CO_MAX?` ほか${r.weekOnly.length-CO_MAX}件`:'') + `</div>`;
+    // 1段落に「／」で繋げると折り返して塊になり、何件あるか目で数えられない。1件1行にする。
+    if(r.act.length) b+=`<div class="pssub"><b>⚠ 要対応 ${r.act.length}件</b></div>`
+      + r.act.slice(0,CO_MAX).map(v=>`<div class="psitem"><span class="n">${esc(coName(v.x))}</span>`
+        + `<em>${esc(psActLabel(v))}・${getProgress(v.x.n)}%</em></div>`).join('')
+      + (r.act.length>CO_MAX?`<div class="psitem more">ほか ${r.act.length-CO_MAX}件</div>`:'');
+    if(r.weekOnly.length) b+=`<div class="pssub">📅 今週 ${r.weekOnly.length}件</div>`
+      + r.weekOnly.slice(0,CO_MAX).map(x=>`<div class="psitem"><span class="n">${esc(coName(x))}</span></div>`).join('')
+      + (r.weekOnly.length>CO_MAX?`<div class="psitem more">ほか ${r.weekOnly.length-CO_MAX}件</div>`:'');
     if(!r.act.length && !r.week.length) b+=`<div class="pssub"><em>要対応なし・今週の予定もありません</em></div>`;
     return b+`</div>`; }).join('')
    : `<div class="tpempty">担当欄に名前がある人が見つかりません。</div>`;
@@ -4842,12 +4862,9 @@ function openDetail(id){
   document.getElementById('dtNo').textContent=`${kindLabel}${t.no?'　No. '+t.no:''}${t.assign?'　［'+t.assign+'］':''}`;
   document.getElementById('dtName').textContent=t.name||'(無題)';
 
-  let html=`<div class="fld wide"><div class="detailops">
-      <button class="btn" data-up="${t.id}" title="上へ">▲ 上へ</button>
-      <button class="btn" data-down="${t.id}" title="下へ">▼ 下へ</button>
-      <button class="btn danger" data-del="${t.id}" title="削除">🗑 削除</button>
-    </div></div>`;
-  html+=`<div class="fld wide"><label>名称</label><input id="dtNameEdit" value="${esca(t.name)}"></div>`;
+  // 並べ替えと削除はカルテの一番下へ。開いた瞬間いちばん目立つ位置に「削除」があると
+  // 誤操作を誘うし、ここで一番よく使うのは進捗の更新なので、そちらを上に置く。
+  let html=`<div class="fld wide"><label>名称</label><input id="dtNameEdit" value="${esca(t.name)}"></div>`;
 
   // 旧・単一レポート → 週報配列へ移行
   if(isLeafReport && t.report && !t.reports){ t.reports=[{id:nextId(), date:'', author:t.updatedBy||'', text:t.report}]; delete t.report; }
@@ -4943,6 +4960,20 @@ function openDetail(id){
   } else {
     html+=`<div class="fld"><label>期間（集計）</label><div class="ro">${esca(period)}</div></div>`;
   }
+  // 大項目・中項目のカルテは「名称・進捗・期間」の3行だけで、画面の大半が空白だった。
+  // ここで知りたいのは「この中に何があって、どれが止まっているか」なので、配下の作業を並べる。
+  if(t.kind==='big'||t.kind==='mid'){
+    // eachLeaf は末端しか拾わない＝サブタスクを持つ「作業」が漏れるので、自分で辿る
+    const kids=[]; (function walk(n){ (n.children||[]).forEach(c=>{ if(c.kind==='small') kids.push(c); else walk(c); }); })(t);
+    html+=`<div class="fld wide"><label>この中の作業（${kids.length}件・クリックでそのカルテへ）</label><div class="steplist">`+
+      (kids.length? kids.map(c=>{ const ss=schedStatus(c), sp=stageInfo(getStage(c));
+        return `<div class="steprow kidrow${ss?' '+ss:''}" data-detail="${esca(c.id)}">`+
+          `<span class="snm">${ss?lateMark(ss):''}${esca(c.name||'(無題)')}</span>`+
+          `<span class="who none">${esca(c.role||'担当未定')}</span>`+
+          `<span class="stage ${sp.cls}">${getStage(c)} ${getProgress(c)}%</span></div>`; }).join('')
+        : `<div class="hint">まだ作業がありません。</div>`)+
+    `</div></div>`;
+  }
 
   if(isLeafReport){
     html+=`<hr style="border:none;border-top:1px solid var(--line2);margin:12px 0">
@@ -4954,7 +4985,13 @@ function openDetail(id){
         <div id="dtDepInfo" class="ro" style="margin-top:5px;color:var(--muted)"></div></div>`;
   }
 
+  html+=`<div class="fld wide dtops-foot"><div class="detailops">`+
+    `<button class="btn" data-up="${t.id}" title="ひとつ上へ移動">▲ 上へ</button>`+
+    `<button class="btn" data-down="${t.id}" title="ひとつ下へ移動">▼ 下へ</button>`+
+    `<button class="btn danger" data-del="${t.id}" title="この項目を削除（配下も一緒に消えます）">🗑 削除</button>`+
+  `</div></div>`;
   document.getElementById('detailBody').innerHTML=html;
+  if(window.__fitDetail) window.__fitDetail(t.kind==='big'||t.kind==='mid');
   document.getElementById('detail').classList.add('open');
 
   const nm=document.getElementById('dtNameEdit');
@@ -5170,7 +5207,10 @@ function setBarLabel(on){ document.body.classList.toggle('show-barlabel', on);
 const barLabelToggle=document.getElementById('barLabelToggle');
 if(barLabelToggle){
   barLabelToggle.addEventListener('click', ()=> setBarLabel(!document.body.classList.contains('show-barlabel')));
-  setBarLabel(localStorage.getItem('ai_sched_barlabel')!=='0');   // 既定ON（'0'のときだけOFF）
+  // 既定OFF。作業名は左の固定列にいつも出ている（横スクロールしても固定）ので、バーにも出すと二重。
+  // しかもラベルがバーを覆って「いつからいつまでか」が読めなくなる＝ガントとして機能しなくなる。
+  // 名前を重ねたい人は ⚙管理 →「🏷 バーに名前」で戻せる（選択は端末に記憶）。
+  setBarLabel(localStorage.getItem('ai_sched_barlabel')==='1');
 }
 // ライト⇄ダーク テーマ切替（既定ライト・端末ごとにlocalStorage記憶）
 function setTheme(light){ document.body.classList.toggle('theme-light', light);
