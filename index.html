@@ -375,7 +375,7 @@
   .msadd input[type=text]{flex:1; min-width:160px; background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13px;}
   .msadd input[type=date]{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-family:inherit; color-scheme:dark;}
   .msadd button{background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; font-family:inherit; font-size:13px;}
-  /* 過去ログの折りたたみ見出し（定例一覧の過去分・済んだお題） */
+  /* 過去ログの折りたたみ見出し（定例一覧の過去分・済んだ議題） */
   .tpfold{display:flex; align-items:center; gap:8px; width:100%; margin:12px 0 6px; padding:7px 10px;
     background:var(--panel2); border:1px solid var(--line); border-radius:8px; color:var(--muted);
     font-size:12px; cursor:pointer; text-align:left;}
@@ -695,7 +695,7 @@
   .kprow.bad{border-color:rgba(220,59,59,.5);} .kprow.bad .rt{color:#dc3b3b;}
   .kprow.warn{border-color:rgba(217,148,19,.5);} .kprow.warn .rt{color:#c98a12;}
   .kprow.ok{opacity:.62;}
-  /* お題・議題ボード（右サイドパネル：ガントを見ながら会議中に書ける）*/
+  /* 議題ボード（右サイドパネル：ガントを見ながら会議中に書ける）*/
   :root{--tpw:50vw;}   /* 既定は画面の半分。起動時にJSがpx値へ置き換える（ドラッグ幅は端末に記憶）*/
   #topicModal{position:fixed; z-index:58; right:0; top:0; height:100vh; width:var(--tpw);
     background:var(--panel); border-left:1px solid var(--line); box-shadow:-10px 0 40px rgba(0,0,0,.45);
@@ -793,6 +793,8 @@
   .tpquick button{flex:none; background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:9px;
     padding:0 20px; cursor:pointer; font-family:inherit; font-size:13.5px;}
   .tpquick button:hover{filter:brightness(1.06);}
+  /* 入口の見出し。この画面でまずやることが一目で分かるようにする（設定は下に畳む） */
+  .tpaddlab{font-size:12px; font-weight:700; color:var(--teal); margin:2px 2px 5px; letter-spacing:.3px;}
   .tpquickhint{font-size:10.5px; color:var(--dim); margin:5px 2px 14px; line-height:1.6;}
   .qhelp{width:16px; height:16px; border-radius:50%; border:1px solid var(--line); background:var(--panel3);
     color:var(--muted); font-size:10.5px; line-height:1; cursor:pointer; font-family:inherit; padding:0;}
@@ -819,17 +821,17 @@
     border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13.5px; line-height:1.7;}
   .tpnote textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
   /* ─── 色の意味 ───────────────────────────────
-     ティール = 会議で書くもの（お題・当日メモ）
+     ティール = 会議で書くもの（議題・当日メモ）
      青       = カルテ（ガントの作業）＝別の世界のもの
      アンバー = 持ち越し
      この3色以外は使わない。色が増えると「どこに何を書くか」が伝わらなくなる。 */
   :root{
-    /* お題は緑味、カルテは青味。どちらも「ごく薄く」。色相を離すことで
+    /* 議題は緑味、カルテは青味。どちらも「ごく薄く」。色相を離すことで
        同じカードの中でも「ここだけカルテの話」が一目で分かる。 */
     --topic-bg:rgba(63,157,92,.055);  --topic-bd:rgba(63,157,92,.30);  --topic-fg:#2f7d4c;
     --karte-bg:rgba(66,124,214,.075); --karte-bd:rgba(66,124,214,.36); --karte-fg:#3767bf;
   }
-  /* お題＝1件1カード（狭いパネルでも書きやすいように表をやめてカードにした）*/
+  /* 議題＝1件1カード（狭いパネルでも書きやすいように表をやめてカードにした）*/
   .tpgrp{margin-bottom:16px;}
   .tpgrp .gh{display:flex; align-items:center; gap:8px; font-size:11.5px; font-weight:700; color:var(--muted); margin:0 0 8px;}
   .tpgrp .gh .n{background:var(--panel3); border-radius:9px; padding:1px 8px; font-size:11px; color:var(--text);}
@@ -1083,8 +1085,8 @@
       <button data-m="edit" title="編集（バーを引く・動かす）">✏<span class="lbl"> 編集</span></button>
     </span>
     <button class="btn" id="todayBtn" title="今日の位置へスクロール">📍<span class="lbl"> 今日</span></button>
-    <button class="btn" id="findBtn" title="作業・お題・議事メモをまとめて探す（Ctrl+F）">🔍<span class="lbl"> 検索</span></button>
-    <button class="btn" id="topicBtn" title="打合せ予定・お題を開く（話したいことを書く）">📝 打合せ予定</button>
+    <button class="btn" id="findBtn" title="作業・議題・議事メモをまとめて探す（Ctrl+F）">🔍<span class="lbl"> 検索</span></button>
+    <button class="btn" id="topicBtn" title="打合せ予定・議題を開く（話したいことを書く）">📝 打合せ予定</button>
     <button class="btn" id="sumBtn" title="今週のサマリー（進捗・遅延・今週やること）">📊 サマリー</button>
     <span class="tsep"></span>
     <!-- 右：管理・状態 -->
@@ -1118,7 +1120,7 @@
 <div class="pop" id="ctxMenu"></div>
 <div class="pop" id="filterPop">
   <div class="mlabel">この名前で記録する</div>
-  <div class="mrow"><span class="datectl">👤 <input id="userName" list="userList" placeholder="氏名" title="進捗更新時・お題の記入者としてこの名前が使われます"><datalist id="userList"></datalist></span></div>
+  <div class="mrow"><span class="datectl">👤 <input id="userName" list="userList" placeholder="氏名" title="進捗更新時・議題の記入者としてこの名前が使われます"><datalist id="userList"></datalist></span></div>
   <div class="mlabel">表示をしぼる</div>
   <button class="flt" id="fMine" title="自分が担当の作業だけ表示">👤 自分の作業だけ</button>
   <button class="flt" id="fOpen" title="未完（完了以外）だけ表示">◻ 未完だけ</button>
@@ -1146,7 +1148,7 @@
   <button id="exportBtn">💾 書き出し（保存）</button>
   <button id="importBtn">📂 読み込み</button>
   <button id="backupBtn">🕘 復元</button>
-  <button id="syncBtn" title="定例シート（議題）とお題を突き合わせて、差分だけ取り込む">🔄 定例シートと同期</button>
+  <button id="syncBtn" title="定例シート（議題）と議題を突き合わせて、差分だけ取り込む">🔄 定例シートと同期</button>
   <div class="mlabel" style="color:#c2555f">危険な操作</div>
   <button id="resetBtn" style="color:#c2555f" title="全データを初期サンプルに戻す（通常は使いません）">🧨 初期化（全部消してサンプルに戻す）</button>
 </div>
@@ -1210,13 +1212,13 @@
 </div></div>
 
 <div class="modal" id="findModal"><div class="m">
-  <div class="mh"><div class="t">🔍 検索</div><div class="s">作業（カルテ）・お題・当日メモ・決まったこと・定例をまとめて探します。行をクリックすると、その場所が開きます。</div></div>
+  <div class="mh"><div class="t">🔍 検索</div><div class="s">作業（カルテ）・議題・当日メモ・決まったこと・定例をまとめて探します。行をクリックすると、その場所が開きます。</div></div>
   <div class="mb"><input id="findInput" placeholder="例）ツール化／伊藤／セリフ／8月" autocomplete="off"><div id="findBody"></div></div>
   <div class="mf"><button class="ghost" id="findClose">閉じる</button></div>
 </div></div>
 
 <div class="modal" id="syncModal"><div class="m">
-  <div class="mh"><div class="t">🔄 定例シートと同期</div><div class="s">スプレッドシートの「議題」とお題を突き合わせます。<b>取り込む前に差分を確認できます。</b>片方だけが変わった欄はそのまま採用し、両方変わった欄だけ選んでもらいます。</div></div>
+  <div class="mh"><div class="t">🔄 定例シートと同期</div><div class="s">スプレッドシートの「議題」と議題を突き合わせます。<b>取り込む前に差分を確認できます。</b>片方だけが変わった欄はそのまま採用し、両方変わった欄だけ選んでもらいます。</div></div>
   <div class="mb" id="syncBody"></div>
   <div class="mf"><button class="ghost" id="syncClose">閉じる</button><button class="big" id="syncApply" disabled>この内容で取り込む</button></div>
 </div></div>
@@ -1532,7 +1534,7 @@ window.__stampChanges=function(prevJson){
   (function walk(nodes){ (nodes||[]).forEach(n=>{ const sig=__ownSig(n);
     if(prevMap[n.id]===undefined || prevMap[n.id]!==sig){ n._u=now; if(by) n._by=by; }
     if(n.children) walk(n.children); }); })(state.tree);
-  // 定例・お題にも同じように「誰がいつ変えたか」を刻む（変更履歴で追えるようにするため）
+  // 定例・議題にも同じように「誰がいつ変えたか」を刻む（変更履歴で追えるようにするため）
   ['meetings','topics'].forEach(key=>{
     const pm={}; if(prev && Array.isArray(prev[key])) prev[key].forEach(x=>{ if(x&&x.id) pm[x.id]=__ownSig(x); });
     (state[key]||[]).forEach(x=>{ if(!x||!x.id) return; const sig=__ownSig(x);
@@ -1560,7 +1562,7 @@ function __mergeSiblings(rArr, lArr){
   lArr.forEach(ln=>{ const rn=rById[ln.id]; out.push(rn?__mergeNode(rn,ln):ln); });   // 共通=マージ／local専用=保持
   rArr.forEach(rn=>{ if(!lIds[rn.id]) out.push(rn); });                                  // remote専用(他者の追加)=保持
   return out; }
-// フラット配列（お題など）をid単位でマージ：新しい_u優先・両者の追加を保持
+// フラット配列（議題など）をid単位でマージ：新しい_u優先・両者の追加を保持
 function __mergeList(rArr, lArr){
   rArr=rArr||[]; lArr=lArr||[];
   const rById={}; rArr.forEach(n=>{ if(n&&n.id!=null) rById[n.id]=n; });
@@ -1575,7 +1577,7 @@ window.__mergeBoards=function(remote, local){
   out.seq=Math.max(+local.seq||0, +remote.seq||0);           // ID採番は大きい方（衝突回避）
   out.tree=__mergeSiblings(remote.tree, local.tree);
   out.meetings=__mergeList(remote.meetings, local.meetings); // 定例も同時編集で消えないようマージ
-  out.topics=__mergeList(remote.topics, local.topics);       // お題も同時編集で消えないようマージ
+  out.topics=__mergeList(remote.topics, local.topics);       // 議題も同時編集で消えないようマージ
   out.members=__mergeList(remote.members, local.members);    // メンバー名簿(ログイン者)もマージ
   out.milestones=__mergeList(remote.milestones, local.milestones); // マイルストーンもマージ
   out.slack=__mergePlain(remote.slack, local.slack);         // Slack設定は_uが新しい方（下記の注意参照）
@@ -1752,7 +1754,7 @@ function computeKPIs(){
   const donePct = total ? Math.round(done/total*100) : 0;
   const cut = hOld>0 ? Math.round((1-hNew/hOld)*100) : null;
   const actCut = aOld>0 ? Math.round((1-aAct/aOld)*100) : null;   // 実績ベースの削減率
-  // 打合せ予定：次回の定例と未対応お題数
+  // 打合せ予定：次回の定例と未対応議題数
   ensureBoards();
   const mts=(state.meetings||[]).filter(m=>m&&m.date).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
   const todayY=ymd(new Date());
@@ -1760,17 +1762,17 @@ function computeKPIs(){
   const nextMt=mts.find(m=>m.date>=todayY)||null;
   const lastMt=nextMt?null:(mts.length?mts[mts.length-1]:null);
   const curMt=nextMt||lastMt;
-  // お題の未対応件数は表示中の定例のぶんだけ数える（終わった定例の積み残しが残り続けないように）
+  // 議題の未対応件数は表示中の定例のぶんだけ数える（終わった定例の積み残しが残り続けないように）
   const openTp=curMt?(state.topics||[]).filter(t=>t&&!t.done&&t.meetingId===curMt.id).length:0;
   const candTp=curMt?carryCandidates(curMt).length:0;   // 前の回に残っている未対応＝持ち越し候補
   // 工数タイルを省いた回は列数を変える（空きが出て崩れるのを防ぐ）
   box.classList.toggle('nohours', !(actCut!=null||cut!=null));
   box.innerHTML =
-    `<div class="kpi meet${nextMt?'':' past'}" id="kpiMeet" title="${_tpOpen()?'クリックで閉じる':'クリックで打合せ予定・お題を開く'}"><div class="go">${_tpOpen()?'✕':'開く ▸'}</div>`+
+    `<div class="kpi meet${nextMt?'':' past'}" id="kpiMeet" title="${_tpOpen()?'クリックで閉じる':'クリックで打合せ予定・議題を開く'}"><div class="go">${_tpOpen()?'✕':'開く ▸'}</div>`+
       `<div class="lab">📝 打合せ予定</div>`+
       `<div class="val">${nextMt?mdNum(parse(nextMt.date))+(nextMt.start?' <small>'+esc(nextMt.start)+(nextMt.end?'〜'+esc(nextMt.end):'')+'</small>':''):'未定'}</div>`+
       `<div class="meta">${nextMt?esc((nextMt.title||'定例'))+(nextMt.room?'／'+esc(nextMt.room):'')+' ／ ':
-        (lastMt?'前回 '+mdNum(parse(lastMt.date))+' '+esc(lastMt.title||'定例')+'（済） ／ ':'定例を登録 ／ ')}お題 未対応 ${openTp}件`+
+        (lastMt?'前回 '+mdNum(parse(lastMt.date))+' '+esc(lastMt.title||'定例')+'（済） ／ ':'定例を登録 ／ ')}議題 未対応 ${openTp}件`+
         (candTp?` ／ <b style="color:#c98a12;white-space:nowrap">🔁 持越 ${candTp}件</b>`:'')+`</div>`+
       (nextMt?'':`<button class="mtnext" id="kpiNextMt" title="${lastMt?'前回の内容（時刻・会議室）を引き継いだ次回の登録フォームを開きます':'定例の登録フォームを開きます'}">＋ ${lastMt?'次回':'定例'}を登録</button>`)+
     `</div>`+
@@ -2486,7 +2488,7 @@ function scrollToToday(silent){ const wrap=grid.parentElement; if(!wrap) return 
 // render() 直後はまだレイアウトが確定せず offsetLeft が 0 になることがあるので rAF 2回ぶん待つ。
 function scrollToTodayOnBoot(){ requestAnimationFrame(()=>requestAnimationFrame(()=>{ try{ scrollToToday(true); }catch(e){} })); }
 
-// ===== お題・議題ボード（定例ごとにExcel風テーブルで記入・全員共有・マージ対応）=====
+// ===== 議題ボード（定例ごとにExcel風テーブルで記入・全員共有・マージ対応）=====
 function ensureBoards(){
   if(!state.slack || typeof state.slack!=='object') state.slack={ url:'', label:'', last:null, _u:0 };
   if(!Array.isArray(state.meetings)) state.meetings=[];
@@ -2516,7 +2518,7 @@ function meAuthorIsRaw(){
   const email=window.__user?String(window.__user):''; if(!email) return false;
   const m=(state.members||[]).find(x=>x&&x.id===email);
   return !(m && m.name && m.name!==email.split('@')[0]); }
-let _openMeeting=null;   // null=定例一覧／会議id=その会議のお題テーブル
+let _openMeeting=null;   // null=定例一覧／会議id=その会議の議題テーブル
 let _mtDraft=null;       // 「＋次回を登録」で開いたときの追加フォームのプリセット値（一度使ったら破棄）
 function updateTopicBtn(){ ensureBoards(); if(typeof computeKPIs==='function'){ try{ computeKPIs(); }catch(e){} } }  // KPIの打合せ予定タイルを更新
 function refreshTopicsIfOpen(){ const m=document.getElementById('topicModal'); if(m&&m.classList.contains('on')) renderTopics(); }
@@ -2551,14 +2553,14 @@ function mtWhenLine(m){ const d=m.date?parse(m.date):null;                      
     (m.start?` ${m.start}${m.end?'〜'+m.end:''}`:'')+(m.room?` ／ ${m.room}`:''); }
 let _mtEdit=false, _noteEdit=false;   // 定例の日時／概要を「書き換えモード」にしているか（画面の状態）
 let _gcMenu=false;                    // 「📅 カレンダー ▾」を開いているか（画面の状態・保存しない）
-let _tpQuickHelp=false;               // お題入力欄の「?」を開いているか（画面の状態・保存しない）
-let _tpMore=new Set();                // お題カードで「＋ 欄を足す」を開いているカード（画面の状態）
-let _tpOps=new Set();                 // お題カードで「…」（順番・削除）を開いているカード（画面の状態）
+let _tpQuickHelp=false;               // 議題入力欄の「?」を開いているか（画面の状態・保存しない）
+let _tpMore=new Set();                // 議題カードで「＋ 欄を足す」を開いているカード（画面の状態）
+let _tpOps=new Set();                 // 議題カードで「…」（順番・削除）を開いているカード（画面の状態）
 // 過去ログの畳み方（自分の画面だけ・共有ボードには入れない）。既定は畳む＝いま話すことに集中させる。
 // 一度開いたら開いたままにする（過去の議事録を読みに来た人が毎回開き直さなくていいように）。
 function _foldGet(k,def){ try{ const v=localStorage.getItem(k); return v==null?def:(v==='1'); }catch(e){ return def; } }
 let _mtFoldPast=_foldGet('ai_sched_mtfoldpast', true);     // 定例一覧：過ぎた回を畳む
-let _tpFoldDone=_foldGet('ai_sched_tpfolddone', true);     // 開いた回：済んだお題を畳む
+let _tpFoldDone=_foldGet('ai_sched_tpfolddone', true);     // 開いた回：済んだ議題を畳む
 function foldHead(kind, label, n, folded, warn){
   return `<button class="tpfold${warn?' warn':''}" data-fold="${kind}" title="${folded?'開いて表示します':'畳んで隠します'}">`+
     `<span class="cx">${folded?'▸':'▾'}</span>${label}<span class="n">${warn?warn+' ／ ':''}${n}件</span></button>`;
@@ -2601,7 +2603,7 @@ function renderMeetingList(box){
           `<button class="mtgcal" data-gcal-mt="${esca(m.id)}" title="Googleカレンダーに登録">📅</button>`+
           `<button class="del" data-del-mt="${esca(m.id)}" title="この定例を削除">✕</button></div>`+
         `<span class="mtd">${mtWhen(m)}</span>`+
-        `<span class="mtc">お題 ${c.total}件${c.open?'（未対応 '+c.open+'）':''}`+
+        `<span class="mtc">議題 ${c.total}件${c.open?'（未対応 '+c.open+'）':''}`+
           (co?` ／ <span class="co">🔁 持ち越し ${co}件</span>`:'')+`</span>`+
         (m.note?`<div class="mtn">${esc(m.note)}</div>`:'')+
       `</div>`; };
@@ -2609,7 +2611,7 @@ function renderMeetingList(box){
   // 日付未設定は「これから」に入れる（消えると気づけない）。
   const past=list.filter(m=>m.date&&m.date<todayY);
   const up=list.filter(m=>!(m.date&&m.date<todayY));
-  let h=`<div class="tpsec">定例一覧（クリックで概要・お題を記入／📅でカレンダー登録）</div>`;
+  let h=`<div class="tpsec">定例一覧（クリックで概要・議題を記入／📅でカレンダー登録）</div>`;
   if(!list.length) h+=`<div class="tpempty">定例がまだありません。下の「＋ 定例を追加」から登録してください。</div>`;
   else {
     h+= up.length ? up.map(mtRow).join('')
@@ -2691,14 +2693,14 @@ function nextMeetingDraft(){ ensureBoards();
 // Googleカレンダーの「予定を作成」画面を開く。
 // ⚠ このアプリはカレンダーを読めない（そういう権限を取っていない）ので、既に予定があるかは判定できない。
 //   定例は隔週の繰り返し予約で入っていることが多く、ここから作ると二重に予定が立つ。だから毎回確認する。
-//   お題を既存の予定に足したいだけなら「📋 説明欄をコピー」を使う。
+//   議題を既存の予定に足したいだけなら「📋 説明欄をコピー」を使う。
 function openGcal(m){
   const g=(state.members||[]).length;
   if(!confirm('Googleカレンダーの「予定を作成」画面を開きます。\n\n'+
     '・保存はGoogleの画面でご自分で押してください（自動では作られません）\n'+
     '・招待先はこのアプリにログインした '+g+'名 だけです（未ログインの人は入りません）\n'+
     '・⚠ この定例が繰り返し予約などで既にカレンダーに入っている場合、ここから作ると二重になります\n\n'+
-    'お題を既存の予定に足したいだけなら「📋 説明欄をコピー」を使ってください。\n\n続けますか？')) return;
+    '議題を既存の予定に足したいだけなら「📋 説明欄をコピー」を使ってください。\n\n続けますか？')) return;
   window.open(gcalUrl(m),'_blank','noopener');
 }
 function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _openMeeting=null; renderTopics(); showTopicPanel();
@@ -2707,8 +2709,8 @@ function openNextMeetingForm(){ _mtDraft=nextMeetingDraft(); ensureBoards(); _op
 // ブラウザのログインセッションでしか共有ボードに書けないため、確定済みの予定はここに書いて
 // 起動時に1回だけ入れる。適用済みIDを state.seeds に残すので、後で消しても復活しない。
 // 役目が終わった項目は SEEDS から削除してよい。
-// 定例1件＋そのお題をまとめて入れる。同じ日付の定例が既にあれば作り直さず内容だけ合わせる（idを保つ＝既存お題が残る）。
-// お題は「やること」が同じ行があればスキップするので、seedを取り消し忘れても二重登録にならない。
+// 定例1件＋その議題をまとめて入れる。同じ日付の定例が既にあれば作り直さず内容だけ合わせる（idを保つ＝既存議題が残る）。
+// 議題は「やること」が同じ行があればスキップするので、seedを取り消し忘れても二重登録にならない。
 function seedMeetingWithTopics(MT, rows){
   let m=state.meetings.find(x=>x&&x.date===MT.date);
   if(m){ const patch=Object.assign({}, MT);
@@ -2750,7 +2752,7 @@ const SEEDS=[
             detail:'次回以降、個別タスクに対する進捗報告・共有を活性化したい。要相談）角谷さんのツール活用＋しばらくはスプレッドシート併用が良いかも。狙い）それとなく進めると各自の都合が積み重なって全体の進捗が遅れる、を抑制して進捗を活発化する。' },
         ]); } },
   // 第6回定例（＝【社内】企画AI委員会）2026-08-17(月) 16:00〜17:00 会議室L
-  // Googleカレンダーで実物を確認済み。既存の行があれば作り直さず直す（idを保つ＝お題が残る）。
+  // Googleカレンダーで実物を確認済み。既存の行があれば作り直さず直す（idを保つ＝議題が残る）。
   { id:'mt_20260817_dai6_r2', apply(){
       const MT={ title:'第6回定例', date:'2026-08-17', start:'16:00', end:'17:00', room:'会議室L' };
       const cur=state.meetings.find(m=>m&&(m.date==='2026-08-17'||m.date==='2026-08-18'));
@@ -2781,7 +2783,7 @@ function prefillNextIfEmpty(){ const g=id=>document.getElementById(id);
   if(g('mtTitle')) g('mtTitle').value=d.title||''; if(g('mtDate')) g('mtDate').value=d.date||'';
   if(g('mtStart')) g('mtStart').value=d.start||''; if(g('mtEnd')) g('mtEnd').value=d.end||'';
   if(g('mtRoom')) g('mtRoom').value=d.room||''; }
-// お題1件＝1カード。閉じているときは要点だけ、クリックで開くと下に記入欄が出る。
+// 議題1件＝1カード。閉じているときは要点だけ、クリックで開くと下に記入欄が出る。
 let _tpOpenCards=new Set();   // 開いているカード（画面の状態なので保存しない）
 // contenteditable の中身を改行つきで取り出す（2026-08-21修正）。
 // ・textContent は Enterで入る <div>／<br> を無視する＝**改行が消えたまま保存されていた**
@@ -2833,7 +2835,7 @@ function linkSuggestions(t){
   const ord={}; mtSorted().forEach((m,i)=>ord[m.id]=i);                       // 新しい定例のものを先に
   state.topics.slice().sort((a,b)=>(ord[b.meetingId]||0)-(ord[a.meetingId]||0)).forEach(x=>{
     if(x.id===t.id) return; const m=state.meetings.find(y=>y&&y.id===x.meetingId);
-    const src=(m&&m.title)||'ほかのお題';
+    const src=(m&&m.title)||'ほかの議題';
     // 参考リンク欄だけでなく、メモ・当日メモ・決まったことに貼られたURLも拾う（実際はメモに貼られがち）
     [x.links, x.detail, x.log, x.result].forEach(v=>urlsIn(v).forEach(u=>push(u, src))); });
   state.meetings.forEach(m=>urlsIn(m.note).forEach(u=>push(u,(m.title||'定例')+'の概要')));
@@ -2853,14 +2855,14 @@ function addSugLink(tid,u){
   if(urlsIn(cur).indexOf(u)>=0) return;                                        // すでに入っていれば足さない
   t.links=(cur?cur+'\n':'')+u; t._u=Date.now(); _tpShow.add(tid+':links'); save(); renderTopics();
 }
-// ガントのカルテ（作業）に紐づける。1つのお題に何件でも結びつけられる。
+// ガントのカルテ（作業）に紐づける。1つの議題に何件でも結びつけられる。
 function tpTaskIds(t){
   const a=Array.isArray(t.taskIds)?t.taskIds.slice():[];
   if(t.taskId && a.indexOf(t.taskId)<0) a.unshift(t.taskId);      // 旧・単数フィールドからの移行
   return a.filter(id=>!!findNode(id));
 }
-// お題の文章とカルテ名の重なりから「これでは？」を出す。
-// 日本語は単語で切れないので、カルテ名の連続する文字列がお題の文章に出てくるかで見る。
+// 議題の文章とカルテ名の重なりから「これでは？」を出す。
+// 日本語は単語で切れないので、カルテ名の連続する文字列が議題の文章に出てくるかで見る。
 // 3文字以上一致していれば候補にする（2文字だと「作成」「資料」で誤爆する）。
 function kartSuggest(t){
   const text=((t.todo||'')+' '+(t.detail||'')+' '+(t.log||'')+' '+(t.result||'')).toLowerCase();
@@ -2946,14 +2948,14 @@ function tpChips(t){
   return c.length?`<div class="tpchips">`+c.map(x=>`<span>${esc(x)}</span>`).join('')+`</div>`:'';
 }
 // 開いたときの記入欄は「最初はメモだけ」。他は＋ボタンで出す（いきなり全部出すと書く気が失せるため）。
-let _tpShow=new Set();     // 'お題id:欄' … その欄を出しているか（中身があるものは常に出る）
+let _tpShow=new Set();     // '議題id:欄' … その欄を出しているか（中身があるものは常に出る）
 function tpHas(t,f){
   if(f==='task') return tpTaskIds(t).length>0;
   return !!String(t[f]||'').trim();
 }
 function tpOn(t,f){ return tpHas(t,f) || _tpShow.has(t.id+':'+f); }
 function tpAddBtn(t,f,label){ return tpOn(t,f)?'':`<button class="addfld" data-addfld="${esca(t.id)}|${f}">＋ ${label}</button>`; }
-// 会議は「話す順」があるので、お題は ord の順に並べる（未設定は後ろ＝追加順のまま）
+// 会議は「話す順」があるので、議題は ord の順に並べる（未設定は後ろ＝追加順のまま）
 function tpOrdered(rows){
   return rows.slice().sort((a,b)=>{
     const ao=(typeof a.ord==='number')?a.ord:1e9, bo=(typeof b.ord==='number')?b.ord:1e9;
@@ -3029,7 +3031,7 @@ function nextOrd(meetingId){    // 追加したものは末尾に置く
 function tpCard(t){
   const src=t.from ? state.meetings.find(x=>x&&x.id===t.from) : null;
   const open=_tpOpenCards.has(t.id);
-  // 1行目＝お題そのもの（主役）。名前などの補足は2行目に小さく置く。
+  // 1行目＝議題そのもの（主役）。名前などの補足は2行目に小さく置く。
   let h=`<div class="tpcard${t.done?' done':''}${t.from?' carried':''}${open?' open':''}" data-tid="${esca(t.id)}">`+
     `<div class="r1">`+
       `<button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'「まだ話していない」に戻す':'この回で話した（済）にする。タスクの完了ではありません'}">✓</button>`+
@@ -3038,11 +3040,11 @@ function tpCard(t){
       `<button class="exp" data-expand="${esca(t.id)}" title="${open?'たたむ':'メモ・リンク・カルテなどを書く'}">${open?'▾ とじる':'▸ 詳細'}</button>`+
     `</div>`+
     `<div class="r2">`+
-      `<span class="nmic" title="このお題を書いた人">👤</span>`+
-      `<div class="nm cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="書いた人" title="このお題を書いた人（あとで誰に聞けばいいか分かるように）">${esc(t.name||'')}</div>`+
-      (t.from?`<button class="cotag" data-uncarry="${esca(t.id)}" title="${esca((src&&src.title)||'元の定例')}から持ち越したお題です。クリックすると元の回に戻します">🔁 ${esc(((src&&src.title)||'前回').replace('定例',''))}から持ち越し</button>`:'')+
+      `<span class="nmic" title="この議題を書いた人">👤</span>`+
+      `<div class="nm cell" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="書いた人" title="この議題を書いた人（あとで誰に聞けばいいか分かるように）">${esc(t.name||'')}</div>`+
+      (t.from?`<button class="cotag" data-uncarry="${esca(t.id)}" title="${esca((src&&src.title)||'元の定例')}から持ち越した議題です。クリックすると元の回に戻します">🔁 ${esc(((src&&src.title)||'前回').replace('定例',''))}から持ち越し</button>`:'')+
       (t.done?'':(()=>{ const nx=nextMtOf(t);
-        return `<button class="act carry" data-carry="${esca(t.id)}" title="${nx?`このお題を「${esca(nx.title||'次の定例')} ${esca(mtWhenLine(nx))}」に移します。移動先では「前回から」と表示されます`:'次の定例がまだ登録されていません'}">`+
+        return `<button class="act carry" data-carry="${esca(t.id)}" title="${nx?`この議題を「${esca(nx.title||'次の定例')} ${esca(mtWhenLine(nx))}」に移します。移動先では「前回から」と表示されます`:'次の定例がまだ登録されていません'}">`+
           `▶ ${nx?esc(mdNum(parse(nx.date)))+'の定例へ送る':'次の定例へ送る'}</button>`; })())+
     `</div>`;
   if(!open){                                        // 閉じているときは要点だけ
@@ -3072,8 +3074,8 @@ function tpCard(t){
         (_tpOps.has(t.id)
           ?`<span class="mvbtns">順番 <button data-mv="${esca(t.id)}|-1" title="上へ">▲ 上へ</button>`+
             `<button data-mv="${esca(t.id)}|1" title="下へ">▼ 下へ</button></span>`+
-            `<button class="delrow" data-del="${esca(t.id)}" title="このお題を削除">🗑 このお題を削除</button>`
-          :`<button class="act ghost" data-tpops="${esca(t.id)}" title="話す順を変える・このお題を削除する">…</button>`)+
+            `<button class="delrow" data-del="${esca(t.id)}" title="この議題を削除">🗑 この議題を削除</button>`
+          :`<button class="act ghost" data-tpops="${esca(t.id)}" title="話す順を変える・この議題を削除する">…</button>`)+
       `</div>`+
     `</div>`;
   }
@@ -3111,7 +3113,7 @@ function renderMeetingTable(box){
         // カレンダー関係はボタンを2つ常時並べると場所を食うので、1つに畳んで押したときだけ出す。
         `<button class="tpgcal" id="tpCalMenu" title="Googleカレンダーに関する操作">📅 カレンダー ${_gcMenu?'▴':'▾'}</button></div>`+
         (_gcMenu?`<div class="calmenu">`+
-          `<button id="tpDesc">📋 この回の「ねらい＋お題」をコピー</button>`+
+          `<button id="tpDesc">📋 この回の「ねらい＋議題」をコピー</button>`+
           `<div class="sm">カレンダーの<b>既存の予定</b>を開いて、説明欄に貼ってください（アプリからカレンダーには書き込めません）。招待メールに議題が載るので、当日までに目を通してもらえます。</div>`+
           `<button id="tpGcal">📅 新しく予定を作る</button>`+
           `<div class="sm">⚠ すでに繰り返し予約が入っている定例だと<b>二重になります</b>。日程変更のときは押さないでください。</div>`+
@@ -3125,19 +3127,22 @@ function renderMeetingTable(box){
           `<select class="mtedit tsel" data-mt="end" title="終了">${timeOpts(m.end||'','終了')}</select>`+
           `<select class="mtedit tsel rmsel" data-mt="room" title="会議室">${roomOpts(m.room||'')}</select></div></div>`;
   // 会議の概要：ふだんは本文だけ見せて、押したら書き換えられる（空の入力欄を並べない）
+  let note='';
   if(_noteEdit){
-    h+=`<div class="tpnote"><label>この回のねらい・議題 <span class="sm">会議中もそのまま書き換えられます（自動で全員に共有）</span>`+
+    note=`<div class="tpnote"><label>この回のねらい <span class="sm">会議中もそのまま書き換えられます（自動で全員に共有）</span>`+
        `<button class="mini" id="noteDone" style="margin-left:auto">とじる</button></label>`+
        `<textarea data-mtnote placeholder="例）・ツール化のネック報告（伊藤さん）&#10;・進捗共有のやり方を決める">${esc(m.note||'')}</textarea></div>`;
   }else if((m.note||'').trim()){
-    h+=`<div class="notelab">この回のねらい・議題</div>`+
+    note=`<div class="notelab">この回のねらい</div>`+
        `<div class="noteview" id="noteEditBtn" title="クリックで書き換え">${esc(m.note)}<span class="pen">✎</span></div>`;
   }else{
-    h+=`<button class="noteadd" id="noteEditBtn">＋ この回のねらい・議題を書く</button>`;
+    note=`<button class="noteadd" id="noteEditBtn">＋ この回のねらいを書く（任意）</button>`;
   }
-  // ★入口：ここに書けばいい、が一目で分かるようにする
-  h+=`<div class="tpquick"><input id="tpQuick" type="text" autocomplete="off"`+
-     ` placeholder="話したいこと・相談したいことを書く"><button id="tpQuickAdd">追加</button></div>`+
+  // ★入口：この画面でやることは「議題を1件足す」。ここを主役にして一番上に置く。
+  // 「ねらい」は1回書けば済む設定なので、入口より下に、畳んだまま置く（表向きは設定を見せない）。
+  h+=`<div class="tpaddlab">＋ 議題を追加</div>`+
+     `<div class="tpquick"><input id="tpQuick" type="text" autocomplete="off"`+
+     ` placeholder="例）ツール化の調査結果を聞きたい"><button id="tpQuickAdd">追加</button></div>`+
      // 注記は常駐させない。読ませないと使えない画面にすると、説明する人が毎回口で言うことになる。
      // 「?」を押した人にだけ出す（表示名がメールIDのままの警告だけは、直してほしい情報なので常に出す）。
      `<div class="tpquickhint">`+
@@ -3146,28 +3151,29 @@ function renderMeetingTable(box){
          ` ✓ は「この回で話した」の印です（タスクの完了ではありません）。話せなかったものは「▶ ◯/◯の定例へ送る」で次に回せます。`:'')+
        (meAuthorIsRaw()?`<br><b>表示名がメールのIDのままです。</b>上の「氏名」欄に名前を入れると、以降の書き込みに反映されます。`:'')+
      `</div>`;
-  // 済んだお題（✓）はまとめて下に畳む。議事録として残すので消さない＝「過去ログ」扱い。
+  h+=note;   // 「ねらい」は入口の下（1回書けば済むものを先頭に置かない）
+  // 済んだ議題（✓）はまとめて下に畳む。議事録として残すので消さない＝「過去ログ」扱い。
   const carOpen=carried.filter(t=>!t.done), ownOpen=own.filter(t=>!t.done);
   const doneRows=carried.filter(t=>t.done).concat(own.filter(t=>t.done));
   h+=tpGroup(carOpen,'🔁 前回からの持ち越し','carry');
-  h+=tpGroup(ownOpen, carOpen.length?'この回のお題':'お題','');
+  h+=tpGroup(ownOpen, carOpen.length?'この回の議題':'議題','');
   if(!carOpen.length && !ownOpen.length && doneRows.length)
-    h+=`<div class="tpnote-sm">この回のお題はすべて「話した（✓）」になっています。中身は下の過去ログから読めます。</div>`;
+    h+=`<div class="tpnote-sm">この回の議題はすべて「話した（✓）」になっています。中身は下の過去ログから読めます。</div>`;
   h+=tpFoldGroup(doneRows,'tpdone','✓ この回で話した（記録）','done',_tpFoldDone);
   // ✓の説明はクイック追加欄の「?」に移した（常駐させない）
-  if(!rows.length) h+=`<div class="tpempty">まだお題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
-  // 前の回で未対応のまま終わったお題＝この回に入れるかどうかを、ここで一覧して選べるようにする
+  if(!rows.length) h+=`<div class="tpempty">まだ議題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
+  // 前の回で未対応のまま終わった議題＝この回に入れるかどうかを、ここで一覧して選べるようにする
   const cand=carryCandidates(m);
-  if(cand.length) h+=`<div class="tpgrp cand"><div class="gh">🔁 前の回で未対応のお題 <span class="n">${cand.length}</span>`+
+  if(cand.length) h+=`<div class="tpgrp cand"><div class="gh">🔁 前の回で未対応の議題 <span class="n">${cand.length}</span>`+
     `<span class="sm">この回に入れますか？（直近${CARRY_BACK}回ぶん）</span></div>`+
     cand.map(t=>{ const src=state.meetings.find(x=>x&&x.id===t.meetingId);
       return `<div class="candrow"><div class="ct">${esc(t.todo||'(無題)')}`+
         `<span class="cs">${esc((src&&src.title)||'')}${t.name?' ／ '+esc(t.name):''}</span></div>`+
-        `<button class="act carry" data-carryto="${esca(t.id)}" title="この回のお題に移す">＋ この回へ</button></div>`;
+        `<button class="act carry" data-carryto="${esca(t.id)}" title="この回の議題に移す">＋ この回へ</button></div>`;
     }).join('')+
     ((n=>n?`<div class="tpmoved" style="padding-top:6px">これより前の回にも未対応が ${n} 件あります（定例一覧から開けます）</div>`:'')(carryOlderCount(m)))+
     `</div>`;
-  if(movedOut.length) h+=`<div class="tpgrp" style="margin-top:16px"><div class="gh">→ 次回へ持ち越したお題 <span class="n">${movedOut.length}</span></div>`+
+  if(movedOut.length) h+=`<div class="tpgrp" style="margin-top:16px"><div class="gh">→ 次回へ持ち越した議題 <span class="n">${movedOut.length}</span></div>`+
     `<div class="tpmoved">`+movedOut.map(t=>`<span class="mv">・${esc(t.todo||'(無題)')}</span>`).join('')+`</div></div>`;
   box.innerHTML=h;
   autoGrowNote();
@@ -3178,7 +3184,7 @@ function renderMeetingTable(box){
 // 概要欄は中身のぶんだけ伸ばす（会議中にスクロールさせない）
 function autoGrowNote(){ const ta=document.querySelector('#topicBody [data-mtnote]'); if(!ta) return;
   ta.style.height='auto'; ta.style.height=Math.min(360, Math.max(96, ta.scrollHeight+2))+'px'; }
-// この回より前の定例に残っている未対応のお題＝持ち越し候補
+// この回より前の定例に残っている未対応の議題＝持ち越し候補
 const CARRY_BACK=2;          // さかのぼる回数（増やすと古い未対応が延々と候補に出続ける）
 function carryCandidates(m){
   if(!m||!m.date) return [];
@@ -3199,22 +3205,22 @@ function carryTopicTo(id, mtId){
   t.from=t.meetingId; t.meetingId=mtId; t.done=false; t.ord=nextOrd(mtId); t._u=Date.now();
   save(); renderTopics();
 }
-// 未対応のまま終わったお題を次の定例へ移す。元の回には「→次回へ持ち越した」痕跡が残る（t.from）。
+// 未対応のまま終わった議題を次の定例へ移す。元の回には「→次回へ持ち越した」痕跡が残る（t.from）。
 function carryTopic(id){
   const t=state.topics.find(x=>x&&x.id===id); if(!t) return;
   const cur=state.meetings.find(x=>x&&x.id===t.meetingId); if(!cur) return;
   const nx=mtSorted().find(x=>String(x.date||'')>String(cur.date||''));
   if(!nx){ alert('次の定例がまだ登録されていません。\n「← 定例一覧」→「＋ 定例を追加」で次回を登録してから移してください。'); return; }
   t.from=cur.id; t.meetingId=nx.id; t.done=false; t.ord=nextOrd(nx.id); t._u=Date.now();
-  save(); renderTopics();                        // 画面はこの回のまま（下の「→ 次回へ持ち越したお題」に出る）
-  tpToast(`「${(t.todo||'このお題')}」を ${mtWhenLine(nx)} の${nx.title||'定例'}へ送りました`);
+  save(); renderTopics();                        // 画面はこの回のまま（下の「→ 次回へ持ち越した議題」に出る）
+  tpToast(`「${(t.todo||'この議題')}」を ${mtWhenLine(nx)} の${nx.title||'定例'}へ送りました`);
 }
-// お題ボード用の短いお知らせ（ガントのモード表示を流用）
+// 議題ボード用の短いお知らせ（ガントのモード表示を流用）
 function tpToast(msg){ const el=document.getElementById('modeToast'); if(!el) return;
   el.textContent=msg; el.classList.add('show'); el.classList.remove('edit','scroll');
   el.style.transform='translateX(-50%)'; el.style.left='50%'; el.style.top='76px';
   clearTimeout(_modeToastT); _modeToastT=setTimeout(()=>el.classList.remove('show'), 2600); }
-// このお題が乗っている定例の「次の定例」
+// この議題が乗っている定例の「次の定例」
 function nextMtOf(t){ const cur=state.meetings.find(x=>x&&x.id===t.meetingId); if(!cur) return null;
   return mtSorted().find(x=>String(x.date||'')>String(cur.date||''))||null; }
 function uncarryTopic(id){
@@ -3237,30 +3243,30 @@ function addMeeting(){ const g=id=>document.getElementById(id);
   if(want) openSlackCfg(); }
 function setMtField(field, val){ const m=state.meetings.find(x=>x.id===_openMeeting); if(!m||!field) return;
   if((m[field]||'')===val) return; m[field]=val; m._u=Date.now(); save(); renderTopics(); }
-// 定例の削除。中止・日程変更は必ず起きるので、お題を巻き添えで消さないことを最優先にする。
+// 定例の削除。中止・日程変更は必ず起きるので、議題を巻き添えで消さないことを最優先にする。
 function delMeeting(id){
   const m=state.meetings.find(x=>x.id===id); if(!m) return;
   const c=mtCounts(id), label='「'+(m.title||'定例')+' '+mtWhenLine(m)+'」';
   const nx=mtSorted().find(x=>x&&x.id!==id && String(x.date||'')>String(m.date||''));
   if(c.total){
     if(nx){
-      // 既定は「お題を次の回へ移してから削除」。メモごと消えるのが一番痛いので、これを標準にする。
-      if(!confirm('定例'+label+'を削除します。\n\nこの回にはお題が '+c.total+'件 あります。\n'+
-                  '［OK］お題を「'+(nx.title||'定例')+' '+mtWhenLine(nx)+'」へ移してから削除します\n'+
+      // 既定は「議題を次の回へ移してから削除」。メモごと消えるのが一番痛いので、これを標準にする。
+      if(!confirm('定例'+label+'を削除します。\n\nこの回には議題が '+c.total+'件 あります。\n'+
+                  '［OK］議題を「'+(nx.title||'定例')+' '+mtWhenLine(nx)+'」へ移してから削除します\n'+
                   '［キャンセル］削除をやめる\n\n'+
-                  '※ お題ごと消したい場合は、先にお題を1件ずつ削除してください。')) return;
+                  '※ 議題ごと消したい場合は、先に議題を1件ずつ削除してください。')) return;
       state.topics.forEach(t=>{ if(t&&t.meetingId===id){
         t.meetingId=nx.id; t.ord=nextOrd(nx.id); delete t.from; t._u=Date.now(); } });
-      tpToast('お題 '+c.total+'件を「'+(nx.title||'定例')+'」へ移しました');
+      tpToast('議題 '+c.total+'件を「'+(nx.title||'定例')+'」へ移しました');
     } else {
-      if(!confirm('定例'+label+'を削除します。\n\nこの回にはお題が '+c.total+'件 ありますが、\n'+
-                  '移動先になる次の定例がありません。このままだと お題も一緒に消えます。\n\n'+
-                  '先に「＋ 定例を追加」で次回を登録すると、お題を移してから削除できます。\n\n'+
+      if(!confirm('定例'+label+'を削除します。\n\nこの回には議題が '+c.total+'件 ありますが、\n'+
+                  '移動先になる次の定例がありません。このままだと 議題も一緒に消えます。\n\n'+
+                  '先に「＋ 定例を追加」で次回を登録すると、議題を移してから削除できます。\n\n'+
                   'それでも削除しますか？（Ctrl+Z で戻せます）')) return;
       state.topics=state.topics.filter(t=>!(t&&t.meetingId===id));
     }
   } else {
-    if(!confirm('定例'+label+'を削除しますか？（お題は入っていません）')) return;
+    if(!confirm('定例'+label+'を削除しますか？（議題は入っていません）')) return;
   }
   logAct('定例', (m.title||'')+' '+(m.date||''));
   state.meetings=state.meetings.filter(x=>x.id!==id);
@@ -3272,18 +3278,18 @@ function addRow(){ if(!_openMeeting) return;
   const cell=document.querySelector('#topicBody [data-edit="'+t.id+'"][data-field="todo"]'); if(cell) cell.focus(); }
 function toggleTopic(id){ const t=state.topics.find(x=>x&&x.id===id); if(!t) return; t.done=!t.done; t._u=Date.now(); save(); renderTopics(); }
 function delTopic(id){ const t=state.topics.find(x=>x&&x.id===id); if(!t) return;
-  if((t.name||t.todo||t.detail) && !confirm('このお題を削除しますか？')) return;
-  logAct('お題', t.todo||t.name||'(無題)');
+  if((t.name||t.todo||t.detail) && !confirm('この議題を削除しますか？')) return;
+  logAct('議題', t.todo||t.name||'(無題)');
   state.topics=state.topics.filter(x=>x&&x.id!==id); save(); renderTopics(); }
 function editCell(id, field, text){ const t=state.topics.find(x=>x&&x.id===id); if(!t||!field) return;
   const v=String(text==null?'':text), cur=(t[field]==null?'':String(t[field]));
   if(v===cur) return; t[field]=v; t._u=Date.now(); save(); }
 function _plus1h(hhmm){ const a=String(hhmm).split(':'); const h=(+a[0]+1)%24; return String(h).padStart(2,'0')+':'+String(+a[1]||0).padStart(2,'0'); }
-// カレンダーの説明欄に貼る本文（概要＋お題）。予定作成URLと「説明欄をコピー」で共用する。
+// カレンダーの説明欄に貼る本文（概要＋議題）。予定作成URLと「説明欄をコピー」で共用する。
 function gcalDetails(m){
   const rows=tpOrdered(state.topics.filter(t=>t&&t.meetingId===m.id));
   return (m.note?'■会議の概要\n'+m.note+'\n\n':'')+
-    '■お題\n'+(rows.length? rows.map(t=>`・${t.done?'[済]':''}${t.from?'[持ち越し]':''}[${t.name||''}] ${t.todo||''}${t.detail?' — '+t.detail:''}`).join('\n') : '（お題未記入）');
+    '■議題\n'+(rows.length? rows.map(t=>`・${t.done?'[済]':''}${t.from?'[持ち越し]':''}[${t.name||''}] ${t.todo||''}${t.detail?' — '+t.detail:''}`).join('\n') : '（議題未記入）');
 }
 function gcalUrl(m){   // Googleカレンダー「予定作成」テンプレートURL（認証不要・入力済みで開く）
   const det=gcalDetails(m);
@@ -3544,7 +3550,7 @@ function fromSheetNote(v){
            .replace(/（期限:\s*([^）]*)）/, function(m,g){ due=g.trim(); return ''; });
   return { log:log, result:rest.trim(), owner:owner, due:due };
 }
-// アプリのお題を、シートと同じ形（3項目）に写したもの
+// アプリの議題を、シートと同じ形（3項目）に写したもの
 function topicAsSheet(t){ return { todo:String(t.todo||''), detail:String(t.detail||''), note:toSheetNote(t) }; }
 function syncBase(){ const b=state.sheetSync&&state.sheetSync.rows; return (b&&typeof b==='object')?b:{}; }
 // シートから受け取った行（{uid,date,todo,detail,note}）とアプリを突き合わせる
@@ -3689,7 +3695,7 @@ document.getElementById('syncModal').addEventListener('change', e=>{
   const r=e.target.closest('[data-cf]'); if(!r) return;
   _syncChoice[r.dataset.cf]=r.value;
 });
-// ===== 検索（作業・お題・議事メモを横断）=====
+// ===== 検索（作業・議題・議事メモを横断）=====
 function fdHit(text, q){ return String(text||'').toLowerCase().indexOf(q)>=0; }
 function fdMark(text, q, len){
   const s=String(text||'').replace(/\n/g,' ');
@@ -3701,7 +3707,7 @@ function fdMark(text, q, len){
 function runFind(){
   const q=String((document.getElementById('findInput')||{}).value||'').trim().toLowerCase();
   const box=document.getElementById('findBody'); if(!box) return;
-  if(q.length<1){ box.innerHTML='<div class="tpempty">探したい言葉を入れてください。作業名・担当・お題・当日メモ・決まったことから探します。</div>'; return; }
+  if(q.length<1){ box.innerHTML='<div class="tpempty">探したい言葉を入れてください。作業名・担当・議題・当日メモ・決まったことから探します。</div>'; return; }
   ensureBoards();
   const tasks=[], topics=[], mts=[];
   walkAll(state.tree, nd=>{ if(!nd) return;
@@ -3721,8 +3727,8 @@ function runFind(){
     tasks.slice(0,40).map(x=>'<div class="fdrow" data-detail="'+esca(x.nd.id)+'"><span class="ft">カルテ</span>'+
       '<span class="fn">'+esc(x.nd.name||'(無題)')+'<span class="fs">'+x.snip+'</span></span>'+
       '<span class="fm">'+esc(x.nd.role||'')+'</span></div>').join(''); }
-  if(topics.length){ h+='<div class="fdsec">お題・議事メモ '+topics.length+'</div>'+
-    topics.slice(0,40).map(x=>'<div class="fdrow" data-findtp="'+esca(x.t.id)+'"><span class="ft">お題</span>'+
+  if(topics.length){ h+='<div class="fdsec">議題・議事メモ '+topics.length+'</div>'+
+    topics.slice(0,40).map(x=>'<div class="fdrow" data-findtp="'+esca(x.t.id)+'"><span class="ft">議題</span>'+
       '<span class="fn">'+esc(x.t.todo||'(無題)')+'<span class="fs">'+x.snip+'</span></span>'+
       '<span class="fm">'+esc((x.m&&x.m.title)||'')+'</span></div>').join(''); }
   if(mts.length){ h+='<div class="fdsec">定例 '+mts.length+'</div>'+
@@ -3909,7 +3915,7 @@ function summaryData(){
   const ums=(state.milestones||[]).filter(m=>m&&m.date&&parse(m.date)>=today).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6);
   return {leaves,total,done,pct,late,week,ws,we,ums};
 }
-// 定例まわりのサマリー材料（前回で決まったこと／次回のお題）
+// 定例まわりのサマリー材料（前回で決まったこと／次回の議題）
 // 実績が入っている作業だけを集計（見込みではなく「本当に減ったか」）
 function actualHours(){
   let old=0, act=0, cnt=0;
@@ -3982,7 +3988,7 @@ function callOutData(){
   return { d, st, people };
 }
 const CO_MAX=10;                                   // 長い一覧は切るが、切ったことは必ず書く
-const SL_TP_MAX=6;                                 // Slackに載せる次回のお題の上限（長いと読まれない）
+const SL_TP_MAX=6;                                 // Slackに載せる次回の議題の上限（長いと読まれない）
 function coName(x){ return String(x.n.name||''); }
 function coDue(x){ const e=effEnd(x.n); return e?mdNum(parse(e)):null; }
 // 同じ作業が「遅延」「停滞」「今週」に3重で並ぶと読む気が失せるので、1作業=1行にまとめる。
@@ -4056,11 +4062,11 @@ function slackText(){
   { const a=actualHours(); if(a.cnt) L.push('AI工数削減（実績）'+a.old+'h → '+a.act+'h ＝ *'+a.pct+'%減*'); }
   if(mm.next) L.push('次回の定例　'+mtWhenLine(mm.next));
   L.push('<'+APP_URL+'|▶ ボードを開く>');
-  // 次回のお題も載せる。当日いきなり集まるより、事前に見ておいてもらう方が呼びかけとして効く。
+  // 次回の議題も載せる。当日いきなり集まるより、事前に見ておいてもらう方が呼びかけとして効く。
   if(mm.next && mm.nextTp.length){
     const open=mm.nextTp.filter(t=>!t.done).length;
     L.push('');
-    L.push('*次回のお題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
+    L.push('*次回の議題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
     const note=String(mm.next.note||'').replace(/\s+/g,' ').trim();
     if(note) L.push('_ねらい：'+(note.length>90?note.slice(0,90)+'…':note)+'_');
     mm.nextTp.slice(0,SL_TP_MAX).forEach(t=>{
@@ -4069,18 +4075,18 @@ function slackText(){
     if(mm.nextTp.length>SL_TP_MAX) L.push('・ほか '+(mm.nextTp.length-SL_TP_MAX)+'件（ボードで見られます）');
     L.push('_話したいことがあれば、当日までにボードに足しておいてください。_');
   } else if(mm.next){
-    // 「次回を登録」直後はお題が0件。ここを空欄にすると投稿の意味が薄くなるので、お題募集の呼びかけにする。
+    // 「次回を登録」直後は議題が0件。ここを空欄にすると投稿の意味が薄くなるので、議題募集の呼びかけにする。
     L.push('');
-    L.push('*次回のお題*　まだ登録がありません');
+    L.push('*次回の議題*　まだ登録がありません');
     L.push('_話したいことがあれば、当日までにボードに足しておいてください。_');
   }
-  // 前の回に残っている未対応（＝まだ次回へ移していないお題）。移し忘れると回を跨いで埋もれるので、
-  // 「次回のお題」とは別枠で必ず出す。次回へ移した分は上の一覧に「／持ち越し」で出るので二重にならない。
+  // 前の回に残っている未対応（＝まだ次回へ移していない議題）。移し忘れると回を跨いで埋もれるので、
+  // 「次回の議題」とは別枠で必ず出す。次回へ移した分は上の一覧に「／持ち越し」で出るので二重にならない。
   if(mm.prev && mm.prevOpen.length){
     L.push('');
     // 文言は「片づいていない」→「前回から続いている」。チャンネルで人の目に触れるので、
     // 状態の説明だけにして責める語感を残さない（ユーザー指示・2026-08-21）。
-    L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いているお題*（'+mm.prevOpen.length+'件）');
+    L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いている議題*（'+mm.prevOpen.length+'件）');
     mm.prevOpen.slice(0,SL_TP_MAX).forEach(t=>{
       L.push('・'+(t.todo||'(無題)')+(t.name?'（'+t.name+'）':''));
     });
@@ -4316,8 +4322,8 @@ function renderSummary(){ ensureBoards(); const box=document.getElementById('sum
     h+= mm.nextTp.length
       ? mm.nextTp.map(t=>`<div class="smrow"><span class="smn">${t.done?'✓ ':'・'}${esc(t.todo||'')}</span>`+
           `<span class="smmeta">${esc(t.name||'—')}${t.from?' ／ 持ち越し':''}</span></div>`).join('')+
-        `<div class="smnote">お題 ${mm.nextTp.length}件（未対応 ${openN}件）</div>`
-      : `<div class="tpempty">お題はまだありません。「📝 打合せ予定」から書けます。</div>`;
+        `<div class="smnote">議題 ${mm.nextTp.length}件（未対応 ${openN}件）</div>`
+      : `<div class="tpempty">議題はまだありません。「📝 打合せ予定」から書けます。</div>`;
   }
   box.innerHTML=h; }
 function summaryText(){ const d=summaryData(); const L=[];
@@ -4341,7 +4347,7 @@ function summaryText(){ const d=summaryData(); const L=[];
     if(mm.prevOpen.length) L.push('（未対応のまま：'+mm.prevOpen.map(t=>t.todo||'').join('／')+'）');
   }
   if(mm.next){
-    L.push(''); L.push(`■ 次回の定例（${mtWhenLine(mm.next)} ${mm.next.title||''}）のお題`);
+    L.push(''); L.push(`■ 次回の定例（${mtWhenLine(mm.next)} ${mm.next.title||''}）の議題`);
     if((mm.next.note||'').trim()) L.push(String(mm.next.note).split('\n').map(x=>'　'+x).join('\n'));
     L.push(mm.nextTp.length
       ? mm.nextTp.map(t=>`・${t.todo||''}（${t.name||'—'}${t.from?'・持ち越し':''}）`).join('\n')
@@ -4401,7 +4407,7 @@ function renderHistory(){ const box=document.getElementById('histBody'); if(!box
   const arr=[];
   walkAll(state.tree, n=>{ if(n&&n._u) arr.push({ t:+n._u, by:n._by, label:n.name||'(無題)', tag:'' }); });
   (state.meetings||[]).forEach(m=>{ if(m&&m._u) arr.push({ t:+m._u, by:m._by, label:(m.title||'定例'), tag:'定例' }); });
-  (state.topics||[]).forEach(t=>{ if(t&&t._u) arr.push({ t:+t._u, by:t._by, label:(t.todo||'(無題のお題)'), tag:'お題' }); });
+  (state.topics||[]).forEach(t=>{ if(t&&t._u) arr.push({ t:+t._u, by:t._by, label:(t.todo||'(無題の議題)'), tag:'議題' }); });
   (state.log||[]).forEach(l=>{ if(l&&l.t) arr.push({ t:+l.t, by:l.by, label:l.name||'(無題)', tag:l.kind, del:true }); });
   arr.sort((a,b)=>(b.t||0)-(a.t||0));
   const top=arr.slice(0,80);
