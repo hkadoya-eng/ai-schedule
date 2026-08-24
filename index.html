@@ -28,6 +28,9 @@
      人に説明できなくなるので、段は増やさず、補助ボタンのラベルだけ隠して1段を保つ（位置が動かない）。 */
   body.tpon .toolbar{gap:5px;}
   body.tpon .toolbar .lbl{display:none;}
+  /* 「今日」「検索」もラベルを残そうとしたが、幅が足りずボタンの中で改行して2段になった（実測48px）。
+     位置が動かないことを優先し、パネルを開いている間はアイコンのみにする。tooltipで名前は出る。 */
+  body.tpon .toolbar button{white-space:nowrap;}
   body.tpon .toolbar .btn, body.tpon .toolbar .seg button{padding-left:8px; padding-right:8px;}
   .btn{border:1px solid var(--line); background:#fff; color:var(--text); padding:5px 11px;
     border-radius:6px; cursor:pointer; font-size:12px; font-family:inherit;}
@@ -504,6 +507,15 @@
   /* ═══════════ KPI サマリーバー ═══════════ */
   .kpibar{display:grid; grid-template-columns:1.15fr repeat(4,1fr); gap:12px; padding:12px 16px;
     background:#0f1a26; border-bottom:1px solid var(--line); flex:0 0 auto;}
+  /* 工数の実績・見込みが1件も無いときは、空のタイルを置かない（読むものが無い枠は雑音になる） */
+  .kpibar.nohours{grid-template-columns:1.15fr repeat(3,1fr);}
+  /* 打合せパネルを開くと横幅が半分になる。5枚のままだと文字が3行に折り返して読めなくなるので、
+     パネル自身が同じことを表示している「打合せ予定」タイルを外し、補足行も畳んで数字だけ残す。 */
+  body.tpon .kpibar{grid-template-columns:repeat(4,1fr); gap:8px; padding:10px 12px;}
+  body.tpon .kpibar.nohours{grid-template-columns:repeat(3,1fr);}
+  body.tpon #kpiMeet{display:none;}
+  body.tpon .kpi .meta, body.tpon .kpi .go, body.tpon .kpi .ring{display:none;}
+  body.tpon .kpi{padding:9px 11px;}
   /* 打合せ予定タイル（クリックで開く・目立たせる）*/
   .kpi.meet{cursor:pointer; background:linear-gradient(180deg,rgba(47,182,176,.20),rgba(47,182,176,.07));
     border-color:rgba(47,182,176,.6); box-shadow:0 0 0 1px rgba(47,182,176,.35), 0 6px 20px rgba(47,182,176,.28);}
@@ -1751,6 +1763,8 @@ function computeKPIs(){
   // お題の未対応件数は表示中の定例のぶんだけ数える（終わった定例の積み残しが残り続けないように）
   const openTp=curMt?(state.topics||[]).filter(t=>t&&!t.done&&t.meetingId===curMt.id).length:0;
   const candTp=curMt?carryCandidates(curMt).length:0;   // 前の回に残っている未対応＝持ち越し候補
+  // 工数タイルを省いた回は列数を変える（空きが出て崩れるのを防ぐ）
+  box.classList.toggle('nohours', !(actCut!=null||cut!=null));
   box.innerHTML =
     `<div class="kpi meet${nextMt?'':' past'}" id="kpiMeet" title="${_tpOpen()?'クリックで閉じる':'クリックで打合せ予定・お題を開く'}"><div class="go">${_tpOpen()?'✕':'開く ▸'}</div>`+
       `<div class="lab">📝 打合せ予定</div>`+
@@ -1765,11 +1779,11 @@ function computeKPIs(){
       `<div class="ring" style="--p:${pct}"><span>${pct}</span></div></div>`+
     `<div class="kpi drill" data-kpi="done" title="クリックで内訳（完了・未完了の一覧）"><div class="go">内訳 ▸</div><div class="lab">完了</div><div class="val">${done}<small> / ${total}</small></div>`+
       `<div class="barmini"><i style="width:${donePct}%"></i></div></div>`+
-    `<div class="kpi drill ${(actCut!=null||cut!=null)?'accent':''}" data-kpi="hours" title="クリックで内訳（工数を入力した作業）"><div class="go">内訳 ▸</div>`+
+    ((actCut!=null||cut!=null)?`<div class="kpi drill accent" data-kpi="hours" title="クリックで内訳（工数を入力した作業）"><div class="go">内訳 ▸</div>`+
       `<div class="lab">AI工数削減${actCut!=null?'<span style="font-size:9px;color:var(--teal)">（実績）</span>':''}</div>`+
       `<div class="val">${actCut!=null?actCut:(cut!=null?cut:'—')}${(actCut!=null||cut!=null)?'<small>%</small>':''}</div>`+
       `<div class="meta">${actCut!=null?`実績 ${aOld}h → ${aAct}h（${aCnt}件）`:(hOld>0?`見込 ${hOld}h → ${hNew}h`:'工数を入力すると表示')}`+
-        `${(actCut!=null&&cut!=null)?` ／ 見込 ${cut}%`:''}</div></div>`+
+        `${(actCut!=null&&cut!=null)?` ／ 見込 ${cut}%`:''}</div></div>`:'')+
     `<div class="kpi drill" data-kpi="late" title="クリックで内訳（超過・遅れ・期限が近いもの）"><div class="go">内訳 ▸</div><div class="lab">遅延・期限</div><div class="val" style="${late?'color:#dc3b3b':(dueSoon?'color:#d99413':'')}">${late}<small> 件</small></div>`+
       `<div class="meta">超過 ${lateOver}・遅れ ${behind}${dueSoon?` ／ 期限7日内 ${dueSoon}`:''}</div></div>`;
 }
@@ -2444,7 +2458,7 @@ document.getElementById('helpBody').innerHTML=`
 <h4>3. 進捗を更新する（いちばんよく使う）</h4>
 <ul><li>「進捗」列の<b>ステージのピルをクリック</b> → その場でステージ(未着手/着手/レビュー中/完了/保留)と％を設定。</li>
 <li>←→キーや ± ボタンでも±5%。子工程がある作業は子の集計が自動反映。</li>
-<li>更新前に、ヘッダーの<b>「更新者」に自分の名前</b>を入れておくと記録されます。</li></ul>
+<li>更新前に、ヘッダーの<b>「更新者」に自分の名前</b>を入れておくと記録されます。</li><li><b>工数</b>（AIなしだと何時間／実際に何時間）は、作業をクリックして開く<b>カルテの「工数」</b>に入れます。1件でも入れると、上部に<b>「AI工数削減」</b>のタイルが出ます（1件も無いときはタイルを出しません）。</li></ul>
 <h4>4. 段取りを取り込む（着手前チェックシート）</h4>
 <ul><li>チェックシートのExcelを<b>画面にドラッグ＆ドロップ</b> → 対象作業にNo.で紐づき、工程が入ります（差分プレビューで確認）。</li>
 <li>対象作業が無い場合は「新規作業として追加」も選べます。</li></ul>
@@ -2538,6 +2552,8 @@ function mtWhenLine(m){ const d=m.date?parse(m.date):null;                      
 let _mtEdit=false, _noteEdit=false;   // 定例の日時／概要を「書き換えモード」にしているか（画面の状態）
 let _gcMenu=false;                    // 「📅 カレンダー ▾」を開いているか（画面の状態・保存しない）
 let _tpQuickHelp=false;               // お題入力欄の「?」を開いているか（画面の状態・保存しない）
+let _tpMore=new Set();                // お題カードで「＋ 欄を足す」を開いているカード（画面の状態）
+let _tpOps=new Set();                 // お題カードで「…」（順番・削除）を開いているカード（画面の状態）
 // 過去ログの畳み方（自分の画面だけ・共有ボードには入れない）。既定は畳む＝いま話すことに集中させる。
 // 一度開いたら開いたままにする（過去の議事録を読みに来た人が毎回開き直さなくていいように）。
 function _foldGet(k,def){ try{ const v=localStorage.getItem(k); return v==null?def:(v==='1'); }catch(e){ return def; } }
@@ -3045,11 +3061,20 @@ function tpCard(t){
             tpCell(t,'result','result','何が決まったか／次に誰が何をするか')+
             `<div class="tprow mt"><span class="lb">担当</span><input class="mtedit" data-tfield="owner" data-tid="${esca(t.id)}" value="${esca(t.owner||'')}" placeholder="例）伊藤(真)">`+
             `<span class="lb">期限</span><input class="mtedit" type="date" data-tfield="due" data-tid="${esca(t.id)}" value="${esca(t.due||'')}"></div>`):'')+
-      `<div class="addflds">`+tpAddBtn(t,'links','リンク')+tpAddBtn(t,'task','カルテ')+
-        tpAddBtn(t,'log','当日メモ')+tpAddBtn(t,'result','決まったこと')+`</div>`+
-      `<div class="tpfoot"><span class="mvbtns">順番 <button data-mv="${esca(t.id)}|-1" title="上へ">▲ 上へ</button>`+
-      `<button data-mv="${esca(t.id)}|1" title="下へ">▼ 下へ</button></span>`+
-      `<button class="delrow" data-del="${esca(t.id)}" title="このお題を削除">🗑 このお題を削除</button></div>`+
+      // 開いた瞬間に操作が7個並ぶと「既定は最小」が崩れる。足す欄と、順番・削除は畳んでおく。
+      // 会議中に使うのは「メモ・背景」と「当日メモ」だけなので、それ以外は押した人にだけ出す。
+      (_tpMore.has(t.id)?(()=>{ const bs=tpAddBtn(t,'links','リンク')+tpAddBtn(t,'task','カルテ')+
+          tpAddBtn(t,'log','当日メモ')+tpAddBtn(t,'result','決まったこと');
+        return `<div class="addflds">`+(bs||`<span class="sm" style="color:var(--dim);font-size:11px">欄はすべて出ています</span>`)+`</div>`; })():'')+
+      `<div class="tpfoot">`+
+        `<button class="act" data-tpmore="${esca(t.id)}" title="参考リンク・関連するカルテ・当日メモ・決まったことの欄を出します">`+
+          `${_tpMore.has(t.id)?'▾ とじる':'＋ 欄を足す'}</button>`+
+        (_tpOps.has(t.id)
+          ?`<span class="mvbtns">順番 <button data-mv="${esca(t.id)}|-1" title="上へ">▲ 上へ</button>`+
+            `<button data-mv="${esca(t.id)}|1" title="下へ">▼ 下へ</button></span>`+
+            `<button class="delrow" data-del="${esca(t.id)}" title="このお題を削除">🗑 このお題を削除</button>`
+          :`<button class="act ghost" data-tpops="${esca(t.id)}" title="話す順を変える・このお題を削除する">…</button>`)+
+      `</div>`+
     `</div>`;
   }
   return h+`</div>`;
@@ -3400,6 +3425,9 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
   if(e.target.closest('#tpCalMenu')){ _gcMenu=!_gcMenu; renderTopics(); return; }
   if(e.target.closest('#tpQuickHelp')){ _tpQuickHelp=!_tpQuickHelp; renderTopics(); return; }
+  const tm=e.target.closest('[data-tpmore]'); if(tm){ const id=tm.dataset.tpmore;
+    if(_tpMore.has(id)) _tpMore.delete(id); else _tpMore.add(id); renderTopics(); return; }
+  const to=e.target.closest('[data-tpops]'); if(to){ _tpOps.add(to.dataset.tpops); renderTopics(); return; }
   if(e.target.closest('#tpDesc')){ const m=state.meetings.find(x=>x.id===_openMeeting);
     if(m){ try{ navigator.clipboard.writeText(gcalDetails(m)); tpToast('説明欄用のテキストをコピーしました。カレンダーの予定を開いて貼ってください'); }
            catch(err){ alert('コピーできませんでした'); } } return; }
