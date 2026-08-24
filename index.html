@@ -709,6 +709,13 @@
   }
   .tpgcal{background:linear-gradient(180deg,#5b8def,#3f6fd6); color:#fff; font-weight:700; border:none; border-radius:8px; padding:7px 13px; cursor:pointer; font-family:inherit; font-size:12.5px; margin-left:auto; white-space:nowrap;}
   .tpgcal:hover{filter:brightness(1.08);}
+  /* カレンダー操作は畳んでおく（ヘッダーにボタンを常時2つ並べると場所を食う） */
+  .calmenu{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px 12px; margin:6px 0 2px;}
+  .calmenu button{display:block; background:var(--panel3); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:7px 11px; cursor:pointer; font-family:inherit; font-size:12.5px; margin:0 0 4px;}
+  .calmenu button:hover{border-color:var(--teal);}
+  .calmenu .sm{font-size:11px; color:var(--dim); line-height:1.6; margin:0 0 10px;}
+  .calmenu .sm:last-child{margin-bottom:0;}
   .mtadd{background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:11px 12px;}
   .mtadd .rm{width:150px;} .mtadd .mtsep{color:var(--dim);}
   .tsel{background:var(--panel3); color:var(--text); border:1px solid var(--line); border-radius:7px; padding:7px 9px; font-family:inherit; font-size:12.5px; color-scheme:dark; cursor:pointer;}
@@ -2494,7 +2501,7 @@ function _tpOpen(){ return document.body.classList.contains('tpon'); }
 function closeTopics(){ document.getElementById('topicModal').classList.remove('on'); document.body.classList.remove('tpon');
   if(typeof computeKPIs==='function') computeKPIs(); }
 function openTopics(mtId){ ensureBoards();
-  _openMeeting = (typeof mtId==='string' && mtId) ? mtId : defaultMeetingId(); _mtEdit=_noteEdit=false;
+  _openMeeting = (typeof mtId==='string' && mtId) ? mtId : defaultMeetingId(); _mtEdit=_noteEdit=_gcMenu=false;
   renderTopics(); showTopicPanel(); }
 function mtCounts(id){ const rows=state.topics.filter(t=>t&&t.meetingId===id); return {total:rows.length, open:rows.filter(t=>!t.done).length}; }
 function carryCount(id){ return state.topics.filter(t=>t&&t.meetingId===id&&t.from).length; }   // 前回から持ち越してきた件数
@@ -2513,6 +2520,7 @@ function mtWhenLine(m){ const d=m.date?parse(m.date):null;                      
   return (d?`${d.getMonth()+1}/${d.getDate()}(${_WD[d.getDay()]})`:'日付未定')+
     (m.start?` ${m.start}${m.end?'〜'+m.end:''}`:'')+(m.room?` ／ ${m.room}`:''); }
 let _mtEdit=false, _noteEdit=false;   // 定例の日時／概要を「書き換えモード」にしているか（画面の状態）
+let _gcMenu=false;                    // 「📅 カレンダー ▾」を開いているか（画面の状態・保存しない）
 // 過去ログの畳み方（自分の画面だけ・共有ボードには入れない）。既定は畳む＝いま話すことに集中させる。
 // 一度開いたら開いたままにする（過去の議事録を読みに来た人が毎回開き直さなくていいように）。
 function _foldGet(k,def){ try{ const v=localStorage.getItem(k); return v==null?def:(v==='1'); }catch(e){ return def; } }
@@ -3058,8 +3066,14 @@ function renderMeetingTable(box){
   const carried=tpOrdered(rows.filter(t=>t.from)), own=tpOrdered(rows.filter(t=>!t.from));
   const movedOut=state.topics.filter(t=>t&&t.from===m.id);   // この回から次回へ移したもの（痕跡として残す）
   let h=`<div class="tphd"><button class="tpback" id="tpBack">← 定例一覧</button>`+
-        `<button class="tpgcal" id="tpDesc" title="この回の「概要＋お題」をコピーします。すでにカレンダーに入っている予定（繰り返し予約など）の説明欄に貼ってください">📋 説明欄をコピー</button>`+
-        `<button class="tpgcal" id="tpGcal" title="Googleカレンダーの「予定を作成」画面を開きます（保存はご自分で。繰り返し予約が既にある定例だと二重になります）">📅 新しく予定を作る</button></div>`+
+        // カレンダー関係はボタンを2つ常時並べると場所を食うので、1つに畳んで押したときだけ出す。
+        `<button class="tpgcal" id="tpCalMenu" title="Googleカレンダーに関する操作">📅 カレンダー ${_gcMenu?'▴':'▾'}</button></div>`+
+        (_gcMenu?`<div class="calmenu">`+
+          `<button id="tpDesc">📋 この回の「ねらい＋お題」をコピー</button>`+
+          `<div class="sm">カレンダーの<b>既存の予定</b>を開いて、説明欄に貼ってください（アプリからカレンダーには書き込めません）。招待メールに議題が載るので、当日までに目を通してもらえます。</div>`+
+          `<button id="tpGcal">📅 新しく予定を作る</button>`+
+          `<div class="sm">⚠ すでに繰り返し予約が入っている定例だと<b>二重になります</b>。日程変更のときは押さないでください。</div>`+
+        `</div>`:'')+
         `<div class="mthead"><div class="ttl">${esc(m.title||'定例')}</div>`+
           `<div class="whenline">${esc(mtWhenLine(m))}`+
           `<button class="mini" id="mtEditToggle" title="定例名・日付・時刻・会議室を変更する（Googleカレンダー側は連動しません）">${_mtEdit?'とじる':'✎ 変更'}</button></div></div>`;
@@ -3356,11 +3370,12 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     if(k==='past'){ _mtFoldPast=!_mtFoldPast; try{ localStorage.setItem('ai_sched_mtfoldpast', _mtFoldPast?'1':'0'); }catch(err){} }
     else { _tpFoldDone=!_tpFoldDone; try{ localStorage.setItem('ai_sched_tpfolddone', _tpFoldDone?'1':'0'); }catch(err){} }
     renderTopics(); return; }
-  if(e.target.closest('#tpBack')){ _openMeeting=null; _mtEdit=_noteEdit=false; renderTopics(); return; }
+  if(e.target.closest('#tpBack')){ _openMeeting=null; _mtEdit=_noteEdit=_gcMenu=false; renderTopics(); return; }
   if(e.target.closest('#mtAddToggle')){ const f=document.getElementById('mtAddForm');
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
       if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
+  if(e.target.closest('#tpCalMenu')){ _gcMenu=!_gcMenu; renderTopics(); return; }
   if(e.target.closest('#tpDesc')){ const m=state.meetings.find(x=>x.id===_openMeeting);
     if(m){ try{ navigator.clipboard.writeText(gcalDetails(m)); tpToast('説明欄用のテキストをコピーしました。カレンダーの予定を開いて貼ってください'); }
            catch(err){ alert('コピーできませんでした'); } } return; }
@@ -3377,7 +3392,7 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     const el=document.querySelector(sel); if(el){ el.focus(); el.scrollIntoView({block:'nearest'}); } return; }
   const gmt=e.target.closest('[data-gcal-mt]'); if(gmt){ e.stopPropagation(); const m=state.meetings.find(x=>x.id===gmt.dataset.gcalMt); if(m) openGcal(m); return; }
   const dmt=e.target.closest('[data-del-mt]'); if(dmt){ e.stopPropagation(); delMeeting(dmt.dataset.delMt); return; }
-  const omt=e.target.closest('[data-open-mt]'); if(omt){ _openMeeting=omt.dataset.openMt; _mtEdit=_noteEdit=false; renderTopics(); return; }
+  const omt=e.target.closest('[data-open-mt]'); if(omt){ _openMeeting=omt.dataset.openMt; _mtEdit=_noteEdit=_gcMenu=false; renderTopics(); return; }
   const tg=e.target.closest('[data-toggle]'); if(tg){ toggleTopic(tg.dataset.toggle); return; }
   const cy=e.target.closest('[data-carry]'); if(cy){ carryTopic(cy.dataset.carry); return; }
   const ct=e.target.closest('[data-carryto]'); if(ct){ carryTopicTo(ct.dataset.carryto, _openMeeting); return; }
