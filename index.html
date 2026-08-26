@@ -95,15 +95,15 @@
   /* 進捗・日付セル */
   td.prog{text-align:center; padding:2px 4px; white-space:nowrap;}
   td.prog .stage, td.prog .agg{margin-left:0;}
-  td.datecell{text-align:center; font-size:11px; color:#5b6b7d; padding:2px 6px; white-space:nowrap;}
+  td.datecell{text-align:center; font-size:11.5px; color:#5b6b7d; padding:2px 6px; white-space:nowrap; font-variant-numeric:tabular-nums;}
   td.datecell.none{color:#c3ccd6;}
   /* 行 */
   tbody tr:hover td{background:var(--rowhover);}
   tbody tr:hover .sl{background:var(--rowhover);}
   td.no{text-align:center; color:var(--muted); font-size:11px;}  /* position:relativeはstickyを潰すので付けない */
-  .item-cell{padding:3px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; position:relative;}
-  .row-big   .item-cell{font-weight:700; background:#d6e2f4!important;}
-  .row-big   .sl{background:#d6e2f4;}
+  .item-cell{padding:6px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; position:relative; line-height:1.5;}
+  .row-big   .item-cell{font-weight:700; background:#dfe8f6!important; letter-spacing:.3px;}
+  .row-big   .sl{background:#dfe8f6;}
   .row-mid   .item-cell{font-weight:600; color:#33506e;}
   /* サブタスク行 */
   .row-task td{background:#fcfdff;}
@@ -151,6 +151,9 @@
   td.tl{position:relative; height:25px;}
   body.view-day td.tl.weekend{background:#f4f6f9;}
   body.view-day tr:hover td.tl.weekend{background:#eef2f7;}
+  /* タイムラインの縦線は月の区切りだけ効かせる。全セルに同じ濃さの線が入ると網目に見えて
+     バーが読みづらくなるので、コマの境目はごく薄くする。 */
+  td.tl{border-right-color:transparent;}
   td.tl.mend{border-right:1px solid var(--line);}
   td.tl{cursor:grab;}                                   /* 空きはつかんでスクロール */
   body.editing td.tl[data-leaf]{cursor:crosshair;}       /* 編集ON・空き末端はドラッグで作成 */
@@ -237,7 +240,7 @@
   .stage .pct{opacity:.9; font-weight:600;}
   /* 未着手は「まだ何も起きていない」なので塗らない。全行が同じ色の錠剤で埋まると
      どこを見ればいいか分からなくなる＝色が付いている＝何か起きている、に統一する。 */
-  .st-todo{background:transparent; color:#8a97a5; border:1px dashed #c7d0da; font-weight:600;}
+  .st-todo{background:transparent; color:#93a0ad; border:none; font-weight:600; padding-left:0; padding-right:0;}
   .st-doing{background:#3b7dd8;} .st-review{background:#6b4b9a;}
   .st-done{background:#2e9e6b;} .st-hold{background:#c98a2b;}
   .agg{display:inline-block; font-size:10px; font-weight:700; color:#41607f; background:#e3ebf4;
@@ -461,7 +464,8 @@
   /* バー：発光＋未達は暗く */
   .bar{box-shadow:0 1px 6px rgba(0,0,0,.4); outline:1px solid rgba(255,255,255,.08);}
   /* 進捗：済み=はっきり色／残り=ミュート＋ハッチのトラック。境界は明るい線で明確化 */
-  .bar.pend{background-image:linear-gradient(rgba(10,16,24,.48),rgba(10,16,24,.48)),repeating-linear-gradient(45deg,rgba(255,255,255,.11) 0 3px,transparent 3px 7px)!important; outline:1px solid rgba(255,255,255,.13);}
+  /* 未達部分。斜線ハッチは0%の作業が多いと画面じゅうが縞になって目が滑るので、平らな薄い塗りにする */
+  .bar.pend{background-image:linear-gradient(rgba(10,16,24,.52),rgba(10,16,24,.52))!important;}
   .bar.edge{box-shadow:inset -3px 0 0 rgba(255,255,255,.6);}
   .bl-over{color:#ffd2d2; font-weight:700;}   /* 期限を過ぎているバーのラベル（文字は足さず色で示す） */
   .roll{background:rgba(146,164,186,.28);}
@@ -496,7 +500,7 @@
   .detailops .btn.danger{color:#e78a93; border-color:rgba(194,85,99,.5);}
   .detailops .btn.danger:hover{background:rgba(194,85,99,.15);}
   /* ステージ色（ダーク調整） */
-  .st-todo{background:transparent; color:#8fa2ba; border:1px dashed rgba(143,162,186,.5);}
+  .st-todo{background:transparent; color:#8698ae; border:none; padding-left:0; padding-right:0;}
   .st-doing{background:#4c8dff;} .st-review{background:#a988f2;}
   .st-done{background:#37d67a; color:#06231a;} .st-hold{background:#f2b13d; color:#2a1e05;}
   .agg{background:var(--panel3); color:#aebfd3;}
@@ -1046,7 +1050,11 @@
   body.theme-light .agg{color:#56637a;} body.theme-light .dbadge.prio-low{color:#56637a;}
   body.theme-light .statusdot{border-color:rgba(0,0,0,.2);}
   body.theme-light .bar{box-shadow:0 1px 4px rgba(0,0,0,.18); outline:1px solid rgba(0,0,0,.08);}
-  body.theme-light .bar.pend{background-image:linear-gradient(rgba(255,255,255,.58),rgba(255,255,255,.58)),repeating-linear-gradient(45deg,rgba(0,0,0,.07) 0 3px,transparent 3px 7px)!important; outline:1px solid rgba(0,0,0,.1);}
+  body.theme-light .bar.pend{background-image:linear-gradient(rgba(255,255,255,.50),rgba(255,255,255,.50))!important;}
+  /* 明るいテーマではバーが淡いので、ラベルは黒文字＋白の薄い下地にする。
+     暗い下地に白抜き文字だと、淡いバーの上でチップだけが浮いて見える。 */
+  body.theme-light .bar-label{color:#1f2d3d; background:rgba(255,255,255,.60); text-shadow:none; font-weight:700;}
+  body.theme-light .bar-label.bl-over{color:#b3232f;}
   body.theme-light .bar.edge{box-shadow:inset -3px 0 0 rgba(0,0,0,.38);}
   body.theme-light .kpi.meet{background:linear-gradient(180deg,rgba(47,182,176,.16),rgba(47,182,176,.05));}
   body.theme-light .kpi.meet .val{color:#0d4f4a;}
