@@ -762,6 +762,15 @@
   .tsel:hover{border-color:var(--teal);} .tsel.rmsel{min-width:130px;}
   .mtrow .mtgcal{flex:none; background:rgba(91,141,239,.16); color:#9dbbf5; border:1px solid rgba(91,141,239,.45); border-radius:7px; padding:4px 10px; cursor:pointer; font-size:13px;}
   .mtrow .mtgcal:hover{filter:brightness(1.12);}
+  /* 資料バー：会議中に「その回のDriveフォルダ」へ1クリックで飛ぶ */
+  .drvbar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:-4px 0 12px;}
+  .drvbar button{background:var(--panel3); border:1px solid var(--line); color:var(--text); border-radius:8px;
+    padding:5px 10px; cursor:pointer; font-family:inherit; font-size:12px; white-space:nowrap;}
+  .drvbar button:hover{border-color:var(--teal);}
+  .drvbar button.main{background:rgba(47,182,176,.16); border-color:rgba(47,182,176,.5); font-weight:700;}
+  .mtrow .mtdrv{background:rgba(47,182,176,.14); color:#7fd6d0; border-color:rgba(47,182,176,.45);}
+  .mtrow .mtdrv.off{background:none; color:var(--dim); border-color:var(--line);}
+  .mtedit.drvin{flex:1 1 100%; min-width:0;}
   .tpmeta{margin-bottom:12px;}
   .mtedit{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 8px; font-family:inherit; font-size:12.5px;}
   .mtedit.tpttl-in{font-size:15px; font-weight:700; width:100%; margin-bottom:7px;}
@@ -2612,6 +2621,34 @@ function tpFoldPast(inner, n, pending){
   return foldHead('past','🗂 過去ログ（終わった定例）', n, _mtFoldPast,
                   pending?('⚠ 未対応 '+pending+'件が残っています'):'')+(_mtFoldPast?'':inner);
 }
+// ── 定例の資料（Google Drive）────────────────────────────────────────
+// 会議中に「その回の資料」へ1クリックで飛べるようにする。回ごとのフォルダは
+// Drive の 打ち合わせ資料/YYMMDD_第N回定例 に作られているので、日付で紐づける。
+// 新しい回はフォルダを作った人が「✎ 変更」→ 資料フォルダURL を貼れば全員に共有される（m.drive）。
+const DRIVE_ROOT='https://drive.google.com/drive/folders/1K29hyramUk5Ivr4iWTrNcbPECCkBbwwa';   // 打ち合わせ資料（親）
+const DRIVE_SHEET='https://docs.google.com/spreadsheets/d/1jzz4scTX_5Q6MYbjaB0BBnoAeuqj9ayActG4jTErelI/edit'; // 企画AI定例シート（議事録）
+const DRIVE_BY_DATE={
+  '2026-04-21':'1_w0wZ5Sufbn247POX2xT32eVA1hwSVs_',   // 第一回
+  '2026-05-12':'1MjYDyf9Un4eTYBajlhl-G7oe96sgGBKS',   // 第二回
+  '2026-05-26':'1zkPvkyFOKcidIi6JET-z5UAZTBkuayPq',   // 第三回
+  '2026-06-29':'1UGptcxvZpI2kkRBuodbupWV8Nul7dGCU',   // 第四回
+  '2026-07-27':'1l0ft6gCyVRfsoj7pPFW5JYOhyiRj0vZ4',   // 第五回
+  '2026-08-17':'1YLRW0w9aDYyG8JWlgKCeGjXOswDYk8xs',   // 第六回
+  '2026-08-31':'1xH-HL8zhoVcnpc9lPF0I1w_aKXVcxkk0',   // 第七回
+};
+// その回のフォルダ。人が貼ったURL（共有ボード）が最優先、無ければ日付の対応表。
+function mtDriveOwn(m){ if(!m) return '';
+  const u=String(m.drive||'').trim(); if(/^https?:\/\//i.test(u)) return u;
+  const id=DRIVE_BY_DATE[m.date||'']; return id?('https://drive.google.com/drive/folders/'+id):''; }
+function openDrive(u){ if(!u) return; window.open(u,'_blank','noopener'); }
+// 会議中の主役は「この回の資料」。無い回でも空振りさせず、親フォルダを開く。
+function drvBar(m){ const own=mtDriveOwn(m);
+  return `<div class="drvbar">`+
+    (own?`<button class="main" data-drive="${esca(own)}" title="この回の資料フォルダをGoogle Driveで開きます">📁 この回の資料</button>`
+        :`<button data-drive="${esca(DRIVE_ROOT)}" title="この回のフォルダはまだ登録されていません。作ったら「✎ 変更」→ 資料フォルダURL に貼ってください（全員に共有されます）">📂 打ち合わせ資料</button>`)+
+    `<button data-drive="${esca(DRIVE_SHEET)}" title="議事録が入っている企画AI定例シートを開きます">📊 定例シート</button>`+
+    (own?`<button data-drive="${esca(DRIVE_ROOT)}" title="打ち合わせ資料フォルダ（過去の回もすべてここ）">📂 資料ぜんぶ</button>`:'')+
+  `</div>`; }
 function renderMeetingList(box){
   const list=state.meetings.slice().sort((a,b)=>String(a.date||'').localeCompare(String(b.date||'')));
   const todayY=ymd(new Date());
@@ -2621,6 +2658,9 @@ function renderMeetingList(box){
       return `<div class="mtrow${past?' past':''}${isNext?' next':''}" data-open-mt="${esca(m.id)}">`+
         `<div class="l1"><span class="mtt">${esc(m.title||'(無題の定例)')}</span>`+
           (past?`<span class="mttag done">済</span>`:'')+(isNext?`<span class="mttag now">次回</span>`:'')+
+          ((u,own)=>`<button class="mtgcal mtdrv${own?'':' off'}" data-drive="${esca(u)}"`+
+            ` title="${own?'この回の資料フォルダをDriveで開く':'この回のフォルダは未登録です（打ち合わせ資料フォルダを開きます）'}">📁</button>`
+          )(mtDriveOwn(m)||DRIVE_ROOT, !!mtDriveOwn(m))+
           `<button class="mtgcal" data-gcal-mt="${esca(m.id)}" title="Googleカレンダーに登録">📅</button>`+
           `<button class="del" data-del-mt="${esca(m.id)}" title="この定例を削除">✕</button></div>`+
         `<span class="mtd">${mtWhen(m)}</span>`+
@@ -3141,12 +3181,15 @@ function renderMeetingTable(box){
         `</div>`:'')+
         `<div class="mthead"><div class="ttl">${esc(m.title||'定例')}</div>`+
           `<div class="whenline">${esc(mtWhenLine(m))}`+
-          `<button class="mini" id="mtEditToggle" title="定例名・日付・時刻・会議室を変更する（Googleカレンダー側は連動しません）">${_mtEdit?'とじる':'✎ 変更'}</button></div></div>`;
+          `<button class="mini" id="mtEditToggle" title="定例名・日付・時刻・会議室を変更する（Googleカレンダー側は連動しません）">${_mtEdit?'とじる':'✎ 変更'}</button></div></div>`+drvBar(m);
   if(_mtEdit) h+=`<div class="tpmeta"><input class="mtedit tpttl-in" data-mt="title" value="${esca(m.title||'')}" placeholder="定例名">`+
           `<div class="mtline"><input class="mtedit" type="date" data-mt="date" value="${esca(m.date||'')}">`+
           `<select class="mtedit tsel" data-mt="start" title="開始">${timeOpts(m.start||'','開始')}</select><span class="mtsep">〜</span>`+
           `<select class="mtedit tsel" data-mt="end" title="終了">${timeOpts(m.end||'','終了')}</select>`+
-          `<select class="mtedit tsel rmsel" data-mt="room" title="会議室">${roomOpts(m.room||'')}</select></div></div>`;
+          `<select class="mtedit tsel rmsel" data-mt="room" title="会議室">${roomOpts(m.room||'')}</select></div>`+
+          // 資料フォルダのURL。貼ると全員の画面の「📁 この回の資料」がそこを開く。
+          `<div class="mtline"><input class="mtedit drvin" data-mt="drive" value="${esca(m.drive||'')}"`+
+            ` placeholder="資料フォルダのURL（DriveでフォルダをコピーしたURLを貼る）"></div></div>`;
   // 会議の概要：ふだんは本文だけ見せて、押したら書き換えられる（空の入力欄を並べない）
   let note='';
   if(_noteEdit){
@@ -3454,6 +3497,8 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
       if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
+  const dv=e.target.closest('[data-drive]');
+  if(dv){ e.stopPropagation(); openDrive(dv.dataset.drive); return; }   // 行クリック（回を開く）より先に処理する
   if(e.target.closest('#tpCalMenu')){ _gcMenu=!_gcMenu; renderTopics(); return; }
   if(e.target.closest('#tpQuickHelp')){ _tpQuickHelp=!_tpQuickHelp; renderTopics(); return; }
   const tm=e.target.closest('[data-tpmore]'); if(tm){ const id=tm.dataset.tpmore;
