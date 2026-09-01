@@ -1275,7 +1275,7 @@
 <div class="modal" id="slackModal"><div class="m">
   <div class="mh"><div class="t">💬 Slack投稿の設定</div><div class="s">所定のチャンネルに、進捗の要約を1本投げます。メンション（通知）は使わず名前の文字だけなので、急かさずに「並んでいるのが見える」形にしています。</div></div>
   <div class="mb" id="slackBody"></div>
-  <div class="mf"><button class="ghost" id="slackTest" title="ごく短いテスト文だけを投稿して、ちゃんと届くか確かめます">🧪 テスト投稿</button><button class="ghost" id="slackClose">閉じる</button><button class="big" id="slackPost">💬 このままチャンネルに投稿</button></div>
+  <div class="mf"><button class="ghost" id="slackTest" title="ごく短いテスト文だけを投稿して、ちゃんと届くか確かめます">🧪 テスト投稿</button><button class="ghost" id="slackDmTest" title="いま見えている文面を、自分にだけDMで送って見た目を確かめます（チャンネルには出ません）">🧪 自分にDMで試す</button><button class="ghost" id="slackClose">閉じる</button><button class="big" id="slackPost">💬 このままチャンネルに投稿</button></div>
 </div></div>
 
 <div class="modal" id="summaryModal"><div class="m">
@@ -4375,17 +4375,24 @@ function slackFull(){
 //   CORSヘッダを付けないため fetch は reject することがある。**その場合も送信は届いている**ので、
 //   ここで絶対に再送してはいけない（二重投稿になる）。結果が読めないことは正直に画面に出す。
 // Webhookが登録済みか。未登録なら通知系のUIはそもそも出さない（押せないボタンを見せない）
+// 自分にDMで試すときの宛先。人ごとに違うので共有ボードには入れない（端末ローカル）。
+function slackDmTarget(){ try{ return String(localStorage.getItem('ai_sched_slackdm')||'').trim(); }catch(e){ return ''; } }
 function slackReady(){ ensureBoards();
   return /^https:\/\/hooks\.slack\.com\//.test(String((state.slack&&state.slack.url)||'').trim()); }
 // 「登録したらSlackで知らせる」の記憶。共有ボードに入れず端末ローカル（人によって好みが違う操作なので）
 function mtNotifyPref(){ try{ return localStorage.getItem('ai_sched_mtnotify')!=='0'; }catch(e){ return true; } }
-async function postToSlack(text, kind){
+// channel を渡すとその宛先に送る（'@ユーザー名' で本人へのDM）。投稿前の見た目確認に使う。
+// ⚠ 宛先の上書きが効くのは「レガシーのカスタムインテグレーション」で発行したWebhookのとき。
+//   2026-09-01に実物で確認済み（@h.kadoya へDMが届いた）。
+async function postToSlack(text, kind, channel){
   ensureBoards();
   const url=String((state.slack&&state.slack.url)||'').trim();
   if(!/^https:\/\/hooks\.slack\.com\//.test(url)){
     alert('先に ⚙管理 →「💬 Slack投稿の設定」で Incoming Webhook の URL を登録してください。');
     openSlackCfg(); return false; }
-  const body='payload='+encodeURIComponent(JSON.stringify({ text:text }));
+  const pay={ text:text };
+  if(channel){ pay.channel=channel; pay.username='AI推進スケジューラ（テスト）'; pay.icon_emoji=':test_tube:'; }
+  const body='payload='+encodeURIComponent(JSON.stringify(pay));
   let res='sent';                                    // 'ok' 確認できた / 'sent' 届いたはずだが確認不可 / 'ng'
   let msg='';
   try{
@@ -4400,12 +4407,17 @@ async function postToSlack(text, kind){
     // last＝「進捗フル」の差分の基準。お題募集や前日リマインドで上書きすると、
     // 次の進捗投稿の「前回からの動き」が1日ぶんになってしまうので kind で分ける。
     const rec={ t:Date.now(), by:currentUser()||'', confirmed:(res==='ok'), kind:(kind||'full') };
-    state.slack.lastAny=rec;
-    if(!kind || kind==='full') state.slack.last=Object.assign({}, rec, slackNums());
-    state.slack._u=Date.now(); save(); }
-  alert(res==='ok' ? '💬 Slackに投稿しました。'
-      : res==='sent' ? '💬 Slackに送信しました。\n'+msg
-      : '投稿できませんでした。\n'+msg);
+    // テスト（🧪・DM）はチャンネルに出ていないので「前回の投稿」には残さない
+    if(kind!=='test' && kind!=='dmtest'){
+      state.slack.lastAny=rec;
+      if(!kind || kind==='full') state.slack.last=Object.assign({}, rec, slackNums());
+      state.slack._u=Date.now(); save(); }
+  }
+  const where = channel ? ('🧪 '+channel+' にDMで送りました（チャンネルには出ていません）。')
+                        : '💬 Slackに投稿しました。';
+  alert(res==='ok' ? where
+      : res==='sent' ? (channel?'🧪 DMを送信しました。\n':'💬 Slackに送信しました。\n')+msg
+      : '送信できませんでした。\n'+msg);
   renderSlackCfg();
   return res!=='ng';
 }
@@ -4439,8 +4451,13 @@ function renderSlackCfg(){
     +'white-space:pre-wrap;font-size:12px;line-height:1.6;font-family:inherit;background:var(--panel2);'
     +'border:1px solid var(--line);border-radius:8px;padding:10px;margin:0;color:inherit">'+esc(_slackDraft!=null?_slackDraft:slackText())+'</textarea>';
   h+='<div class="smnote">*太字* ／ _斜体_ ／ &lt;URL|表示文字&gt; はSlackの書式です。改行はそのまま反映されます。</div>';
+  h+='<div class="mlabel">自分にDMで試す宛先（この端末だけに保存）</div>';
+  h+='<div class="mrow"><input id="slackDm" style="flex:1" placeholder="@h.kadoya" value="'+esc(slackDmTarget())+'"></div>';
+  h+='<div class="smnote">Slackのユーザー名を<b>＠つき</b>で入れると、下の「🧪 自分にDMで試す」で<b>いま見えている文面が自分にだけ</b>届きます（チャンネルには出ません）。9人に出す前の見た目確認用です。</div>';
   if(!ok) h+='<div class="smnote warn">URLが未登録（または形式ちがい）です。投稿ボタンは押せません。</div>';
   box.innerHTML=h;
+  const dmi=document.getElementById('slackDm');
+  if(dmi) dmi.addEventListener('change', ()=>{ try{ localStorage.setItem('ai_sched_slackdm', dmi.value.trim()); }catch(e){} renderSlackCfg(); });
   const u=document.getElementById('slackUrl'), l=document.getElementById('slackLabel');
   const put=()=>{ state.slack.url=u.value.trim(); state.slack.label=l.value.trim(); state.slack._u=Date.now(); save(); };
   if(u) u.addEventListener('change', ()=>{ put(); renderSlackCfg(); });
@@ -4450,6 +4467,7 @@ function renderSlackCfg(){
   if(ta) ta.addEventListener('input', ()=>{ _slackDraft=ta.value; });
   const post=document.getElementById('slackPost'), test=document.getElementById('slackTest');
   if(post) post.disabled=!ok; if(test) test.disabled=!ok;
+  const dmb=document.getElementById('slackDmTest'); if(dmb) dmb.disabled=!ok;
 }
 // 開くたびに文面を作り直す。前回の編集を残すと、古い数字のまま投稿してしまう事故が起きる。
 // kind を渡すとその文面で開く（定例登録フックは 'call'＝お題ください）。
@@ -4641,6 +4659,13 @@ document.getElementById('slackModal').addEventListener('click', e=>{
     postToSlack(txt, _slackKind).then(ok=>{ if(ok){ _slackDraft=null; renderSlackCfg(); } });   // 送れたら下書きは破棄
     return; }
   if(e.target.closest('#slackTest')){ postToSlack('🧪 テスト投稿です（AI推進スケジューラ）。これが見えていれば設定はOKです。','test'); return; }
+  if(e.target.closest('#slackDmTest')){
+    const to=slackDmTarget();
+    if(!to){ alert('先に「自分にDMで試す宛先」に @ユーザー名 を入れてください（例 @h.kadoya）。'); const el=document.getElementById('slackDm'); if(el) el.focus(); return; }
+    const ta2=document.getElementById('slackMsg');
+    const txt2=String((ta2? ta2.value : (_slackDraft!=null?_slackDraft:slackText()))||'').trim();
+    if(!txt2){ alert('文面が空です。'); return; }
+    postToSlack(txt2, 'dmtest', to); return; }
 });
 document.getElementById('summaryModal').addEventListener('click', e=>{
   if(e.target.id==='summaryModal'||e.target.id==='summaryClose'){ document.getElementById('summaryModal').classList.remove('on'); return; }
