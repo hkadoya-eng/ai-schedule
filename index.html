@@ -795,6 +795,17 @@
   .slsched .slrow .cal{flex:none; background:rgba(91,141,239,.16); color:#9dbbf5; border:1px solid rgba(91,141,239,.45);
     border-radius:7px; padding:2px 8px; cursor:pointer; font-size:12px; font-family:inherit;}
   .slsched .slrow .cal:hover{filter:brightness(1.12);}
+  .slsched .slrow .man{color:var(--dim); font-size:11px; flex:none;}
+  /* 会議の設定：自動でSlackに流す4本 */
+  .mtauto{display:flex; flex-wrap:wrap; gap:6px 10px; align-items:center; margin:2px 0 4px; width:100%;}
+  .mtauto .lb{font-size:11px; color:var(--dim); flex:none;}
+  .mtauto label{display:inline-flex; align-items:center; gap:5px; font-size:12px; cursor:pointer;
+    background:var(--panel3); border:1px solid var(--line); border-radius:999px; padding:4px 11px 4px 8px;}
+  .mtauto label:hover{border-color:var(--teal);}
+  .mtauto .dy{color:var(--dim); font-size:10.5px;}
+  .mtauto button{display:inline-flex; align-items:center; gap:5px; font-size:12px; cursor:pointer; font-family:inherit;
+    background:var(--panel3); border:1px solid var(--line); color:var(--muted); border-radius:999px; padding:4px 11px;}
+  .mtauto button.on{background:rgba(47,182,176,.16); border-color:rgba(47,182,176,.5); color:var(--text); font-weight:700;}
   .slsched .slrow.due{background:rgba(47,182,176,.10);} .slsched .slrow.due .s{color:var(--teal);}
   .slsched .slrow.done .n, .slsched .slrow.done .d{opacity:.55;}
   .tpmeta{margin-bottom:12px;}
@@ -2723,6 +2734,8 @@ function renderMeetingList(box){
        `<input class="tt" id="mtTitle" type="text" placeholder="定例名（例：AI推進 第四回定例）" value="${esca(d.title||'')}">`+
        `<input id="mtDate" type="date" title="日付" value="${esca(d.date||'')}"><select id="mtStart" class="tsel" title="開始時刻">${timeOpts(d.start||'','開始')}</select><span class="mtsep">〜</span>`+
        `<select id="mtEnd" class="tsel" title="終了時刻">${timeOpts(d.end||'','終了')}</select><select id="mtRoom" class="tsel rmsel" title="会議室">${roomOpts(d.room||'')}</select>`+
+       // この定例について、どれを自動で流すか。日付が決まればあとは全部そこから決まる。
+       mtAutoRow(null,false)+
        // 「次回を登録」は毎サイクル必ず人がやる操作なので、ここを進捗共有の起動点にする。
        // ただし**自動送信はしない**（ユーザーが「自動は怖い」と明言）。文面プレビュー付きの
        // 投稿画面を開くところまでで止め、送るかどうかは必ず人が決める。既定ON・端末に記憶。
@@ -3217,7 +3230,8 @@ function renderMeetingTable(box){
           `<select class="mtedit tsel rmsel" data-mt="room" title="会議室">${roomOpts(m.room||'')}</select></div>`+
           // 資料フォルダのURL。貼ると全員の画面の「📁 この回の資料」がそこを開く。
           `<div class="mtline"><input class="mtedit drvin" data-mt="drive" value="${esca(m.drive||'')}"`+
-            ` placeholder="資料フォルダのURL（DriveでフォルダをコピーしたURLを貼る）"></div></div>`;
+            ` placeholder="資料フォルダのURL（DriveでフォルダをコピーしたURLを貼る）"></div>`+
+          mtAutoRow(m,true)+`</div>`;
   // 会議の概要：ふだんは本文だけ見せて、押したら書き換えられる（空の入力欄を並べない）
   let note='';
   if(_noteEdit){
@@ -3327,8 +3341,11 @@ function addMeeting(){ const g=id=>document.getElementById(id);
   if(!title && !date){ alert('定例名か日付を入れてください。'); return; }
   // チェック状態は renderTopics() で DOM が作り直される前に読む（後で読むと必ず null になる）
   const nb=g('mtNotify'), want=!!(nb&&nb.checked&&slackReady());
+  // チェックの読み取りも同じ理由で先にやる（renderTopics のあとでは null になる）
+  const auto=mtAutoAll();
+  document.querySelectorAll('#mtAddForm [data-mtauto]').forEach(cb=>{ auto[cb.dataset.mtauto]=!!cb.checked; });
   if(nb){ try{ localStorage.setItem('ai_sched_mtnotify', nb.checked?'1':'0'); }catch(e){} }
-  state.meetings.push({ id:uid('mt'), title:title||'定例', date, start, end, room, _u:Date.now() });
+  state.meetings.push({ id:uid('mt'), title:title||'定例', date, start, end, room, auto, _u:Date.now() });
   save(); renderTopics();
   // ここでは**開くだけ**。投稿は画面のボタンを人が押したときだけ起きる（勝手に送らない）。
   // 画面には文面プレビューと「前回の投稿」の日時が出るので、二重投稿もそこで気づける。
@@ -3526,6 +3543,10 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
       if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
+  const mae=e.target.closest('[data-mtautoedit]');
+  if(mae){ const m=state.meetings.find(x=>x&&x.id===_openMeeting); if(m){ const k=mae.dataset.mtautoedit;
+      m.auto=Object.assign(mtAutoAll(), m.auto||{}); m.auto[k]=!mtAuto(m,k); m._u=Date.now(); save(); renderTopics(); }
+    return; }
   const plg=e.target.closest('[data-slgo]'); if(plg){ openSlackCfg(plg.dataset.slgo); return; }
   const pld=e.target.closest('[data-sldone]');
   if(pld){ ensureBoards(); state.slack.sent=state.slack.sent||{};
@@ -4204,6 +4225,20 @@ function slackDefaultKind(){
 // ⚠ **自動では送らない**。「きょうが投稿日」を画面で知らせるところまで（このプロジェクトの原則）。
 const SL_SCHED={ call:-7, agenda:-3, eve:-1, full:1 };
 const SL_PLAN_GRACE=6;      // 予定日を過ぎても、何日は「まだ流していません」と出すか
+const SL_WHEN={ call:'7日前', agenda:'3日前', eve:'前日', full:'翌日' };
+// 定例ごとに「自動で流す／流さない」を持つ（m.auto）。無ければ全部ON＝これまで通り。
+// ⚠ 実際に自動で送るのはGAS（app/gas_slack_auto.gs）。アプリはこの印を共有ボードに書くだけ。
+function mtAuto(m,k){ const a=(m&&m.auto)||null; return a ? (a[k]!==false) : true; }
+function mtAutoAll(){ return { call:true, agenda:true, eve:true, full:true }; }
+// 追加フォーム用（チェックボックス）／✎変更用（押して切り替えるボタン）
+function mtAutoRow(m, edit){
+  const item=k=>{ const on=mtAuto(m,k), lab=slKindLabel(k), dy=SL_WHEN[k];
+    return edit
+      ? `<button type="button" class="${on?'on':''}" data-mtautoedit="${k}" title="押すと自動で流す／流さないが切り替わります">`+
+        `${on?'✓':'□'} ${esc(lab)}<span class="dy">${esc(dy)}</span></button>`
+      : `<label><input type="checkbox" data-mtauto="${k}"${on?' checked':''}>${esc(lab)}<span class="dy">${esc(dy)}</span></label>`; };
+  return `<div class="mtauto"><span class="lb">自動でSlackに流す</span>`+
+    ['call','agenda','eve','full'].map(item).join('')+`</div>`; }
 function slDateAdd(base, off){ const d=parse(base); d.setDate(d.getDate()+off); return ymd(d); }
 // 土日に当たったら動かす。前ふり（お題・議題）は前の金曜、前日リマインドは当日の朝、
 // 進捗フルは翌月曜。※定例が月曜だと「前日＝日曜」になるので、リマインドは実質いつも当日の朝。
@@ -4541,9 +4576,11 @@ function renderSlackCfg(){
     if(pl.length){
       h+='<div class="tpsec">投稿の予定（定例の日付から決まります）</div><div class="slsched">';
       pl.forEach(p=>{ const ek=slEffKind(p), done=slSent(p);
+        const mt=state.meetings.find(x=>x&&x.date===p.mt), au=mtAuto(mt,p.k);
         const due=(!done && p.date<=t && slDateAdd(p.date,SL_PLAN_GRACE)>=t), gone=(!done && !due && p.date<=t);
         h+='<div class="slrow'+(done?' done':(due?' due':''))+'"><span class="d">'+slMd(p.date)+'</span>'
           +'<span class="n">'+esc(slKindLabel(ek))+'</span><span class="mm">'+esc(p.note)+'</span>'
+          +'<span class="man">'+(au?'自動':'手動')+'</span>'
           +'<button class="cal" data-slcal="'+esca(p.mt+'|'+p.k)+'" title="この日に自分あてのリマインダーをGoogleカレンダーに入れます">📅</button>'
           +'<span class="s">'+(done?'✓ 流しました':(due?'まだ流していません':(gone?'—':'')))+'</span></div>'; });
       h+='</div>';
