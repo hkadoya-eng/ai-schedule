@@ -4141,7 +4141,9 @@ const SL_TP_MAX=6;                                 // Slackに載せる次回の
 const SL_MOVE_MAX=6;                               // 「前回からの動き」に並べる作業の上限
 const SL_RES_MAX=5;                                // 「決まったこと」の上限
 const SL_WEEK_MAX=6;                               // 「今週が期限」の上限
-const SL_REP_MAX=8;                                // 「前回からの報告（週報）」の上限
+const SL_REP_MAX=8;
+// Slackのtext記法には水平線が無いので、この1行を見出しの前に入れて項目を区切る。
+const SL_HR='────────────────────';                                // 「前回からの報告（週報）」の上限
 const SL_AG_MAX=10;                                // 「議題つき」に並べる議題の上限（メモ付きなので少なめ）
 function coName(x){ return String(x.n.name||''); }
 function coDue(x){ const e=effEnd(x.n); return e?mdNum(parse(e)):null; }
@@ -4397,12 +4399,14 @@ function slackAgenda(){
   L.push('');
   if(mm.nextTp.length){
     const open=mm.nextTp.filter(t=>!t.done).length;
+    L.push(SL_HR);
     L.push('*議題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
     mm.nextTp.slice(0,SL_AG_MAX).forEach(t=>L.push(slTopicLine(t,true)));
     if(mm.nextTp.length>SL_AG_MAX) L.push('・ほか '+(mm.nextTp.length-SL_AG_MAX)+'件（ボードで見られます）');
-  } else L.push('*議題*　まだ登録がありません');
+  } else { L.push(SL_HR); L.push('*議題*　まだ登録がありません'); }
   if(mm.prev && mm.prevOpen.length){
     L.push('');
+    L.push(SL_HR);
     L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いている議題*（'+mm.prevOpen.length+'件）');
     mm.prevOpen.slice(0,SL_TP_MAX).forEach(t=>L.push(slTopicLine(t,false)));
     if(mm.prevOpen.length>SL_TP_MAX) L.push('・ほか '+(mm.prevOpen.length-SL_TP_MAX)+'件');
@@ -4424,6 +4428,7 @@ function slackEve(){
   L.push(slackLinks(mm));
   if(mm.nextTp.length){
     L.push('');
+    L.push(SL_HR);
     L.push('*議題*（'+mm.nextTp.length+'件）');
     mm.nextTp.slice(0,SL_TP_MAX).forEach(t=>L.push(slTopicLine(t,false)));
     if(mm.nextTp.length>SL_TP_MAX) L.push('・ほか '+(mm.nextTp.length-SL_TP_MAX)+'件（ボードで見られます）');
@@ -4433,6 +4438,7 @@ function slackEve(){
   }
   { const co=callOutData(), d=co.d, st=co.st;
     L.push('');
+    L.push(SL_HR);
     L.push('*来る前に、自分の進捗だけ更新をお願いします*');
     L.push('全体 '+d.pct+'%　｜　完了 '+d.done+'/'+d.total+'　｜　遅延 '+d.late.length+'件　｜　'+STALE_DAYS+'日以上動いてない '+st.length+'件');
     const rows=co.people.map(p=>({p, ci:coItems(p)})).filter(v=>v.ci.act>0);
@@ -4459,6 +4465,7 @@ function slackFull(){
   if(mm.next && mm.nextTp.length){
     const open=mm.nextTp.filter(t=>!t.done).length;
     L.push('');
+    L.push(SL_HR);
     L.push('*次回の議題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
     const note=String(mm.next.note||'').replace(/\s+/g,' ').trim();
     if(note) L.push('_ねらい：'+(note.length>90?note.slice(0,90)+'…':note)+'_');
@@ -4475,6 +4482,7 @@ function slackFull(){
     L.push('');
     // 文言は「片づいていない」→「前回から続いている」。チャンネルで人の目に触れるので、
     // 状態の説明だけにして責める語感を残さない（ユーザー指示・2026-08-21）。
+    L.push(SL_HR);
     L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いている議題*（'+mm.prevOpen.length+'件）');
     mm.prevOpen.slice(0,SL_TP_MAX).forEach(t=>{
       L.push('・'+(t.todo||'(無題)')+(t.name?'（'+t.name+'）':''));
@@ -4485,6 +4493,7 @@ function slackFull(){
   // ② 前回の定例で決まったこと。出られなかった人がここだけ読めば追いつけるようにする。
   if(mm.prev && mm.prevDone.length){
     L.push('');
+    L.push(SL_HR);
     L.push('*前回（'+mtWhenLine(mm.prev)+'）で決まったこと*（'+mm.prevDone.length+'件）');
     mm.prevDone.slice(0,SL_RES_MAX).forEach(t=>{
       const r=String(t.result||'').replace(/\s+/g,' ').trim();
@@ -4497,6 +4506,7 @@ function slackFull(){
   //    ここを拾わないと、定例で話したはずのことが丸ごと消える（ユーザー指摘・2026-09-01）。
   if(mm.prev && mm.prevLog.length){
     L.push('');
+    L.push(SL_HR);
     L.push('*前回の当日メモ*（'+mm.prevLog.length+'件）');
     mm.prevLog.slice(0,SL_RES_MAX).forEach(t=>{
       L.push('・'+(t.todo||'(無題)')+'　'+slCut(t.log,90));
@@ -4507,6 +4517,7 @@ function slackFull(){
   { const reps=mm.prev? slackReports(mm.prev.date) : [];
     if(reps.length){
       L.push('');
+      L.push(SL_HR);
       L.push('*前回からの報告*（'+reps.length+'件）');
       reps.slice(0,SL_REP_MAX).forEach(r=>{
         L.push('・'+slackItem(r.x)+'　'+slCut(r.text,70));
@@ -4517,6 +4528,7 @@ function slackFull(){
   { const mv=slackMoved(last&&last.t);
     if(mv && (mv.done.length||mv.prog.length)){
       L.push('');
+      L.push(SL_HR);
       L.push('*前回の投稿（'+fmtBkTime(last.t)+'）からの動き*');
       if(mv.done.length){
         L.push('✅ 完了になった作業　'+mv.done.length+'件');
@@ -4530,6 +4542,7 @@ function slackFull(){
       }
     } }
   L.push('');
+  L.push(SL_HR);
   const rows=co.people.map(p=>({p, ci:coItems(p)})).filter(v=>v.ci.act>0);
   if(!rows.length) L.push('*要対応なし* 🎉 全部きちんと動いています');
   else {
@@ -4556,11 +4569,13 @@ function slackFull(){
     const soon=slackSoon(excl);
     if(soon.length){
       L.push('');
+      L.push(SL_HR);
       L.push('*今週が期限*（'+soon.length+'件・遅延分は上に出ています）');
       soon.slice(0,SL_WEEK_MAX).forEach(v=>L.push('・'+slackItem(v.x)+'　〜'+mdNum(v.e)+'　'+getProgress(v.x.n)+'%'));
       if(soon.length>SL_WEEK_MAX) L.push('・ほか '+(soon.length-SL_WEEK_MAX)+'件（ボードで見られます）');
     } }
   L.push('');
+  L.push(SL_HR);
   L.push('_更新は30秒：ボードを開く → 自分の行の「進捗」バッジ → % を選ぶだけ（保存ボタンはありません）_');
   return L.join('\n');
 }
