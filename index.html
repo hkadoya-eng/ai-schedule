@@ -4199,7 +4199,7 @@ function slackCall(){
   ensureBoards(); const mm=summaryMeetings(), L=[];
   if(!mm.next) return slNoMeeting();
   L.push('📣 *次回のAI推進定例　'+slMtTitle(mm.next)+'*');
-  L.push('話したいこと・共有したいことを、当日までにボードへ足してください（1行でOKです）。');
+  L.push('話したいこと・共有したいことを、当日までにボードへ足してください（お題だけでもOKです）。');
   L.push(slackLinks(mm));
   L.push('');
   L.push(mm.nextTp.length? '_いま登録されている議題：'+mm.nextTp.length+'件_' : '_いまのところ議題は登録されていません。_');
