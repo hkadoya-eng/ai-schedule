@@ -4540,7 +4540,13 @@ function slackFull(){
 //   ここで絶対に再送してはいけない（二重投稿になる）。結果が読めないことは正直に画面に出す。
 // Webhookが登録済みか。未登録なら通知系のUIはそもそも出さない（押せないボタンを見せない）
 // 自分にDMで試すときの宛先。人ごとに違うので共有ボードには入れない（端末ローカル）。
-function slackDmTarget(){ try{ return String(localStorage.getItem('ai_sched_slackdm')||'').trim(); }catch(e){ return ''; } }
+// 未設定ならログイン中のGoogleアカウントのID（@の前）から推測する。
+// 社内のSlackはメールのIDと同じユーザー名のことが多い（@h.kadoya で実測済み）。違う人は書き換えればそちらが優先。
+function slackDmStored(){ try{ return !!String(localStorage.getItem('ai_sched_slackdm')||'').trim(); }catch(e){ return false; } }
+function slackDmGuess(){ const em=String(window.__user||'').trim(); const id=em.split('@')[0]; return id?('@'+id):''; }
+function slackDmTarget(){
+  try{ const v=String(localStorage.getItem('ai_sched_slackdm')||'').trim(); if(v) return v; }catch(e){}
+  return slackDmGuess(); }
 function slackReady(){ ensureBoards();
   return /^https:\/\/hooks\.slack\.com\//.test(String((state.slack&&state.slack.url)||'').trim()); }
 // 「登録したらSlackで知らせる」の記憶。共有ボードに入れず端末ローカル（人によって好みが違う操作なので）
@@ -4635,7 +4641,7 @@ function renderSlackCfg(){
   h+='<div class="smnote">*太字* ／ _斜体_ ／ &lt;URL|表示文字&gt; はSlackの書式です。改行はそのまま反映されます。</div>';
   h+='<div class="mlabel">自分にDMで試す宛先（この端末だけに保存）</div>';
   h+='<div class="mrow"><input id="slackDm" style="flex:1" placeholder="@h.kadoya" value="'+esc(slackDmTarget())+'"></div>';
-  h+='<div class="smnote">Slackのユーザー名を<b>＠つき</b>で入れると、下の「🧪 自分にDMで試す」で<b>いま見えている文面が自分にだけ</b>届きます（チャンネルには出ません）。9人に出す前の見た目確認用です。</div>';
+  h+='<div class="smnote">'+(slackDmStored()?'':'ログイン中のアカウントから<b>推測して入れてあります</b>（違う場合は書き換えてください）。')+'Slackのユーザー名を<b>＠つき</b>で入れると、下の「🧪 自分にDMで試す」で<b>いま見えている文面が自分にだけ</b>届きます（チャンネルには出ません）。9人に出す前の見た目確認用です。</div>';
   if(!ok) h+='<div class="smnote warn">URLが未登録（または形式ちがい）です。投稿ボタンは押せません。</div>';
   box.innerHTML=h;
   const dmi=document.getElementById('slackDm');
