@@ -777,6 +777,23 @@
     padding:5px 12px; cursor:pointer; font-family:inherit; font-size:12px; white-space:nowrap;}
   .slkinds button:hover{border-color:var(--teal);}
   .slkinds button.on{background:rgba(47,182,176,.18); border-color:rgba(47,182,176,.55); font-weight:700;}
+  /* きょうが投稿日のときだけ出る帯 */
+  .slplan{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 12px; padding:9px 12px;
+    background:rgba(47,182,176,.12); border:1px solid rgba(47,182,176,.45); border-radius:10px; font-size:12.5px;}
+  .slplan .sm{color:var(--dim); font-size:11px;}
+  .slplan button{margin-left:auto; background:var(--teal); border:none; color:#06231f; font-weight:700;
+    border-radius:8px; padding:5px 12px; cursor:pointer; font-family:inherit; font-size:12px; white-space:nowrap;}
+  .slplan button.ghost{margin-left:0; background:none; border:1px solid var(--line); color:var(--muted); font-weight:400;}
+  .slsched{border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-bottom:6px;}
+  .slsched .slrow{display:flex; gap:10px; align-items:center; padding:6px 10px; font-size:12px; border-top:1px solid var(--line2);}
+  .slsched .slrow:first-child{border-top:none;}
+  .slsched .slrow .d{width:62px; color:var(--muted); flex:none; white-space:nowrap;}
+  .slsched .slrow .n{font-weight:700; white-space:nowrap; flex:none;}
+  .slsched .slrow .mm{color:var(--dim); font-size:11px; flex:1 1 auto; min-width:0; overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap;}
+  .slsched .slrow .s{margin-left:auto; color:var(--dim); font-size:11px; white-space:nowrap; flex:none; padding-left:8px;}
+  .slsched .slrow.due{background:rgba(47,182,176,.10);} .slsched .slrow.due .s{color:var(--teal);}
+  .slsched .slrow.done .n, .slsched .slrow.done .d{opacity:.55;}
   .tpmeta{margin-bottom:12px;}
   .mtedit{background:var(--panel2); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:5px 8px; font-family:inherit; font-size:12.5px;}
   .mtedit.tpttl-in{font-size:15px; font-weight:700; width:100%; margin-bottom:7px;}
@@ -2580,6 +2597,8 @@ function renderTopics(){
   try{
     if(_openMeeting && state.meetings.some(m=>m.id===_openMeeting)) renderMeetingTable(box); else { _openMeeting=null; renderMeetingList(box); }
   } finally { _tpRendering=false; }
+  // 「きょうは◯◯を流す日」は一覧でも回を開いていても出す（気づける場所が1つだと見落とす）
+  try{ const pb=slackPlanBanner(); if(pb) box.insertAdjacentHTML('afterbegin', pb); }catch(err){}
   updateTopicBtn();
 }
 function mtWhen(m){ return `${esc(m.date||'日付未設定')}${m.start?' '+esc(m.start)+(m.end?'〜'+esc(m.end):''):''}${m.room?'　@'+esc(m.room):''}`; }
@@ -3504,6 +3523,10 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
       if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
   if(e.target.closest('#mtAddBtn')){ addMeeting(); return; }
+  const plg=e.target.closest('[data-slgo]'); if(plg){ openSlackCfg(plg.dataset.slgo); return; }
+  const pld=e.target.closest('[data-sldone]');
+  if(pld){ ensureBoards(); state.slack.sent=state.slack.sent||{};
+    state.slack.sent[pld.dataset.sldone]=Date.now(); state.slack._u=Date.now(); save(); renderTopics(); return; }
   const dv=e.target.closest('[data-drive]');
   if(dv){ e.stopPropagation(); openDrive(dv.dataset.drive); return; }   // 行クリック（回を開く）より先に処理する
   if(e.target.closest('#tpCalMenu')){ _gcMenu=!_gcMenu; renderTopics(); return; }
@@ -4171,6 +4194,58 @@ function slackDefaultKind(){
   const dd=Math.round((parse(mm.next.date)-t0)/86400000);
   return (dd===0||dd===1) ? 'eve' : 'full';
 }
+// ── 投稿の予定（いつ何を流すか）─────────────────────────────
+// 隔週月曜の定例に合わせて決めた（2026-09-01・ユーザーと合意）：
+//   📣 お題ください … 7日前 ／ 📋 議題つき … 3日前 ／ ⏰ リマインド … 前日
+//   📊 進捗フル     … 定例の翌日（「決まったこと」が載るのでその回の締めになる）
+// ⚠ **自動では送らない**。「きょうが投稿日」を画面で知らせるところまで（このプロジェクトの原則）。
+const SL_SCHED={ call:-7, agenda:-3, eve:-1, full:1 };
+const SL_PLAN_GRACE=6;      // 予定日を過ぎても、何日は「まだ流していません」と出すか
+function slDateAdd(base, off){ const d=parse(base); d.setDate(d.getDate()+off); return ymd(d); }
+// 土日に当たったら動かす。前ふり（お題・議題）は前の金曜、前日リマインドは当日の朝、
+// 進捗フルは翌月曜。※定例が月曜だと「前日＝日曜」になるので、リマインドは実質いつも当日の朝。
+function slPlanDate(mt, k){
+  let d=slDateAdd(mt, SL_SCHED[k]); const w=parse(d).getDay();
+  if(w===0||w===6){
+    if(k==='eve') d=mt;
+    else if(k==='full'){ d=slDateAdd(d, w===6?2:1); }
+    else { d=slDateAdd(d, w===6?-1:-2); }
+  }
+  return d; }
+function slackPlan(){
+  ensureBoards(); const mm=summaryMeetings(), out=[];
+  if(mm.prev&&mm.prev.date) out.push({ k:'full', mt:mm.prev.date, date:slPlanDate(mm.prev.date,'full'), note:'定例の翌日' });
+  if(mm.next&&mm.next.date){
+    out.push({ k:'call',   mt:mm.next.date, date:slPlanDate(mm.next.date,'call'),   note:'7日前' });
+    out.push({ k:'agenda', mt:mm.next.date, date:slPlanDate(mm.next.date,'agenda'), note:'3日前' });
+    out.push({ k:'eve',    mt:mm.next.date, date:slPlanDate(mm.next.date,'eve'),    note:'前日（土日なら当日の朝）' });
+  }
+  return out.sort((a,b)=>a.date.localeCompare(b.date)); }
+function slSentKey(p){ return p.mt+':'+p.k; }
+function slSent(p){ const m=(state.slack&&state.slack.sent)||{}; return !!m[slSentKey(p)]; }
+// 流した印は共有ボードに入れる（チャンネルは1つ＝誰かが流したらもう出さなくていい）
+function slackMarkSent(kind){ ensureBoards();
+  const p=slackPlan().filter(x=>x.k===kind).pop(); if(!p) return;
+  state.slack.sent=state.slack.sent||{}; state.slack.sent[slSentKey(p)]=Date.now();
+  state.slack._u=Date.now(); save(); }
+// 3日前の「議題つき」は、議題が溜まっていないと中身が薄い＝お題の募集をもう一度出す。
+function slEffKind(p){ return (p.k==='agenda' && summaryMeetings().nextTp.length<2) ? 'call' : p.k; }
+function slKindLabel(k){ return (SL_KINDS.find(x=>x.k===k)||{}).label||k; }
+function slMd(d){ const x=parse(d); return (x.getMonth()+1)+'/'+x.getDate()+'('+_WD[x.getDay()]+')'; }
+// きょう出すぶん。過ぎたぶんも数日は出す＝流し忘れに気づける。
+function slackPlanDue(){ const t=ymd(new Date());
+  return slackPlan().filter(p=> p.date<=t && slDateAdd(p.date,SL_PLAN_GRACE)>=t && !slSent(p)); }
+// 「きょうは◯◯を流す日です」の帯。Webhookが未登録なら出さない（押せないものを見せない）。
+function slackPlanBanner(){
+  if(!slackReady()) return '';
+  const due=slackPlanDue(); if(!due.length) return '';
+  const t=ymd(new Date());
+  return due.map(p=>{ const ek=slEffKind(p), late=(p.date<t);
+    return '<div class="slplan"><b>⏰ '+(late?'まだ流していません：':'きょうは')+'「'+esc(slKindLabel(ek))+'」'+(late?'':'を流す日です')+'</b>'+
+      '<span class="sm">'+slMd(p.date)+'・'+esc(p.note)+(ek!==p.k?'／議題がまだ少ないのでお題の募集にしています':'')+'</span>'+
+      '<button data-slgo="'+esca(ek)+'">文面を開く</button>'+
+      '<button class="ghost" data-sldone="'+esca(slSentKey(p))+'" title="もう流した／今回は出さない">流した</button></div>';
+  }).join(''); }
 function slackText(kind){ kind=kind||_slackKind;
   if(kind==='call')   return slackCall();
   if(kind==='agenda') return slackAgenda();
@@ -4412,13 +4487,14 @@ async function postToSlack(text, kind, channel){
       state.slack.lastAny=rec;
       if(!kind || kind==='full') state.slack.last=Object.assign({}, rec, slackNums());
       state.slack._u=Date.now(); save(); }
+    if(kind && kind!=='test' && kind!=='dmtest') slackMarkSent(kind);   // 予定表の✓と帯の消灯
   }
   const where = channel ? ('🧪 '+channel+' にDMで送りました（チャンネルには出ていません）。')
                         : '💬 Slackに投稿しました。';
   alert(res==='ok' ? where
       : res==='sent' ? (channel?'🧪 DMを送信しました。\n':'💬 Slackに送信しました。\n')+msg
       : '送信できませんでした。\n'+msg);
-  renderSlackCfg();
+  renderSlackCfg(); refreshTopicsIfOpen();
   return res!=='ng';
 }
 function renderSlackCfg(){
@@ -4442,6 +4518,18 @@ function renderSlackCfg(){
     } }
   // 文面はそのまま直せる。「ツールを入れました」等のひとことを冒頭に足したい、が実際の要求だった。
   // 自動生成はあくまで下書き＝人が最後に整える。編集内容は _slackDraft に持つ（開き直すと作り直し）。
+  { const pl=slackPlan(), t=ymd(new Date());
+    if(pl.length){
+      h+='<div class="tpsec">投稿の予定（定例の日付から決まります）</div><div class="slsched">';
+      pl.forEach(p=>{ const ek=slEffKind(p), done=slSent(p);
+        const due=(!done && p.date<=t && slDateAdd(p.date,SL_PLAN_GRACE)>=t), gone=(!done && !due && p.date<=t);
+        h+='<div class="slrow'+(done?' done':(due?' due':''))+'"><span class="d">'+slMd(p.date)+'</span>'
+          +'<span class="n">'+esc(slKindLabel(ek))+'</span><span class="mm">'+esc(p.note)+'</span>'
+          +'<span class="s">'+(done?'✓ 流しました':(due?'まだ流していません':(gone?'—':'')))+'</span></div>'; });
+      h+='</div>';
+      h+='<div class="smnote"><b>自動では送りません。</b>その日にボードを開くと「📝 打合せ予定」の上に'
+        +'「きょうは◯◯を流す日です」と出るので、そこから開いて投稿してください。</div>';
+    } }
   h+='<div class="tpsec">投稿の種類</div>';
   h+='<div class="slkinds">'+SL_KINDS.map(k=>'<button class="'+(k.k===_slackKind?'on':'')+'" data-slkind="'+k.k+'" title="'+esc(k.hint)+'">'+k.label+'</button>').join('')+'</div>';
   { const cur=SL_KINDS.find(k=>k.k===_slackKind); if(cur) h+='<div class="smnote">'+esc(cur.hint)+'</div>'; }
