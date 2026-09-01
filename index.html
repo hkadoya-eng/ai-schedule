@@ -902,7 +902,7 @@
   .tpgrp.carry .gh{color:#a8710a;}
   .tpcard{border:1px solid var(--topic-bd); border-radius:10px; background:var(--topic-bg); padding:9px 10px; margin-bottom:8px;}
   .tpcard:focus-within{border-color:var(--teal);}
-  .tpcard.done{opacity:.55;}
+  .tpcard.done:not(.open){opacity:.55;}   /* 開いて記入中のカードは薄くしない（✓のあとに議事録を書くため） */
   .tpcard.carried{border-left:3px solid #e0a12c;}
   .tpcard .r1{display:flex; align-items:flex-start; gap:8px;}
   .tpcard .r2{display:flex; align-items:center; gap:6px; margin-top:4px; padding-left:32px;}
@@ -942,7 +942,7 @@
   .tpcard .cell.memo{font-size:13px; min-height:36px; color:var(--muted); line-height:1.65; margin-top:1px;}   /* class名は memo。detail は左の詳細パネルが使っている */
   /* 記入欄は改行をそのまま見せる。これが無いと保存されている改行が詰まって1行に見える（ceText と対で必要） */
   .tpcard .cell{white-space:pre-wrap; overflow-wrap:anywhere;}
-  .tpcard.done .cell.todo{text-decoration:line-through;}
+  .tpcard.done:not(.open) .cell.todo{text-decoration:line-through;}
   /* 開閉と、開いたときの記入欄 */
   .tpcard{cursor:pointer;} .tpcard.open{cursor:auto;} .tpcard .cell, .tpcard a{cursor:auto;}
   .tpcard .grip{flex:none; color:var(--dim); cursor:grab; padding:2px 4px; border-radius:5px;
@@ -3265,7 +3265,9 @@ function renderMeetingTable(box){
   h+=tpGroup(ownOpen, carOpen.length?'この回の議題':'議題','');
   if(!carOpen.length && !ownOpen.length && doneRows.length)
     h+=`<div class="tpnote-sm">この回の議題はすべて「話した（✓）」になっています。中身は下の過去ログから読めます。</div>`;
-  h+=tpFoldGroup(doneRows,'tpdone','✓ この回で話した（記録）','done',_tpFoldDone);
+  // ✓を押した直後に番されて消えると議事録が書けない。開いているカードがあるうちは番まない。
+  h+=tpFoldGroup(doneRows,'tpdone','✓ この回で話した（記録）','done',
+        _tpFoldDone && !doneRows.some(t=>_tpOpenCards.has(t.id)));
   // ✓の説明はクイック追加欄の「?」に移した（常駐させない）
   if(!rows.length) h+=`<div class="tpempty">まだ議題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
   // 前の回で未対応のまま終わった議題＝この回に入れるかどうかを、ここで一覧して選べるようにする
