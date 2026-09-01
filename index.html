@@ -792,6 +792,9 @@
   .slsched .slrow .mm{color:var(--dim); font-size:11px; flex:1 1 auto; min-width:0; overflow:hidden;
     text-overflow:ellipsis; white-space:nowrap;}
   .slsched .slrow .s{margin-left:auto; color:var(--dim); font-size:11px; white-space:nowrap; flex:none; padding-left:8px;}
+  .slsched .slrow .cal{flex:none; background:rgba(91,141,239,.16); color:#9dbbf5; border:1px solid rgba(91,141,239,.45);
+    border-radius:7px; padding:2px 8px; cursor:pointer; font-size:12px; font-family:inherit;}
+  .slsched .slrow .cal:hover{filter:brightness(1.12);}
   .slsched .slrow.due{background:rgba(47,182,176,.10);} .slsched .slrow.due .s{color:var(--teal);}
   .slsched .slrow.done .n, .slsched .slrow.done .d{opacity:.55;}
   .tpmeta{margin-bottom:12px;}
@@ -4246,6 +4249,22 @@ function slackPlanBanner(){
       '<button data-slgo="'+esca(ek)+'">文面を開く</button>'+
       '<button class="ghost" data-sldone="'+esca(slSentKey(p))+'" title="もう流した／今回は出さない">流した</button></div>';
   }).join(''); }
+// 投稿予定を「自分あてのリマインダー」としてカレンダーに入れるためのURL。
+// アプリからカレンダーには書き込めないので、Googleの「予定を作成」画面を入力済みで開くだけ（保存は人が押す）。
+// 招待者は付けない（9人に配るものではなく、流す係が忘れないための予定）。
+function slPlanEventUrl(p){
+  const ek=slEffKind(p);
+  const t0=(ek==='eve')?'0930':'1000', t1=(ek==='eve')?'0945':'1015';
+  const d=String(p.date).replace(/-/g,'');
+  const q=new URLSearchParams();
+  q.set('action','TEMPLATE');
+  q.set('text','AI推進：'+slKindLabel(ek).replace(/^\S+\s*/,'')+' をSlackに流す');
+  q.set('dates', d+'T'+t0+'00/'+d+'T'+t1+'00'); q.set('ctz','Asia/Tokyo');
+  q.set('details', ['定例（'+slMd(p.mt)+'）に向けた投稿です（'+p.note+'）。',
+    'ボードを開くと「📝 打合せ予定」の上に「きょうは◯◯を流す日です」と出ます。',
+    'そこから文面を開いて、手直ししてから投稿してください。',
+    APP_URL, '', '※ アプリが勝手に送ることはありません。'].join('\n'));
+  return 'https://calendar.google.com/calendar/render?'+q.toString(); }
 function slackText(kind){ kind=kind||_slackKind;
   if(kind==='call')   return slackCall();
   if(kind==='agenda') return slackAgenda();
@@ -4525,10 +4544,13 @@ function renderSlackCfg(){
         const due=(!done && p.date<=t && slDateAdd(p.date,SL_PLAN_GRACE)>=t), gone=(!done && !due && p.date<=t);
         h+='<div class="slrow'+(done?' done':(due?' due':''))+'"><span class="d">'+slMd(p.date)+'</span>'
           +'<span class="n">'+esc(slKindLabel(ek))+'</span><span class="mm">'+esc(p.note)+'</span>'
+          +'<button class="cal" data-slcal="'+esca(p.mt+'|'+p.k)+'" title="この日に自分あてのリマインダーをGoogleカレンダーに入れます">📅</button>'
           +'<span class="s">'+(done?'✓ 流しました':(due?'まだ流していません':(gone?'—':'')))+'</span></div>'; });
       h+='</div>';
       h+='<div class="smnote"><b>自動では送りません。</b>その日にボードを開くと「📝 打合せ予定」の上に'
-        +'「きょうは◯◯を流す日です」と出るので、そこから開いて投稿してください。</div>';
+        +'「きょうは◯◯を流す日です」と出るので、そこから開いて投稿してください。<br>'
+        +'<b>📅 を押すと、その日のリマインダーをGoogleカレンダーに入れられます</b>（保存はGoogleの画面でご自分で。'
+        +'入れておけば<b>ボードを開かなくても通知が来ます</b>）。4本ぶん押してください。</div>';
     } }
   h+='<div class="tpsec">投稿の種類</div>';
   h+='<div class="slkinds">'+SL_KINDS.map(k=>'<button class="'+(k.k===_slackKind?'on':'')+'" data-slkind="'+k.k+'" title="'+esc(k.hint)+'">'+k.label+'</button>').join('')+'</div>';
@@ -4732,6 +4754,10 @@ document.getElementById('sumBtn').addEventListener('click', ()=>{ renderSummary(
 document.getElementById('slackBtn').addEventListener('click', openSlackCfg);
 document.getElementById('slackModal').addEventListener('click', e=>{
   if(e.target.id==='slackModal'||e.target.id==='slackClose'){ document.getElementById('slackModal').classList.remove('on'); return; }
+  const pc=e.target.closest('[data-slcal]');
+  if(pc){ const a=String(pc.dataset.slcal).split('|');
+    const p=slackPlan().find(x=>x.mt===a[0] && x.k===a[1]);
+    if(p) window.open(slPlanEventUrl(p),'_blank','noopener'); return; }
   if(e.target.closest('#slackReset')){ _slackDraft=null; renderSlackCfg(); return; }
   const sk=e.target.closest('[data-slkind]');
   if(sk){ const k=sk.dataset.slkind; if(k===_slackKind) return;
