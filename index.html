@@ -4432,6 +4432,16 @@ function slackFull(){
     });
     if(mm.prevDone.length>SL_RES_MAX) L.push('・ほか '+(mm.prevDone.length-SL_RES_MAX)+'件（ボードで見られます）');
   }
+  // ②' 前回の当日メモ。FBや話した内容は「決まったこと」ではなくこちらに書かれることが多い。
+  //    ここを拾わないと、定例で話したはずのことが丸ごと消える（ユーザー指摘・2026-09-01）。
+  if(mm.prev && mm.prevLog.length){
+    L.push('');
+    L.push('*前回の当日メモ*（'+mm.prevLog.length+'件）');
+    mm.prevLog.slice(0,SL_RES_MAX).forEach(t=>{
+      L.push('・'+(t.todo||'(無題)')+'　'+slCut(t.log,90));
+    });
+    if(mm.prevLog.length>SL_RES_MAX) L.push('・ほか '+(mm.prevLog.length-SL_RES_MAX)+'件（ボードで見られます）');
+  }
   // 次回の議題も載せる。当日いきなり集まるより、事前に見ておいてもらう方が呼びかけとして効く。
   if(mm.next && mm.nextTp.length){
     const open=mm.nextTp.filter(t=>!t.done).length;
