@@ -4298,16 +4298,26 @@ function slMd(d){ const x=parse(d); return (x.getMonth()+1)+'/'+x.getDate()+'('+
 // きょう出すぶん。過ぎたぶんも数日は出す＝流し忘れに気づける。
 function slackPlanDue(){ const t=ymd(new Date());
   return slackPlan().filter(p=> p.date<=t && slDateAdd(p.date,SL_PLAN_GRACE)>=t && !slSent(p)); }
-// 「きょうは◯◯を流す日です」の帯。Webhookが未登録なら出さない（押せないものを見せない）。
+// 帯の文言。「今日は◯◯を流す日」という予定の告知ではなく、
+// **「まだ共有していない」という状態**を書く（ユーザー指示・2026-09-01）。
+// ※ full の p.mt は「終わった定例」、それ以外は「次回の定例」の日付。
+function slBannerMsg(p, ek){
+  const mt=slMd(p.mt);
+  if(ek==='full')   return '📝 '+mt+'の打ち合わせ議事録を、まだSlackで共有していません';
+  if(ek==='agenda') return '📋 '+mt+'の議題を、まだSlackで共有していません';
+  if(ek==='eve')    return '⏰ '+mt+'のリマインドを、まだSlackで流していません';
+  return '📣 '+mt+'のお題募集を、まだSlackで流していません';
+}
+// 帯。Webhookが未登録なら出さない（押せないものを見せない）。
 function slackPlanBanner(){
   if(!slackReady()) return '';
   const due=slackPlanDue(); if(!due.length) return '';
   const t=ymd(new Date());
-  return due.map(p=>{ const ek=slEffKind(p), late=(p.date<t);
-    return '<div class="slplan"><b>⏰ '+(late?'まだ流していません：':'きょうは')+'「'+esc(slKindLabel(ek))+'」'+(late?'':'を流す日です')+'</b>'+
+  return due.map(p=>{ const ek=slEffKind(p);
+    return '<div class="slplan"><b>'+slBannerMsg(p, ek)+'</b>'+
       '<span class="sm">'+slMd(p.date)+'・'+esc(p.note)+(ek!==p.k?'／議題がまだ少ないのでお題の募集にしています':'')+'</span>'+
       '<button data-slgo="'+esca(ek)+'">文面を開く</button>'+
-      '<button class="ghost" data-sldone="'+esca(slSentKey(p))+'" title="もう流した／今回は出さない">流した</button></div>';
+      '<button class="ghost" data-sldone="'+esca(slSentKey(p))+'" title="もう共有した／今回は出さない">共有した</button></div>';
   }).join(''); }
 // 投稿予定を「自分あてのリマインダー」としてカレンダーに入れるためのURL。
 // アプリからカレンダーには書き込めないので、Googleの「予定を作成」画面を入力済みで開くだけ（保存は人が押す）。
