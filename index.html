@@ -3174,12 +3174,13 @@ function tpCard(t){
   }else{
     h+=`<div class="tpx-body">`+
       tpFld('メモ・背景 <span class="sm">会議前に共有しておきたいこと</span>', tpArea(t,'detail','memo','この件の背景、共有しておきたいこと'))+
-      (tpOn(t,'links')?tpFld('参考リンク <span class="sm">1行に1つ／下の候補は押すだけで入ります</span>',
-            tpArea(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links)+tpLinkSuggest(t)):'')+
+      // 当日メモは常に出しておく（畳んでおくと「メモ・背景」に書いてしまう人がいる）。
+      tpFld(`当日メモ <span class="sm">会議中に話が出たらここへ</span><button class="act" data-today="${esca(t.id)}" title="今日の日付と自分の名前を入れて書き始める">＋ 今日の記録</button>`,
+            tpArea(t,'log','log','会議中に出た話・その場で決まったことをここに'))+
       (tpOn(t,'task')?tpFld('関連するカルテ <span class="sm">📌を押すとカルテが開きます</span>',
             tpLinkedTasks(t)+tpKartPicker(t)):'')+
-      (tpOn(t,'log')?tpFld(`当日メモ <span class="sm">会議中に話が出たらここへ</span><button class="act" data-today="${esca(t.id)}" title="今日の日付と自分の名前を入れて書き始める">＋ 今日の記録</button>`,
-            tpArea(t,'log','log','会議中に出た話・その場で決まったことをここに')):'')+
+      (tpOn(t,'links')?tpFld('参考リンク <span class="sm">1行に1つ／下の候補は押すだけで入ります</span>',
+            tpArea(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links)+tpLinkSuggest(t)):'')+
       (tpOn(t,'result')?tpFld('決まったこと・次アクション <span class="sm">会議のあとに埋める</span>',
             tpArea(t,'result','result','何が決まったか／次に誰が何をするか')+
             `<div class="tprow mt"><span class="lb">担当</span><input class="mtedit" data-tfield="owner" data-tid="${esca(t.id)}" value="${esca(t.owner||'')}" placeholder="例）伊藤(真)">`+
@@ -3187,7 +3188,7 @@ function tpCard(t){
       // 開いた瞬間に操作が7個並ぶと「既定は最小」が崩れる。足す欄と、順番・削除は畳んでおく。
       // 会議中に使うのは「メモ・背景」と「当日メモ」だけなので、それ以外は押した人にだけ出す。
       (_tpMore.has(t.id)?(()=>{ const bs=tpAddBtn(t,'links','リンク')+tpAddBtn(t,'task','カルテ')+
-          tpAddBtn(t,'log','当日メモ')+tpAddBtn(t,'result','決まったこと');
+          tpAddBtn(t,'result','決まったこと');   // 当日メモは常設なので「足す」対象から外す
         return `<div class="addflds">`+(bs||`<span class="sm" style="color:var(--dim);font-size:11px">欄はすべて出ています</span>`)+`</div>`; })():'')+
       `<div class="tpfoot">`+
         `<button class="act" data-tpmore="${esca(t.id)}" title="参考リンク・関連するカルテ・当日メモ・決まったことの欄を出します">`+
@@ -4365,6 +4366,14 @@ function slackLinks(mm){
   if(dv) lk.push('<'+dv+'|📁 次回の資料>'); else if(pv) lk.push('<'+pv+'|📁 前回の資料>');
   lk.push('<'+DRIVE_SHEET+'|📊 定例シート>');
   return lk.join('　'); }
+// 複数行の記入をSlackに出す。1行にまとめず、改行はそのまま（行頭を字下げして本文だと分かるように）。
+// 長すぎる回に備えて行数と1行の長さだけ抑える。空行は詰める。
+const SL_BODY_LINES=8, SL_BODY_CHARS=120;
+function slLines(v){
+  const rows=String(v||'').replace(/\r\n?/g,'\n').split('\n').map(x=>x.trim()).filter(Boolean);
+  const out=rows.slice(0,SL_BODY_LINES).map(x=>'　　'+(x.length>SL_BODY_CHARS?x.slice(0,SL_BODY_CHARS)+'…':x));
+  if(rows.length>SL_BODY_LINES) out.push('　　…ほか '+(rows.length-SL_BODY_LINES)+'行（ボードで見られます）');
+  return out; }
 function slCut(v,n){ const t=String(v||'').replace(/\s+/g,' ').trim(); return t.length>n?t.slice(0,n)+'…':t; }
 function slNoMeeting(){ return '次回の定例がまだ登録されていません。\nボードの「📝 打合せ予定」→「＋ 定例を追加」で登録すると、ここに文面ができます。\n'+APP_URL; }
 function slMtTitle(m){ return mtWhenLine(m)+(m.title?'　'+m.title:''); }
@@ -4496,23 +4505,30 @@ function slackFull(){
     L.push(SL_HR);
     L.push('*前回（'+mtWhenLine(mm.prev)+'）で決まったこと*（'+mm.prevDone.length+'件）');
     mm.prevDone.slice(0,SL_RES_MAX).forEach(t=>{
-      const r=String(t.result||'').replace(/\s+/g,' ').trim();
       const who=[String(t.owner||'').trim(), t.due?('〜'+mdNum(parse(t.due))):''].filter(Boolean).join('・');
-      L.push('・'+(t.todo||'(無題)')+'　→ '+(r.length>80?r.slice(0,80)+'…':r)+(who?'（'+who+'）':''));
+      L.push('・'+(t.todo||'(無題)')+(who?'（'+who+'）':''));
+      slLines(t.result).forEach(x=>L.push(x));
     });
     if(mm.prevDone.length>SL_RES_MAX) L.push('・ほか '+(mm.prevDone.length-SL_RES_MAX)+'件（ボードで見られます）');
   }
   // ②' 前回の当日メモ。FBや話した内容は「決まったこと」ではなくこちらに書かれることが多い。
   //    ここを拾わないと、定例で話したはずのことが丸ごと消える（ユーザー指摘・2026-09-01）。
-  if(mm.prev && mm.prevLog.length){
-    L.push('');
-    L.push(SL_HR);
-    L.push('*前回の当日メモ*（'+mm.prevLog.length+'件）');
-    mm.prevLog.slice(0,SL_RES_MAX).forEach(t=>{
-      L.push('・'+(t.todo||'(無題)')+'　'+slCut(t.log,90));
-    });
-    if(mm.prevLog.length>SL_RES_MAX) L.push('・ほか '+(mm.prevLog.length-SL_RES_MAX)+'件（ボードで見られます）');
-  }
+  // 「当日メモ」に書く決まりだが、実際には「メモ・背景」に書いてしまう人がいる。
+  // どちらに書いてあっても拾う（当日メモが優先。メモ欄から拾ったものはその旨を添える）。
+  { const notes=(mm.prev?tpOrdered(state.topics.filter(t=>t&&t.meetingId===mm.prev.id)):[])
+      .map(t=>({ t, body:String(t.log||'').trim(), from:'' }))
+      .map(v=>v.body?v:{ t:v.t, body:String(v.t.detail||'').trim(), from:'メモ欄' })
+      .filter(v=>v.body);
+    if(notes.length){
+      L.push('');
+      L.push(SL_HR);
+      L.push('*前回の当日メモ*（'+notes.length+'件）');
+      notes.slice(0,SL_RES_MAX).forEach(v=>{
+        L.push('・'+(v.t.todo||'(無題)')+(v.from?'　_（'+v.from+'に記入）_':''));
+        slLines(v.body).forEach(x=>L.push(x));
+      });
+      if(notes.length>SL_RES_MAX) L.push('・ほか '+(notes.length-SL_RES_MAX)+'件（ボードで見られます）');
+    } }
   // 各自の報告（カルテの週報）。前回の定例以降に書かれたぶんだけ。
   { const reps=mm.prev? slackReports(mm.prev.date) : [];
     if(reps.length){
@@ -4520,7 +4536,8 @@ function slackFull(){
       L.push(SL_HR);
       L.push('*前回からの報告*（'+reps.length+'件）');
       reps.slice(0,SL_REP_MAX).forEach(r=>{
-        L.push('・'+slackItem(r.x)+'　'+slCut(r.text,70));
+        L.push('・'+slackItem(r.x));
+        slLines(r.text).forEach(x=>L.push(x));
       });
       if(reps.length>SL_REP_MAX) L.push('・ほか '+(reps.length-SL_REP_MAX)+'件（ボードで見られます）');
     } }
