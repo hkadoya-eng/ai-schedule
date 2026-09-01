@@ -927,8 +927,18 @@
   .tpcard .cell{outline:none; white-space:pre-wrap; word-break:break-word; border-radius:7px; padding:6px 8px;
     border:1px solid transparent; cursor:text; transition:border-color .12s, background-color .12s;}
   /* 空＝まだ書かれていない欄だけ、点線の箱にして「ここに書ける」と見せる */
-  .tpcard .cell:empty{border:1px dashed var(--line); background:rgba(255,255,255,.5);}
-  .tpcard .cell:empty:before{content:attr(data-ph); color:var(--dim);}
+  .tpcard div.cell:empty{border:1px dashed var(--line); background:rgba(255,255,255,.5);}
+  .tpcard div.cell:empty:before{content:attr(data-ph); color:var(--dim);}
+  /* 記入欄は textarea。改行がそのまま値になる（contenteditable のような変換が無い） */
+  .tpcard textarea.cell{display:block; width:100%; box-sizing:border-box; font-family:inherit; font-size:13px;
+    line-height:1.65; color:var(--text); background:rgba(255,255,255,.5); border:1px dashed var(--line);
+    border-radius:7px; padding:6px 8px; resize:vertical; overflow:hidden; min-height:34px;}
+  .tpcard textarea.cell:not(:placeholder-shown){border-style:solid; border-color:transparent; background:none;}
+  .tpcard:hover textarea.cell{border-color:var(--line); background:rgba(255,255,255,.55);}
+  .tpcard textarea.cell:focus{outline:none; border-style:solid; border-color:var(--teal); background:#fff;
+    box-shadow:0 0 0 1px var(--teal);}
+  .tpcard textarea.cell::placeholder{color:var(--dim);}
+  .tpcard textarea.cell.memo{color:var(--muted);}
   .tpcard:hover .cell{border-color:var(--line); background:rgba(255,255,255,.55);}
   .tpcard .cell:focus{border-color:var(--teal); background:#fff; box-shadow:0 0 0 1px var(--teal);}
   /* 「押して開く場所」は右上の定位置に固定。開いていても閉じていても同じ場所・同じ形 */
@@ -2613,6 +2623,7 @@ function renderTopics(){
   } finally { _tpRendering=false; }
   // 「きょうは◯◯を流す日」は一覧でも回を開いていても出す（気づける場所が1つだと見落とす）
   try{ const pb=slackPlanBanner(); if(pb) box.insertAdjacentHTML('afterbegin', pb); }catch(err){}
+  try{ tpGrowAll(); }catch(err){}                  // 記入欄の高さを中身に合わせる
   updateTopicBtn();
 }
 function mtWhen(m){ return `${esc(m.date||'日付未設定')}${m.start?' '+esc(m.start)+(m.end?'〜'+esc(m.end):''):''}${m.room?'　@'+esc(m.room):''}`; }
@@ -2905,6 +2916,14 @@ function ceText(el){
     .replace(/\n{3,}/g,'\n\n')  // 入れ子で増えた分は空行1つまでに抑える
     .replace(/\n+$/,'');
 }
+// 複数行を書く欄は textarea にする（改行が値としてそのまま入る＝落ちようがない）。
+// 高さは中身に合わせて伸ばす（会議中にスクロールさせない）。
+function tpArea(t, field, cls, ph){
+  return `<textarea class="cell ${cls}" data-edit="${esca(t.id)}" data-field="${field}" rows="1"`+
+    ` placeholder="${esca(ph)}">${esc(t[field]||'')}</textarea>`;
+}
+function tpGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=Math.max(34, el.scrollHeight+2)+'px'; }
+function tpGrowAll(){ document.querySelectorAll('#topicBody textarea.cell').forEach(tpGrow); }
 function tpCell(t, field, cls, ph){
   return `<div class="cell ${cls}" contenteditable="true" data-edit="${esca(t.id)}" data-field="${field}" data-ph="${esca(ph)}">${esc(t[field]||'')}</div>`;
 }
@@ -3154,15 +3173,15 @@ function tpCard(t){
     h+=tpChips(t);
   }else{
     h+=`<div class="tpx-body">`+
-      tpFld('メモ・背景 <span class="sm">会議前に共有しておきたいこと</span>', tpCell(t,'detail','memo','この件の背景、共有しておきたいこと'))+
+      tpFld('メモ・背景 <span class="sm">会議前に共有しておきたいこと</span>', tpArea(t,'detail','memo','この件の背景、共有しておきたいこと'))+
       (tpOn(t,'links')?tpFld('参考リンク <span class="sm">1行に1つ／下の候補は押すだけで入ります</span>',
-            tpCell(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links)+tpLinkSuggest(t)):'')+
+            tpArea(t,'links','links','https://…（資料・スプレッドシートのURL）')+tpLinkChips(t.links)+tpLinkSuggest(t)):'')+
       (tpOn(t,'task')?tpFld('関連するカルテ <span class="sm">📌を押すとカルテが開きます</span>',
             tpLinkedTasks(t)+tpKartPicker(t)):'')+
       (tpOn(t,'log')?tpFld(`当日メモ <span class="sm">会議中に話が出たらここへ</span><button class="act" data-today="${esca(t.id)}" title="今日の日付と自分の名前を入れて書き始める">＋ 今日の記録</button>`,
-            tpCell(t,'log','log','会議中に出た話・その場で決まったことをここに')):'')+
+            tpArea(t,'log','log','会議中に出た話・その場で決まったことをここに')):'')+
       (tpOn(t,'result')?tpFld('決まったこと・次アクション <span class="sm">会議のあとに埋める</span>',
-            tpCell(t,'result','result','何が決まったか／次に誰が何をするか')+
+            tpArea(t,'result','result','何が決まったか／次に誰が何をするか')+
             `<div class="tprow mt"><span class="lb">担当</span><input class="mtedit" data-tfield="owner" data-tid="${esca(t.id)}" value="${esca(t.owner||'')}" placeholder="例）伊藤(真)">`+
             `<span class="lb">期限</span><input class="mtedit" type="date" data-tfield="due" data-tid="${esca(t.id)}" value="${esca(t.due||'')}"></div>`):'')+
       // 開いた瞬間に操作が7個並ぶと「既定は最小」が崩れる。足す欄と、順番・削除は畳んでおく。
@@ -3638,12 +3657,16 @@ document.getElementById('topicBody').addEventListener('input', e=>{
 document.getElementById('topicBody').addEventListener('blur', e=>{
   const ed=e.target.closest('[data-edit]'); if(ed){
     if(_tpRendering || !ed.isConnected) return;       // 再描画で消える要素のblurは無視（空で上書きしてしまう）
-    const _v=ceText(ed);                             // textContent だと改行が消える（ceText の注記参照）
+    // textarea は value がそのまま値（改行を触らない）。contenteditable のときだけ ceText で組み立てる。
+    const _v=(ed.tagName==='TEXTAREA') ? ed.value : ceText(ed);
     editCell(ed.dataset.edit, ed.dataset.field, _v);
     if(ed.dataset.field==='links'){ const c=ed.parentElement.querySelector('.tplinks'); if(c) c.innerHTML=tpLinkAnchors(_v); }
     return; }
   if(e.target.closest('[data-mtnote]')){ clearTimeout(_noteTimer); save(); }
 }, true);
+document.getElementById('topicBody').addEventListener('input', e=>{
+  if(e.target && e.target.tagName==='TEXTAREA' && e.target.classList.contains('cell')) tpGrow(e.target);
+});
 document.getElementById('topicBody').addEventListener('keydown', e=>{
   if(e.target.id==='mtTitle' && e.key==='Enter'){ e.preventDefault(); addMeeting(); }
   if(e.target.id==='tpQuick' && e.key==='Enter'){ e.preventDefault(); addTopicQuick(); }
