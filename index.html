@@ -4141,6 +4141,7 @@ const SL_TP_MAX=6;                                 // Slackに載せる次回の
 const SL_MOVE_MAX=6;                               // 「前回からの動き」に並べる作業の上限
 const SL_RES_MAX=5;                                // 「決まったこと」の上限
 const SL_WEEK_MAX=6;                               // 「今週が期限」の上限
+const SL_REP_MAX=8;                                // 「前回からの報告（週報）」の上限
 const SL_AG_MAX=10;                                // 「議題つき」に並べる議題の上限（メモ付きなので少なめ）
 function coName(x){ return String(x.n.name||''); }
 function coDue(x){ const e=effEnd(x.n); return e?mdNum(parse(e)):null; }
@@ -4233,7 +4234,7 @@ const SL_KINDS=[
   {k:'call',   label:'📣 お題ください', hint:'日程だけ知らせて議題を募ります。定例を登録した直後向け。'},
   {k:'agenda', label:'📋 議題つき',     hint:'次回の議題を一覧で知らせます。ねらい・メモも少し添えます。'},
   {k:'eve',    label:'⏰ 前日リマインド', hint:'あすの定例＋議題＋「進捗を更新してから来てください」。'},
-  {k:'full',   label:'📊 進捗フル',     hint:'全体の数字・前回からの動き・決まったこと・要対応まで全部。'},
+  {k:'full',   label:'📝 議事録FB',     hint:'定例のあとに流すぶん。議事録（決まったこと・当日メモ）＋全体の数字・動き・要対応。'},
 ];
 let _slackKind='full';
 // 開いた場面で既定を変える（前日／当日ならリマインド）。フックからは 'call' を明示で渡す。
@@ -4246,7 +4247,7 @@ function slackDefaultKind(){
 // ── 投稿の予定（いつ何を流すか）─────────────────────────────
 // 隔週月曜の定例に合わせて決めた（2026-09-01・ユーザーと合意）：
 //   📣 お題ください … 7日前 ／ 📋 議題つき … 3日前 ／ ⏰ リマインド … 前日
-//   📊 進捗フル     … 定例の翌日（「決まったこと」が載るのでその回の締めになる）
+//   📝 議事録FB     … 定例の翌日（議事録＝決まったこと・当日メモが載る＝その回の締め）
 // ⚠ **自動では送らない**。「きょうが投稿日」を画面で知らせるところまで（このプロジェクトの原則）。
 const SL_SCHED={ call:-7, agenda:-3, eve:-1, full:1 };
 const SL_PLAN_GRACE=6;      // 予定日を過ぎても、何日は「まだ流していません」と出すか
@@ -4266,7 +4267,7 @@ function mtAutoRow(m, edit){
     ['call','agenda','eve','full'].map(item).join('')+`</div>`; }
 function slDateAdd(base, off){ const d=parse(base); d.setDate(d.getDate()+off); return ymd(d); }
 // 土日に当たったら動かす。前ふり（お題・議題）は前の金曜、前日リマインドは当日の朝、
-// 進捗フルは翌月曜。※定例が月曜だと「前日＝日曜」になるので、リマインドは実質いつも当日の朝。
+// 議事録FBは翌月曜。※定例が月曜だと「前日＝日曜」になるので、リマインドは実質いつも当日の朝。
 function slPlanDate(mt, k){
   let d=slDateAdd(mt, SL_SCHED[k]); const w=parse(d).getDay();
   if(w===0||w===6){
@@ -4335,6 +4336,20 @@ function slPlanEventUrl(p){
     'そこから文面を開いて、手直ししてから投稿してください。',
     APP_URL, '', '※ アプリが勝手に送ることはありません。'].join('\n'));
   return 'https://calendar.google.com/calendar/render?'+q.toString(); }
+// 定例では各自が担当（フリーズ仕様書・メニュー仕様書・台本…）について報告する。
+// その中身はカルテの「📝 週報（積み重ね）」に溜まるので、**前回の定例以降に書かれたぶんだけ**拾う。
+// 全部載せると長くなるので上限つき。日付の無い週報は拾わない（いつの話か分からないため）。
+function slackReports(sinceYmd){
+  if(!sinceYmd) return [];
+  const out=[];
+  collectLeafInfo().forEach(x=>{
+    (x.n.reports||[]).forEach(r=>{
+      const tx=String((r&&r.text)||'').trim();
+      const dt=String((r&&r.date)||'').trim();
+      if(tx && dt && dt>=sinceYmd) out.push({ x, date:dt, text:tx });
+    });
+  });
+  return out.sort((a,b)=>b.date.localeCompare(a.date)); }
 function slackText(kind){ kind=kind||_slackKind;
   if(kind==='call')   return slackCall();
   if(kind==='agenda') return slackAgenda();
@@ -4427,7 +4442,7 @@ function slackEve(){
   L.push('_更新は30秒：ボードを開く → 自分の行の「進捗」バッジ → % を選ぶだけ（保存ボタンはありません）_');
   return L.join('\n'); }
 
-// ── 📊 進捗フル ─────────────────────────────────────────
+// ── 📝 議事録FB ─────────────────────────────────────────
 function slackFull(){
   ensureBoards();
   const co=callOutData(), d=co.d, st=co.st, mm=summaryMeetings(), t=new Date();
@@ -4451,13 +4466,9 @@ function slackFull(){
       L.push('・'+(t.done?'[済] ':'')+(t.todo||'(無題)')+(t.name?'（'+t.name+'）':'')+(t.from?'／持ち越し':''));
     });
     if(mm.nextTp.length>SL_TP_MAX) L.push('・ほか '+(mm.nextTp.length-SL_TP_MAX)+'件（ボードで見られます）');
-    L.push('_話したいことがあれば、当日までにボードに足しておいてください。_');
-  } else if(mm.next){
-    // 「次回を登録」直後は議題が0件。ここを空欄にすると投稿の意味が薄くなるので、議題募集の呼びかけにする。
-    L.push('');
-    L.push('*次回の議題*　まだ登録がありません');
-    L.push('_話したいことがあれば、当日までにボードに足しておいてください。_');
   }
+  // ※ 議題が0件のときの「まだ登録がありません／足しておいてください」は出さない。
+  //    これは議事録の投稿であって、お題の募集は 📣 お題ください の役目（ユーザー指示・2026-09-01）。
   // 前の回に残っている未対応（＝まだ次回へ移していない議題）。移し忘れると回を跨いで埋もれるので、
   // 「次回の議題」とは別枠で必ず出す。次回へ移した分は上の一覧に「／持ち越し」で出るので二重にならない。
   if(mm.prev && mm.prevOpen.length){
@@ -4492,6 +4503,16 @@ function slackFull(){
     });
     if(mm.prevLog.length>SL_RES_MAX) L.push('・ほか '+(mm.prevLog.length-SL_RES_MAX)+'件（ボードで見られます）');
   }
+  // 各自の報告（カルテの週報）。前回の定例以降に書かれたぶんだけ。
+  { const reps=mm.prev? slackReports(mm.prev.date) : [];
+    if(reps.length){
+      L.push('');
+      L.push('*前回からの報告*（'+reps.length+'件）');
+      reps.slice(0,SL_REP_MAX).forEach(r=>{
+        L.push('・'+slackItem(r.x)+'　'+slCut(r.text,70));
+      });
+      if(reps.length>SL_REP_MAX) L.push('・ほか '+(reps.length-SL_REP_MAX)+'件（ボードで見られます）');
+    } }
   // ① 前回の投稿からの動き。数字の差分だけだと「誰が動かしたか」が見えないので中身を並べる。
   { const mv=slackMoved(last&&last.t);
     if(mv && (mv.done.length||mv.prog.length)){
@@ -4584,7 +4605,7 @@ async function postToSlack(text, kind, channel){
     res='sent'; msg='ブラウザの制限で送信結果を読み取れませんでした。チャンネルをご確認ください。';
   }
   if(res!=='ng'){
-    // last＝「進捗フル」の差分の基準。お題募集や前日リマインドで上書きすると、
+    // last＝「議事録FB」の差分の基準。お題募集や前日リマインドで上書きすると、
     // 次の進捗投稿の「前回からの動き」が1日ぶんになってしまうので kind で分ける。
     const rec={ t:Date.now(), by:currentUser()||'', confirmed:(res==='ok'), kind:(kind||'full') };
     // テスト（🧪・DM）はチャンネルに出ていないので「前回の投稿」には残さない
@@ -4618,8 +4639,8 @@ function renderSlackCfg(){
       h+='<div class="tpsec">前回の投稿</div>';
       h+='<div class="smrow"><span class="smn">'+fmtBkTime(la.t)+'　'+esc(String(la.by||'').split('@')[0]||'—')
         +(kn?'　'+esc(kn):'')+(la.confirmed?'':'（送信結果は未確認）')+'</span>'
-        +(sl.last?'<span class="smmeta">進捗フル：全体 '+sl.last.pct+'% ／ 遅延 '+sl.last.late+' ／ 停滞 '+sl.last.stale+'</span>':'')+'</div>';
-      if(sl.last) h+='<div class="smnote">「📊 進捗フル」では、この数字との差分（前回 7 → −2 など）と、それ以降に動いた作業が文面に入ります。</div>';
+        +(sl.last?'<span class="smmeta">議事録FB：全体 '+sl.last.pct+'% ／ 遅延 '+sl.last.late+' ／ 停滞 '+sl.last.stale+'</span>':'')+'</div>';
+      if(sl.last) h+='<div class="smnote">「📝 議事録FB」では、この数字との差分（前回 7 → −2 など）と、それ以降に動いた作業が文面に入ります。</div>';
     } }
   // 文面はそのまま直せる。「ツールを入れました」等のひとことを冒頭に足したい、が実際の要求だった。
   // 自動生成はあくまで下書き＝人が最後に整える。編集内容は _slackDraft に持つ（開き直すと作り直し）。
@@ -4669,7 +4690,7 @@ function renderSlackCfg(){
 }
 // 開くたびに文面を作り直す。前回の編集を残すと、古い数字のまま投稿してしまう事故が起きる。
 // kind を渡すとその文面で開く（定例登録フックは 'call'＝お題ください）。
-// 省略時は場面から決める（前日・当日ならリマインド、それ以外は進捗フル）。
+// 省略時は場面から決める（前日・当日ならリマインド、それ以外は議事録FB）。
 function openSlackCfg(kind){ closeMore(); _slackDraft=null;
   _slackKind = kind || slackDefaultKind();
   renderSlackCfg(); document.getElementById('slackModal').classList.add('on'); }
