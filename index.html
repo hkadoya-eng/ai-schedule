@@ -777,6 +777,11 @@
     padding:5px 12px; cursor:pointer; font-family:inherit; font-size:12px; white-space:nowrap;}
   .slkinds button:hover{border-color:var(--teal);}
   .slkinds button.on{background:rgba(47,182,176,.18); border-color:rgba(47,182,176,.55); font-weight:700;}
+  /* 作業マスター取り込みの1行（チェック＋作業名＋変更内容） */
+  .wmrow{display:flex; align-items:baseline; gap:8px; padding:5px 8px; border-radius:7px; cursor:pointer; font-size:12.5px;}
+  .wmrow:hover{background:var(--panel2);}
+  .wmrow .wmt{font-weight:700; flex:none; min-width:170px;}
+  .wmrow .wmd{color:var(--muted); font-size:12px;}
   /* きょうが投稿日のときだけ出る帯 */
   .slplan{display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:0 0 12px; padding:9px 12px;
     background:rgba(47,182,176,.12); border:1px solid rgba(47,182,176,.45); border-radius:10px; font-size:12.5px;}
@@ -1226,6 +1231,7 @@
   <button id="exportBtn">💾 書き出し（保存）</button>
   <button id="importBtn">📂 読み込み</button>
   <button id="backupBtn">🕘 復元</button>
+  <button id="wmBtn" title="定例シートの③月次ガント（作業ナンバー・作業名・担当）を貼り付けて、違うところだけ取り込む">📥 作業マスターを取り込む</button>
   <button id="syncBtn" title="定例シート（議題）と議題を突き合わせて、差分だけ取り込む">🔄 定例シートと同期</button>
   <div class="mlabel" style="color:#c2555f">危険な操作</div>
   <button id="resetBtn" style="color:#c2555f" title="全データを初期サンプルに戻す（通常は使いません）">🧨 初期化（全部消してサンプルに戻す）</button>
@@ -1293,6 +1299,14 @@
   <div class="mh"><div class="t">🔍 検索</div><div class="s">作業（カルテ）・議題・当日メモ・決まったこと・定例をまとめて探します。行をクリックすると、その場所が開きます。</div></div>
   <div class="mb"><input id="findInput" placeholder="例）ツール化／伊藤／セリフ／8月" autocomplete="off"><div id="findBody"></div></div>
   <div class="mf"><button class="ghost" id="findClose">閉じる</button></div>
+</div></div>
+
+<div class="modal" id="wmModal"><div class="m">
+  <div class="mh"><div class="t">📥 作業マスターを取り込む</div><div class="s">定例シートの<b>③月次ガント</b>で
+    <b>No.／領域／担当ペア／作業</b>を含む範囲をコピーして、下に貼り付けてください。いまのボードと突き合わせて
+    <b>違うところだけ</b>出します。取り込むものを選んで、最後にもう一度確認します。<b>削除はしません。</b></div></div>
+  <div class="mb" id="wmBody"></div>
+  <div class="mf"><button class="ghost" id="wmClose">閉じる</button><button class="big" id="wmApply" disabled>選んだ内容で取り込む</button></div>
 </div></div>
 
 <div class="modal" id="syncModal"><div class="m">
@@ -2501,6 +2515,7 @@ async function loadCloudBackups(){
     `<button data-snap="${esca(String(r.id))}">この状態に戻す</button></div>`).join('');
 }
 document.getElementById('backupBtn').addEventListener('click', openBackup);
+document.getElementById('wmBtn').addEventListener('click', openWmModal);
 document.getElementById('syncBtn').addEventListener('click', openSyncModal);
 document.getElementById('backupModal').addEventListener('click', e=>{
   if(e.target.id==='backupModal'||e.target.id==='backupClose'){ document.getElementById('backupModal').classList.remove('on'); return; }
@@ -3686,6 +3701,125 @@ document.getElementById('topicBody').addEventListener('keydown', e=>{
   if(e.target.id==='tpQuick' && e.key==='Enter'){ e.preventDefault(); addTopicQuick(); }
 });
 // メンバー一覧（⚙管理の中）
+// ===== 作業マスターの取り込み（定例シート③月次ガント → ボード）=====
+// シートが正なのは「作業ナンバー・作業名・担当・領域」。進捗や期限はアプリが正なので触らない。
+// 消えた作業は**消さない**（シートの貼り忘れ・範囲選択ミスで作業が消えると被害が大きい）。一覧で見せるだけ。
+let _wmDiff=null, _wmPick={};
+function wmKey(x){ return String(x||'').replace(/[\s　]/g,'').replace(/[・\/／]/g,''); }
+function wmSmalls(){ const out=[]; walkAll(state.tree, n=>{ if(n&&n.kind==='small') out.push(n); }); return out; }
+// 貼り付けはタブ区切り（スプレッドシートからのコピー）。列の並びは No.／領域／担当ペア／作業 を前提にする。
+function wmParse(text){
+  const rows=[];
+  String(text||'').replace(/\r\n?/g,'\n').split('\n').forEach(line=>{
+    if(!line.trim()) return;
+    const c=line.split('\t').map(x=>String(x||'').trim());
+    if(c.length<4) return;
+    const no=normNo(c[0]), area=c[1], role=c[2], name=c[3];
+    if(!name) return;
+    if(/^No\.?$/i.test(c[0]) || name==='作業') return;          // 見出し行
+    if(/^(月次ガント|v[0-9])/.test(no)) return;                  // タイトル行
+    rows.push({ no, area, role, name });
+  });
+  return rows; }
+function wmDiff(rows){
+  const smalls=wmSmalls(), byNo={}, byName={};
+  smalls.forEach(n=>{ const k=normNo(n.no); if(k) byNo[k]=n; byName[wmKey(n.name)]=n; });
+  const seen={}, add=[], upd=[];
+  rows.forEach(r=>{
+    const n=(r.no&&byNo[r.no]) || byName[wmKey(r.name)];
+    if(!n){ add.push(r); return; }
+    seen[n.id]=1;
+    const fields=[];
+    if(r.no && normNo(n.no)!==r.no) fields.push({f:'no',   label:'作業ナンバー', from:normNo(n.no)||'（空）', to:r.no});
+    if(r.name && wmKey(n.name)!==wmKey(r.name)) fields.push({f:'name', label:'作業名', from:n.name, to:r.name});
+    if(r.role && String(n.role||'').trim()!==r.role) fields.push({f:'role', label:'担当', from:n.role||'（空）', to:r.role});
+    if(fields.length) upd.push({ n, r, fields });
+  });
+  return { add, upd, only: smalls.filter(n=>!seen[n.id]) }; }
+function wmRowHtml(key, label, detail, on){
+  return '<label class="wmrow"><input type="checkbox" data-wm="'+esca(key)+'"'+(on?' checked':'')+'>'+
+    '<span class="wmt">'+label+'</span><span class="wmd">'+detail+'</span></label>'; }
+function wmPreviewHtml(d){
+  let h='';
+  if(!d.add.length && !d.upd.length) h+='<div class="hint">違うところはありませんでした。ボードとシートは揃っています。</div>';
+  if(d.upd.length){
+    h+='<div class="tpsec">シートと違う作業（'+d.upd.length+'件）</div>';
+    d.upd.forEach((u,i)=>{ u.fields.forEach(f=>{
+      h+=wmRowHtml('u|'+i+'|'+f.f, esc(u.n.name), esc(f.label)+'：'+esc(f.from)+' → <b>'+esc(f.to)+'</b>', true); }); });
+  }
+  if(d.add.length){
+    h+='<div class="tpsec">シートにあってボードに無い作業（'+d.add.length+'件）</div>';
+    d.add.forEach((a,i)=>{ h+=wmRowHtml('a|'+i, esc(a.name),
+      '新しく追加：'+esc(a.area||'領域未設定')+(a.role?'／'+esc(a.role):'')+(a.no?'／No. '+esc(a.no):''), true); });
+  }
+  if(d.only.length){
+    h+='<div class="tpsec">シートに無い作業（'+d.only.length+'件・<b>消しません</b>）</div>';
+    h+='<div class="hint">貼り付けた範囲に入っていないだけかもしれないので、ここは触りません。'+
+       'シート側で本当に無くなったなら、カルテの「🗑 削除」で消してください。</div>';
+    h+='<div class="hint" style="margin-top:6px">'+d.only.map(n=>esc(n.name)).join('／')+'</div>';
+  }
+  return h; }
+function renderWmModal(text, err){
+  const box=document.getElementById('wmBody'); if(!box) return;
+  let h='<div class="fld"><label>シートから貼り付け（No.／領域／担当ペア／作業 の順の列）</label>'+
+        '<textarea id="wmPaste" rows="6" placeholder="001&#9;プレゼン資料系&#9;山根（蔵本）&#9;企画考察">'+esc(text||'')+'</textarea></div>'+
+        '<div class="detailops"><button class="btn" id="wmCheck">違うところを見る</button></div>';
+  if(err) h+='<div class="hint" style="color:#c2555f;margin-top:8px">'+esc(err)+'</div>';
+  if(_wmDiff) h+=wmPreviewHtml(_wmDiff);
+  box.innerHTML=h;
+  const ap=document.getElementById('wmApply');
+  if(ap) ap.disabled=!(_wmDiff && (_wmDiff.upd.length || _wmDiff.add.length)); }
+function openWmModal(){ closeMore(); ensureBoards(); _wmDiff=null; _wmPick={}; renderWmModal(''); 
+  document.getElementById('wmModal').classList.add('on'); }
+// 新しい作業を入れる場所＝領域（中項目）。無ければ作る（大項目は先頭のものにぶら下げる）。
+function wmMidFor(area){
+  let hit=null; walkAll(state.tree, n=>{ if(!hit && n && n.kind==='mid' && wmKey(n.name)===wmKey(area)) hit=n; });
+  if(hit) return hit;
+  let big=(state.tree||[]).find(n=>n&&n.kind==='big');
+  if(!big){ big={ id:nextId(), kind:'big', name:'制作物', children:[] }; state.tree.push(big); }
+  const mid={ id:nextId(), kind:'mid', name:area||'未分類', children:[] };
+  big.children=big.children||[]; big.children.push(mid); return mid; }
+function applyWmDiff(){
+  if(!_wmDiff) return; const d=_wmDiff;
+  const picked=k=>_wmPick[k]!==false;   // 既定は取り込む
+  let cn=0,cm=0,cr=0,ca=0;
+  d.upd.forEach((u,i)=>u.fields.forEach(f=>{ if(!picked('u|'+i+'|'+f.f)) return;
+    if(f.f==='no'){ u.n.no=f.to; cn++; } else if(f.f==='name'){ u.n.name=f.to; cm++; } else { u.n.role=f.to; cr++; }
+    u.n._u=Date.now(); }));
+  d.add.forEach((a,i)=>{ if(!picked('a|'+i)) return;
+    const mid=wmMidFor(a.area);
+    mid.children=mid.children||[];
+    mid.children.push({ id:nextId(), kind:'small', name:a.name, no:a.no||'', role:a.role||'',
+      start:null, end:null, status:'normal', note:'', pstage:'未着手', progress:0, children:[], _u:Date.now() });
+    ca++; });
+  const total=cn+cm+cr+ca;
+  save(); render();
+  document.getElementById('wmModal').classList.remove('on');
+  alert(total? (total+'件を取り込みました。\n\n作業ナンバー '+cn+'件／作業名 '+cm+'件／担当 '+cr+'件／新規追加 '+ca+'件\n\n誤りがあれば Ctrl+Z で戻せます。')
+             : '取り込む変更はありませんでした。'); }
+document.getElementById('wmModal').addEventListener('click', e=>{
+  if(e.target.id==='wmModal'||e.target.id==='wmClose'){ document.getElementById('wmModal').classList.remove('on'); return; }
+  if(e.target.closest('#wmCheck')){
+    const v=((document.getElementById('wmPaste')||{}).value)||'';
+    const rows=wmParse(v);
+    if(!rows.length){ _wmDiff=null; renderWmModal(v, '読み取れる行がありませんでした。No.／領域／担当ペア／作業 の4列を含む範囲をコピーしてください。'); return; }
+    _wmDiff=wmDiff(rows); _wmPick={};
+    renderWmModal(v, rows.length+'行を読みました。'); return; }
+  if(e.target.closest('#wmApply')){
+    const d=_wmDiff; if(!d) return;
+    const picked=k=>_wmPick[k]!==false;
+    let u=0,a=0;
+    d.upd.forEach((x,i)=>x.fields.forEach(f=>{ if(picked('u|'+i+'|'+f.f)) u++; }));
+    d.add.forEach((x,i)=>{ if(picked('a|'+i)) a++; });
+    if(!u && !a){ alert('取り込むものが選ばれていません。'); return; }
+    // 最後にもう一度確認する（ボードは全員で共有しているので、黙って書き換えない）
+    if(!confirm('この内容でボードを書き換えます。よろしいですか？\n\n・変更 '+u+'件\n・新規追加 '+a+'件\n\n※ 削除はしません。取り込んだあとでも Ctrl+Z で戻せます。')) return;
+    applyWmDiff(); return; }
+});
+document.getElementById('wmModal').addEventListener('change', e=>{
+  const cb=e.target.closest('[data-wm]'); if(!cb) return;
+  _wmPick[cb.dataset.wm]=cb.checked; });
+
 // ===== 定例シートとの同期（3-wayマージ：どちらの変更も消さない）=====
 // 前回同期した時点(base) / いまのアプリ / いまのシート を比べる。
 // 片側だけ変わった欄はその値を採用、両方変わった欄だけ「衝突」として選んでもらう。
