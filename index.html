@@ -1316,7 +1316,7 @@
 <div class="modal" id="slackModal"><div class="m">
   <div class="mh"><div class="t">💬 Slack投稿の設定</div><div class="s">所定のチャンネルに、進捗の要約を1本投げます。メンション（通知）は使わず名前の文字だけなので、急かさずに「並んでいるのが見える」形にしています。</div></div>
   <div class="mb" id="slackBody"></div>
-  <div class="mf"><button class="ghost" id="slackTest" title="ごく短いテスト文だけを投稿して、ちゃんと届くか確かめます">🧪 テスト投稿</button><button class="ghost" id="slackDmTest" title="いま見えている文面を、自分にだけDMで送って見た目を確かめます（チャンネルには出ません）">🧪 自分にDMで試す</button><button class="ghost" id="slackClose">閉じる</button><button class="big" id="slackPost">💬 このままチャンネルに投稿</button></div>
+  <div class="mf"><button class="ghost" id="slackDmTest" title="いま見えている文面を、自分にだけDMで送って見た目を確かめます（チャンネルには出ません）">🧪 自分にDMで試す</button><button class="ghost" id="slackClose">閉じる</button><button class="big" id="slackPost">💬 このままチャンネルに投稿</button></div>
 </div></div>
 
 <div class="modal" id="summaryModal"><div class="m">
@@ -4716,8 +4716,8 @@ function renderSlackCfg(){
   // 編集は共有ボードに入れない（1回きりの文面なので、他の人の画面に出す意味がない）
   const ta=document.getElementById('slackMsg');
   if(ta) ta.addEventListener('input', ()=>{ _slackDraft=ta.value; });
-  const post=document.getElementById('slackPost'), test=document.getElementById('slackTest');
-  if(post) post.disabled=!ok; if(test) test.disabled=!ok;
+  const post=document.getElementById('slackPost');
+  if(post) post.disabled=!ok;
   const dmb=document.getElementById('slackDmTest'); if(dmb) dmb.disabled=!ok;
 }
 // 開くたびに文面を作り直す。前回の編集を残すと、古い数字のまま投稿してしまう事故が起きる。
@@ -4913,7 +4913,6 @@ document.getElementById('slackModal').addEventListener('click', e=>{
     if(!confirm('Slack'+(state.slack.label?('の '+state.slack.label):'の所定のチャンネル')+'に、この文面を投稿します。よろしいですか？')) return;
     postToSlack(txt, _slackKind).then(ok=>{ if(ok){ _slackDraft=null; renderSlackCfg(); } });   // 送れたら下書きは破棄
     return; }
-  if(e.target.closest('#slackTest')){ postToSlack('🧪 テスト投稿です（AI推進スケジューラ）。これが見えていれば設定はOKです。','test'); return; }
   if(e.target.closest('#slackDmTest')){
     const to=slackDmTarget();
     if(!to){ alert('先に「自分にDMで試す宛先」に @ユーザー名 を入れてください（例 @h.kadoya）。'); const el=document.getElementById('slackDm'); if(el) el.focus(); return; }
