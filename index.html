@@ -778,6 +778,11 @@
   .slkinds button:hover{border-color:var(--teal);}
   .slkinds button.on{background:rgba(47,182,176,.18); border-color:rgba(47,182,176,.55); font-weight:700;}
   /* 作業マスター取り込みの1行（チェック＋作業名＋変更内容） */
+  .wmsteps{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:9px 12px;
+    margin-bottom:12px; font-size:12.5px; line-height:1.8;}
+  .wmsteps a{color:var(--teal); font-weight:700;}
+  .wmadv{margin-top:14px; border-top:1px dashed var(--line); padding-top:10px;}
+  .wmadv summary{cursor:pointer; color:var(--dim); font-size:12px;}
   .wmrow{display:flex; align-items:baseline; gap:8px; padding:5px 8px; border-radius:7px; cursor:pointer; font-size:12.5px;}
   .wmrow:hover{background:var(--panel2);}
   .wmrow .wmt{font-weight:700; flex:none; min-width:170px;}
@@ -3764,13 +3769,21 @@ function wmPreviewHtml(d){
   return h; }
 function renderWmModal(text, err){
   const box=document.getElementById('wmBody'); if(!box) return;
-  let h='<div class="fld"><label>定例シートの受け口（GASのURL）※<b>1人が入れれば全員の画面で使えます</b></label>'+
-        '<input id="wmUrl" placeholder="https://script.google.com/.../exec" value="'+esca(syncUrl())+'"></div>'+
-        '<div class="detailops" style="margin-bottom:10px"><button class="btn" id="wmFetch">シートから読み込む</button></div>'+
-        '<div class="hint" style="margin-bottom:10px">受け口がまだ無いときは、下にコピペでも読めます。</div>'+
+  // 設定なしで回る「開く→コピー→貼る」を主役に。受け口（GAS）は設定した人だけの近道として畳む。
+  let h='<div class="wmsteps">'+
+        '<b>①</b> <a href="'+esca(DRIVE_SHEET)+'#gid=0" target="_blank" rel="noopener">定例シートを開く</a>'+
+        ' → <b>②</b> ③月次ガントで <b>No.／領域／担当ペア／作業</b> を含む範囲をコピー'+
+        ' → <b>③</b> 下に貼って「違うところを見る」</div>'+
         '<div class="fld"><label>シートから貼り付け（No.／領域／担当ペア／作業 の順の列）</label>'+
         '<textarea id="wmPaste" rows="6" placeholder="001&#9;プレゼン資料系&#9;山根（蔵本）&#9;企画考察">'+esc(text||'')+'</textarea></div>'+
-        '<div class="detailops"><button class="btn" id="wmCheck">違うところを見る</button></div>';
+        '<div class="detailops"><button class="btn" id="wmCheck">違うところを見る</button></div>'+
+        '<details class="wmadv"><summary>受け口（GAS）を使う ── 設定した人はコピー不要で読み込めます</summary>'+
+          '<div class="fld"><label>受け口のURL ※<b>1人が入れれば全員の画面で使えます</b></label>'+
+          '<input id="wmUrl" placeholder="https://script.google.com/.../exec" value="'+esca(syncUrl())+'"></div>'+
+          '<div class="detailops"><button class="btn" id="wmFetch">シートから読み込む</button></div>'+
+          '<div class="hint">受け口の作り方は Drive の「AI推進スケジューラ_定例シート受け口（GAS）.gs.txt」に書いてあります。'+
+          '<b>社内メンバー限定でデプロイして構いません</b>（この画面はログイン中のアカウントで読みに行きます）。</div>'+
+        '</details>';
   if(err) h+='<div class="hint" style="color:#c2555f;margin-top:8px">'+esc(err)+'</div>';
   if(_wmDiff) h+=wmPreviewHtml(_wmDiff);
   box.innerHTML=h;
@@ -3811,7 +3824,7 @@ document.getElementById('wmModal').addEventListener('click', e=>{
     setSyncUrl(u);
     if(!u){ renderWmModal(((document.getElementById('wmPaste')||{}).value)||'', 'GASのURLがまだありません。下の貼り付けで読めます。'); return; }
     _wmDiff=null; renderWmModal(((document.getElementById('wmPaste')||{}).value)||'', '読み込み中…');
-    fetch(u+(u.indexOf('?')<0?'?':'&')+'action=gantt').then(r=>r.json()).then(js=>{
+    gasGet(u, 'gantt').then(js=>{
       if(!js || !Array.isArray(js.rows)) throw new Error(js&&js.error?js.error:'rows が返ってきません');
       const rows=js.rows.map(r=>({ no:normNo(r.no), area:String(r.area||'').trim(),
         role:String(r.role||'').trim(), name:String(r.name||'').trim() })).filter(r=>r.name);
@@ -3846,6 +3859,23 @@ document.getElementById('wmModal').addEventListener('change', e=>{
 const SYNC_FIELDS=['todo','detail','note'];        // note = シートの「備考／議事録」列
 const SYNC_URL_KEY='ai_sched_gas_url';
 // 受け口URLは共有ボードが正。端末ローカルは、共有側がまだ空のときの引き継ぎ用に残す。
+// GASの受け口から読む。fetch はログイン制限のある受け口だと弾かれるので、<script>で読む（JSONP）。
+// 15秒で時間切れ。失敗の理由はここでは分からないので、画面には「よくある原因」を添える。
+function gasGet(url, action){
+  return new Promise((resolve, reject)=>{
+    const cb='__gascb'+Date.now()+Math.floor(Math.random()*1000);
+    const el=document.createElement('script');
+    let done=false;
+    const cleanup=()=>{ try{ delete window[cb]; }catch(e){ window[cb]=undefined; }
+      if(el.parentNode) el.parentNode.removeChild(el); };
+    const timer=setTimeout(()=>{ if(done) return; done=true; cleanup();
+      reject(new Error('時間切れです。受け口のURL、デプロイのやり直し、Googleにログインしているかを確かめてください。')); }, 15000);
+    window[cb]=data=>{ if(done) return; done=true; clearTimeout(timer); cleanup(); resolve(data); };
+    el.onerror=()=>{ if(done) return; done=true; clearTimeout(timer); cleanup();
+      reject(new Error('受け口に届きませんでした。URLが違うか、デプロイされていない可能性があります。')); };
+    el.src=url+(url.indexOf('?')<0?'?':'&')+'action='+encodeURIComponent(action)+'&callback='+cb;
+    document.body.appendChild(el);
+  }); }
 function syncUrl(){ ensureBoards();
   const shared=String((state.sheet&&state.sheet.url)||'').trim(); if(shared) return shared;
   try{ return (localStorage.getItem(SYNC_URL_KEY)||'').trim(); }catch(e){ return ''; } }
