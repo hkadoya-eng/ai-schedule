@@ -778,11 +778,34 @@
   .slkinds button:hover{border-color:var(--teal);}
   .slkinds button.on{background:rgba(47,182,176,.18); border-color:rgba(47,182,176,.55); font-weight:700;}
   /* 作業マスター取り込みの1行（チェック＋作業名＋変更内容） */
-  .wmsteps{background:var(--panel2); border:1px solid var(--line); border-radius:8px; padding:9px 12px;
-    margin-bottom:12px; font-size:12.5px; line-height:1.8;}
-  .wmsteps a{color:var(--teal); font-weight:700;}
-  .wmadv{margin-top:14px; border-top:1px dashed var(--line); padding-top:10px;}
-  .wmadv summary{cursor:pointer; color:var(--dim); font-size:12px;}
+  .wmsteps{margin:0 0 14px; padding:12px 14px 12px 32px; background:var(--panel2); border:1px solid var(--line);
+    border-radius:10px; font-size:12.5px; line-height:2;}
+  .wmsteps li{margin:0;}
+  .wmopen{display:inline-block; background:var(--teal); color:#06231f; font-weight:700; text-decoration:none;
+    border-radius:8px; padding:4px 12px;}
+  .wmopen:hover{filter:brightness(1.08);}
+  .wmpaste{margin-bottom:12px;}
+  .wmpaste>summary{cursor:pointer; font-size:12px; color:var(--dim); margin-bottom:6px;}
+  .wmpaste textarea{display:block; width:100%; box-sizing:border-box; font-family:inherit; font-size:12px;
+    line-height:1.6; padding:9px 11px; border:1px solid var(--line); border-radius:8px;
+    background:var(--panel2); color:var(--text); resize:vertical;}
+  .wmpaste textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
+  .wmmsg{font-size:12px; color:var(--dim); margin:0 0 8px;} .wmmsg.err{color:#c2555f;}
+  .wmok{background:rgba(47,182,176,.12); border:1px solid rgba(47,182,176,.45); border-radius:8px;
+    padding:10px 12px; font-size:12.5px;}
+  .wmhd{display:flex; align-items:center; gap:8px; margin:16px 0 6px; font-size:13px; font-weight:700;}
+  .wmhd .ic{font-size:15px;}
+  .wmhd .n{background:var(--panel3); border-radius:999px; padding:1px 9px; font-size:11px; font-weight:400;}
+  .wmhd .sub{color:var(--dim); font-size:11px; font-weight:400;}
+  .wmhd .all{margin-left:auto; display:flex; gap:4px;}
+  .wmhd .lnk{background:none; border:none; color:var(--dim); font-size:11px; cursor:pointer;
+    font-family:inherit; text-decoration:underline; padding:2px 4px;}
+  .wmhd .lnk:hover{color:var(--teal);}
+  .wmonly{margin-top:16px;} .wmonly>summary{cursor:pointer; color:var(--dim); font-size:12px;}
+  .wmurl{display:flex; gap:8px; align-items:center; margin:8px 0;}
+  .wmurl input{flex:1; min-width:0;}
+  .wmadv{margin-top:18px; border-top:1px dashed var(--line); padding-top:10px;}
+  .wmadv>summary{cursor:pointer; color:var(--dim); font-size:12px;}
   .wmrow{display:flex; align-items:baseline; gap:8px; padding:5px 8px; border-radius:7px; cursor:pointer; font-size:12.5px;}
   .wmrow:hover{background:var(--panel2);}
   .wmrow .wmt{font-weight:700; flex:none; min-width:170px;}
@@ -3747,48 +3770,72 @@ function wmDiff(rows){
 function wmRowHtml(key, label, detail, on){
   return '<label class="wmrow"><input type="checkbox" data-wm="'+esca(key)+'"'+(on?' checked':'')+'>'+
     '<span class="wmt">'+label+'</span><span class="wmd">'+detail+'</span></label>'; }
+function wmHead(icon, title, n, sub){
+  return '<div class="wmhd"><span class="ic">'+icon+'</span>'+title+'<span class="n">'+n+'件</span>'+
+    (sub?'<span class="sub">'+sub+'</span>':'')+
+    '<span class="all"><button class="lnk" data-wmall="1">全部えらぶ</button>'+
+    '<button class="lnk" data-wmall="0">全部はずす</button></span></div>'; }
 function wmPreviewHtml(d){
   let h='';
-  if(!d.add.length && !d.upd.length) h+='<div class="hint">違うところはありませんでした。ボードとシートは揃っています。</div>';
+  if(!d.add.length && !d.upd.length){
+    h+='<div class="wmok">✅ 違うところはありませんでした。ボードとシートは揃っています。</div>';
+  }
   if(d.upd.length){
-    h+='<div class="tpsec">シートと違う作業（'+d.upd.length+'件）</div>';
+    h+=wmHead('✏️','シートと違う作業', d.upd.length, 'チェックしたものを、シートの値に直します');
     d.upd.forEach((u,i)=>{ u.fields.forEach(f=>{
       h+=wmRowHtml('u|'+i+'|'+f.f, esc(u.n.name), esc(f.label)+'：'+esc(f.from)+' → <b>'+esc(f.to)+'</b>', true); }); });
   }
   if(d.add.length){
-    h+='<div class="tpsec">シートにあってボードに無い作業（'+d.add.length+'件）</div>';
+    h+=wmHead('➕','シートにあってボードに無い作業', d.add.length, 'チェックしたものを新しく足します');
     d.add.forEach((a,i)=>{ h+=wmRowHtml('a|'+i, esc(a.name),
-      '新しく追加：'+esc(a.area||'領域未設定')+(a.role?'／'+esc(a.role):'')+(a.no?'／No. '+esc(a.no):''), true); });
+      esc(a.area||'領域未設定')+(a.role?'／'+esc(a.role):'')+(a.no?'／No. '+esc(a.no):''), true); });
   }
   if(d.only.length){
-    h+='<div class="tpsec">シートに無い作業（'+d.only.length+'件・<b>消しません</b>）</div>';
-    h+='<div class="hint">貼り付けた範囲に入っていないだけかもしれないので、ここは触りません。'+
-       'シート側で本当に無くなったなら、カルテの「🗑 削除」で消してください。</div>';
-    h+='<div class="hint" style="margin-top:6px">'+d.only.map(n=>esc(n.name)).join('／')+'</div>';
+    h+='<details class="wmonly"><summary>シートに無い作業 '+d.only.length+'件（消しません）</summary>'+
+       '<div class="hint">貼り付けた範囲に入っていないだけかもしれないので、ここは触りません。'+
+       'シート側で本当に無くなったなら、カルテの「🗑 削除」で消してください。</div>'+
+       '<div class="hint" style="margin-top:6px">'+d.only.map(n=>esc(n.name)).join('／')+'</div></details>';
   }
   return h; }
+// 結果だけ描き直す（貼り付け中に全体を作り直すと、入力欄からフォーカスが外れてしまう）
+function wmRenderResult(msg, isErr){
+  const m=document.getElementById('wmMsg'), box=document.getElementById('wmResult');
+  if(m) m.innerHTML = msg ? ('<div class="wmmsg'+(isErr?' err':'')+'">'+esc(msg)+'</div>') : '';
+  if(box) box.innerHTML = _wmDiff ? wmPreviewHtml(_wmDiff) : '';
+  const ap=document.getElementById('wmApply');
+  if(ap) ap.disabled=!(_wmDiff && (_wmDiff.upd.length || _wmDiff.add.length));
+  // 比べ終わったら貼り付け欄は畳む（結果に集中させる）
+  const dt=document.getElementById('wmPasteWrap');
+  if(dt) dt.open = !(_wmDiff && (_wmDiff.upd.length || _wmDiff.add.length)); }
+// 貼られた内容で比べる（貼った瞬間に呼ばれる）
+function wmCompare(){
+  const v=((document.getElementById('wmPaste')||{}).value)||'';
+  if(!v.trim()){ _wmDiff=null; wmRenderResult(''); return; }
+  const rows=wmParse(v);
+  if(!rows.length){ _wmDiff=null;
+    wmRenderResult('読み取れる行がありませんでした。No.／領域／担当ペア／作業 の4列を含む範囲をコピーしてください。', true); return; }
+  _wmDiff=wmDiff(rows); _wmPick={};
+  wmRenderResult(rows.length+'行を読みました。'); }
 function renderWmModal(text, err){
   const box=document.getElementById('wmBody'); if(!box) return;
   // 設定なしで回る「開く→コピー→貼る」を主役に。受け口（GAS）は設定した人だけの近道として畳む。
-  let h='<div class="wmsteps">'+
-        '<b>①</b> <a href="'+esca(DRIVE_SHEET)+'#gid=0" target="_blank" rel="noopener">定例シートを開く</a>'+
-        ' → <b>②</b> ③月次ガントで <b>No.／領域／担当ペア／作業</b> を含む範囲をコピー'+
-        ' → <b>③</b> 下に貼って「違うところを見る」</div>'+
-        '<div class="fld"><label>シートから貼り付け（No.／領域／担当ペア／作業 の順の列）</label>'+
-        '<textarea id="wmPaste" rows="6" placeholder="001&#9;プレゼン資料系&#9;山根（蔵本）&#9;企画考察">'+esc(text||'')+'</textarea></div>'+
-        '<div class="detailops"><button class="btn" id="wmCheck">違うところを見る</button></div>'+
-        '<details class="wmadv"><summary>受け口（GAS）を使う ── 設定した人はコピー不要で読み込めます</summary>'+
-          '<div class="fld"><label>受け口のURL ※<b>1人が入れれば全員の画面で使えます</b></label>'+
-          '<input id="wmUrl" placeholder="https://script.google.com/.../exec" value="'+esca(syncUrl())+'"></div>'+
-          '<div class="detailops"><button class="btn" id="wmFetch">シートから読み込む</button></div>'+
-          '<div class="hint">受け口の作り方は Drive の「AI推進スケジューラ_定例シート受け口（GAS）.gs.txt」に書いてあります。'+
-          '<b>社内メンバー限定でデプロイして構いません</b>（この画面はログイン中のアカウントで読みに行きます）。</div>'+
-        '</details>';
-  if(err) h+='<div class="hint" style="color:#c2555f;margin-top:8px">'+esc(err)+'</div>';
-  if(_wmDiff) h+=wmPreviewHtml(_wmDiff);
-  box.innerHTML=h;
-  const ap=document.getElementById('wmApply');
-  if(ap) ap.disabled=!(_wmDiff && (_wmDiff.upd.length || _wmDiff.add.length)); }
+  box.innerHTML=
+    '<ol class="wmsteps">'+
+      '<li><a class="wmopen" href="'+esca(DRIVE_SHEET)+'" target="_blank" rel="noopener">📊 定例シートを開く</a></li>'+
+      '<li><b>③月次ガント</b>で <b>No.／領域／担当ペア／作業</b> を含む範囲をコピー</li>'+
+      '<li>下の枠に貼る（<b>貼った瞬間に見くらべます</b>）</li>'+
+    '</ol>'+
+    '<details id="wmPasteWrap" class="wmpaste" open><summary>貼り付ける</summary>'+
+      '<textarea id="wmPaste" rows="7" spellcheck="false" placeholder="001&#9;プレゼン資料系&#9;山根（蔵本）&#9;企画考察">'+esc(text||'')+'</textarea>'+
+    '</details>'+
+    '<div id="wmMsg"></div><div id="wmResult"></div>'+
+    '<details class="wmadv"><summary>受け口（GAS）を使う ── 設定した人はコピー不要で読み込めます</summary>'+
+      '<div class="wmurl"><input id="wmUrl" placeholder="https://script.google.com/.../exec" value="'+esca(syncUrl())+'">'+
+      '<button class="btn" id="wmFetch">シートから読み込む</button></div>'+
+      '<div class="hint">1人が入れれば全員の画面で使えます。作り方は Drive の'+
+      '「AI推進スケジューラ_定例シート受け口（GAS）.gs.txt」に書いてあります（社内限定デプロイでOK）。</div>'+
+    '</details>';
+  wmRenderResult(err||'', !!err); }
 function openWmModal(){ closeMore(); ensureBoards(); _wmDiff=null; _wmPick={}; renderWmModal(''); 
   document.getElementById('wmModal').classList.add('on'); }
 // 新しい作業を入れる場所＝領域（中項目）。無ければ作る（大項目は先頭のものにぶら下げる）。
@@ -3832,12 +3879,15 @@ document.getElementById('wmModal').addEventListener('click', e=>{
       renderWmModal('', 'シートから '+rows.length+'行を読みました。');
     }).catch(err=>{ _wmDiff=null; renderWmModal('', '読み込みに失敗しました: '+err.message); });
     return; }
-  if(e.target.closest('#wmCheck')){
-    const v=((document.getElementById('wmPaste')||{}).value)||'';
-    const rows=wmParse(v);
-    if(!rows.length){ _wmDiff=null; renderWmModal(v, '読み取れる行がありませんでした。No.／領域／担当ペア／作業 の4列を含む範囲をコピーしてください。'); return; }
-    _wmDiff=wmDiff(rows); _wmPick={};
-    renderWmModal(v, rows.length+'行を読みました。'); return; }
+  const wa=e.target.closest('[data-wmall]');
+  if(wa){ const on=wa.dataset.wmall==='1';
+    const sec=wa.closest('.wmhd');
+    let el=sec&&sec.nextElementSibling;
+    while(el && el.classList && el.classList.contains('wmrow')){
+      const cb=el.querySelector('[data-wm]'); if(cb){ cb.checked=on; _wmPick[cb.dataset.wm]=on; }
+      el=el.nextElementSibling; }
+    return; }
+  if(e.target.closest('#wmCheck')){ wmCompare(); return; }
   if(e.target.closest('#wmApply')){
     const d=_wmDiff; if(!d) return;
     const picked=k=>_wmPick[k]!==false;
@@ -3849,6 +3899,10 @@ document.getElementById('wmModal').addEventListener('click', e=>{
     if(!confirm('この内容でボードを書き換えます。よろしいですか？\n\n・変更 '+u+'件\n・新規追加 '+a+'件\n\n※ 削除はしません。取り込んだあとでも Ctrl+Z で戻せます。')) return;
     applyWmDiff(); return; }
 });
+let _wmTimer=null;
+document.getElementById('wmModal').addEventListener('input', e=>{
+  if(!e.target || e.target.id!=='wmPaste') return;
+  clearTimeout(_wmTimer); _wmTimer=setTimeout(wmCompare, 150); });
 document.getElementById('wmModal').addEventListener('change', e=>{
   const cb=e.target.closest('[data-wm]'); if(!cb) return;
   _wmPick[cb.dataset.wm]=cb.checked; });
