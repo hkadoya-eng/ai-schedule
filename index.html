@@ -3737,17 +3737,31 @@ let _wmDiff=null, _wmPick={};
 function wmKey(x){ return String(x||'').replace(/[\s　]/g,'').replace(/[・\/／]/g,''); }
 function wmSmalls(){ const out=[]; walkAll(state.tree, n=>{ if(n&&n.kind==='small') out.push(n); }); return out; }
 // 貼り付けはタブ区切り（スプレッドシートからのコピー）。列の並びは No.／領域／担当ペア／作業 を前提にする。
+// 貼り付けはタブ区切り（スプレッドシートからのコピー）。
+// 列の位置は決め打ちにせず、見出し（No./領域/担当ペア/作業）を探して決める。
+// 見出しごとコピーしてもらえば、範囲が多少ズレても、左に余計な列があっても読める。
 function wmParse(text){
+  const lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
+  let idx={ no:0, area:1, role:2, name:3 }, headAt=-1;
+  for(let i=0;i<Math.min(lines.length,40);i++){
+    const c=lines[i].split('\t').map(x=>String(x||'').trim()), f={};
+    c.forEach((h,j)=>{
+      if(h==='No.'||h==='No') f.no=j;
+      else if(h==='領域') f.area=j;
+      else if(h.indexOf('担当')===0) f.role=j;
+      else if(h==='作業') f.name=j; });
+    if(f.no!=null && f.area!=null && f.role!=null && f.name!=null){ idx=f; headAt=i; break; }
+  }
   const rows=[];
-  String(text||'').replace(/\r\n?/g,'\n').split('\n').forEach(line=>{
+  lines.forEach((line,i)=>{
+    if(i<=headAt) return;                                   // 見出しより上（タイトル行）は捨てる
     if(!line.trim()) return;
     const c=line.split('\t').map(x=>String(x||'').trim());
-    if(c.length<4) return;
-    const no=normNo(c[0]), area=c[1], role=c[2], name=c[3];
-    if(!name) return;
-    if(/^No\.?$/i.test(c[0]) || name==='作業') return;          // 見出し行
-    if(/^(月次ガント|v[0-9])/.test(no)) return;                  // タイトル行
-    rows.push({ no, area, role, name });
+    const name=c[idx.name]||'';
+    if(!name || name==='作業') return;
+    const no=normNo(c[idx.no]||'');
+    if(/^(月次ガント|v[0-9])/.test(no)) return;               // タイトル行
+    rows.push({ no, area:c[idx.area]||'', role:c[idx.role]||'', name });
   });
   return rows; }
 function wmDiff(rows){
@@ -3811,7 +3825,11 @@ function wmCompare(){
   if(!v.trim()){ _wmDiff=null; wmRenderResult(''); return; }
   const rows=wmParse(v);
   if(!rows.length){ _wmDiff=null;
-    wmRenderResult('読み取れる行がありませんでした。No.／領域／担当ペア／作業 の4列を含む範囲をコピーしてください。', true); return; }
+    // 何が届いたのかを見せる。タブ区切りで来ていないのか、列がずれているのかを切り分けられる。
+    const first=String(v).replace(/\r\n?/g,'\n').split('\n').find(x=>x.trim())||'';
+    const cells=first.split('\t').length;
+    wmRenderResult('読み取れませんでした。1行目は '+cells+'列で「'+first.slice(0,60)+'」でした。'+
+      '見出し（No.／領域／担当ペア／作業）の行から下を、まとめて選んでコピーしてください。', true); return; }
   _wmDiff=wmDiff(rows); _wmPick={};
   wmRenderResult(rows.length+'行を読みました。'); }
 function renderWmModal(text, err){
