@@ -1673,6 +1673,7 @@ window.__mergeBoards=function(remote, local){
   out.members=__mergeList(remote.members, local.members);    // メンバー名簿(ログイン者)もマージ
   out.milestones=__mergeList(remote.milestones, local.milestones); // マイルストーンもマージ
   out.slack=__mergePlain(remote.slack, local.slack);         // Slack設定は_uが新しい方（下記の注意参照）
+  out.sheet=__mergePlain(remote.sheet, local.sheet);         // 定例シートの受け口URLも同じ（知らない人が空で潰さない）
   return out; };
 // 単体オブジェクトのマージ。out=Object.assign({},local) だけだと、Slack設定を知らない人が
 // 保存した瞬間に他の人が登録したWebhook URLを空で上書きしてしまう。_uで新しい方を残す。
@@ -2583,6 +2584,8 @@ function scrollToTodayOnBoot(){ requestAnimationFrame(()=>requestAnimationFrame(
 // ===== 議題ボード（定例ごとにExcel風テーブルで記入・全員共有・マージ対応）=====
 function ensureBoards(){
   if(!state.slack || typeof state.slack!=='object') state.slack={ url:'', label:'', last:null, _u:0 };
+  // 定例シートの受け口（GASのURL）は**共有ボード**に置く。端末ローカルにすると、登録した人以外は使えない。
+  if(!state.sheet || typeof state.sheet!=='object') state.sheet={ url:'', _u:0 };
   if(!Array.isArray(state.meetings)) state.meetings=[];
   if(!Array.isArray(state.topics)) state.topics=[];
   if(!Array.isArray(state.members)) state.members=[];
@@ -3761,7 +3764,7 @@ function wmPreviewHtml(d){
   return h; }
 function renderWmModal(text, err){
   const box=document.getElementById('wmBody'); if(!box) return;
-  let h='<div class="fld"><label>定例シートの受け口（GASのURL）※一度入れれば次から不要</label>'+
+  let h='<div class="fld"><label>定例シートの受け口（GASのURL）※<b>1人が入れれば全員の画面で使えます</b></label>'+
         '<input id="wmUrl" placeholder="https://script.google.com/.../exec" value="'+esca(syncUrl())+'"></div>'+
         '<div class="detailops" style="margin-bottom:10px"><button class="btn" id="wmFetch">シートから読み込む</button></div>'+
         '<div class="hint" style="margin-bottom:10px">受け口がまだ無いときは、下にコピペでも読めます。</div>'+
@@ -3805,7 +3808,7 @@ document.getElementById('wmModal').addEventListener('click', e=>{
   if(e.target.id==='wmModal'||e.target.id==='wmClose'){ document.getElementById('wmModal').classList.remove('on'); return; }
   if(e.target.closest('#wmFetch')){
     const u=((document.getElementById('wmUrl')||{}).value||'').trim();
-    try{ localStorage.setItem(SYNC_URL_KEY, u); }catch(err){}
+    setSyncUrl(u);
     if(!u){ renderWmModal(((document.getElementById('wmPaste')||{}).value)||'', 'GASのURLがまだありません。下の貼り付けで読めます。'); return; }
     _wmDiff=null; renderWmModal(((document.getElementById('wmPaste')||{}).value)||'', '読み込み中…');
     fetch(u+(u.indexOf('?')<0?'?':'&')+'action=gantt').then(r=>r.json()).then(js=>{
@@ -3842,7 +3845,15 @@ document.getElementById('wmModal').addEventListener('change', e=>{
 // 片側だけ変わった欄はその値を採用、両方変わった欄だけ「衝突」として選んでもらう。
 const SYNC_FIELDS=['todo','detail','note'];        // note = シートの「備考／議事録」列
 const SYNC_URL_KEY='ai_sched_gas_url';
-function syncUrl(){ try{ return (localStorage.getItem(SYNC_URL_KEY)||'').trim(); }catch(e){ return ''; } }
+// 受け口URLは共有ボードが正。端末ローカルは、共有側がまだ空のときの引き継ぎ用に残す。
+function syncUrl(){ ensureBoards();
+  const shared=String((state.sheet&&state.sheet.url)||'').trim(); if(shared) return shared;
+  try{ return (localStorage.getItem(SYNC_URL_KEY)||'').trim(); }catch(e){ return ''; } }
+// 登録したら全員のボードに入れる（1人がやれば済むようにする）
+function setSyncUrl(u){ ensureBoards();
+  const v=String(u||'').trim();
+  try{ localStorage.setItem(SYNC_URL_KEY, v); }catch(e){}
+  if(String(state.sheet.url||'')!==v){ state.sheet.url=v; state.sheet._u=Date.now(); save(); } }
 // アプリの「当日メモ＋決まったこと」を、シートの1セルに収める形にする（シートに列を足さない方針）
 function toSheetNote(t){
   const parts=[];
@@ -3995,7 +4006,7 @@ document.getElementById('syncModal').addEventListener('click', async e=>{
     return; }
   if(e.target.closest('#syncFetch')){
     const u=((document.getElementById('syncUrl')||{}).value||'').trim();
-    try{ localStorage.setItem(SYNC_URL_KEY, u); }catch(err){}
+    setSyncUrl(u);
     if(!u){ renderSyncModal(null, 'GASのURLがまだ設定されていません。下の貼り付けで試せます。'); return; }
     renderSyncModal(null, '読み込み中…');
     try{ const res=await fetch(u+(u.indexOf('?')<0?'?':'&')+'action=list');
