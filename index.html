@@ -3761,7 +3761,11 @@ function wmPreviewHtml(d){
   return h; }
 function renderWmModal(text, err){
   const box=document.getElementById('wmBody'); if(!box) return;
-  let h='<div class="fld"><label>シートから貼り付け（No.／領域／担当ペア／作業 の順の列）</label>'+
+  let h='<div class="fld"><label>定例シートの受け口（GASのURL）※一度入れれば次から不要</label>'+
+        '<input id="wmUrl" placeholder="https://script.google.com/.../exec" value="'+esca(syncUrl())+'"></div>'+
+        '<div class="detailops" style="margin-bottom:10px"><button class="btn" id="wmFetch">シートから読み込む</button></div>'+
+        '<div class="hint" style="margin-bottom:10px">受け口がまだ無いときは、下にコピペでも読めます。</div>'+
+        '<div class="fld"><label>シートから貼り付け（No.／領域／担当ペア／作業 の順の列）</label>'+
         '<textarea id="wmPaste" rows="6" placeholder="001&#9;プレゼン資料系&#9;山根（蔵本）&#9;企画考察">'+esc(text||'')+'</textarea></div>'+
         '<div class="detailops"><button class="btn" id="wmCheck">違うところを見る</button></div>';
   if(err) h+='<div class="hint" style="color:#c2555f;margin-top:8px">'+esc(err)+'</div>';
@@ -3799,6 +3803,19 @@ function applyWmDiff(){
              : '取り込む変更はありませんでした。'); }
 document.getElementById('wmModal').addEventListener('click', e=>{
   if(e.target.id==='wmModal'||e.target.id==='wmClose'){ document.getElementById('wmModal').classList.remove('on'); return; }
+  if(e.target.closest('#wmFetch')){
+    const u=((document.getElementById('wmUrl')||{}).value||'').trim();
+    try{ localStorage.setItem(SYNC_URL_KEY, u); }catch(err){}
+    if(!u){ renderWmModal(((document.getElementById('wmPaste')||{}).value)||'', 'GASのURLがまだありません。下の貼り付けで読めます。'); return; }
+    _wmDiff=null; renderWmModal(((document.getElementById('wmPaste')||{}).value)||'', '読み込み中…');
+    fetch(u+(u.indexOf('?')<0?'?':'&')+'action=gantt').then(r=>r.json()).then(js=>{
+      if(!js || !Array.isArray(js.rows)) throw new Error(js&&js.error?js.error:'rows が返ってきません');
+      const rows=js.rows.map(r=>({ no:normNo(r.no), area:String(r.area||'').trim(),
+        role:String(r.role||'').trim(), name:String(r.name||'').trim() })).filter(r=>r.name);
+      _wmDiff=wmDiff(rows); _wmPick={};
+      renderWmModal('', 'シートから '+rows.length+'行を読みました。');
+    }).catch(err=>{ _wmDiff=null; renderWmModal('', '読み込みに失敗しました: '+err.message); });
+    return; }
   if(e.target.closest('#wmCheck')){
     const v=((document.getElementById('wmPaste')||{}).value)||'';
     const rows=wmParse(v);
