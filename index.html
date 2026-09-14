@@ -917,6 +917,28 @@
   .tpnote textarea{width:100%; min-height:74px; resize:vertical; background:var(--panel3); color:var(--text);
     border:1px solid var(--line); border-radius:8px; padding:9px 10px; font-family:inherit; font-size:13.5px; line-height:1.7;}
   .tpnote textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
+  /* この回の議事録（まとめ書き／文字起こしの貼り付け先）*/
+  .mnbox{background:var(--panel2); border:1px solid var(--line); border-radius:10px; margin:0 0 14px;}
+  .mnbox.on{border-color:rgba(47,182,176,.42);}
+  .mnhd{display:flex; align-items:center; gap:7px; padding:8px 10px; cursor:pointer;}
+  .mnhd .cx{width:9px; font-size:10px; color:var(--dim);}
+  .mnhd .ttl{flex:none; font-size:11.5px; font-weight:700; color:var(--muted);}
+  .mnhd .sm{flex:1 1 auto; min-width:0; font-size:10.5px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .mnhd .cnt{flex:none; margin-left:auto; font-size:10.5px; color:var(--dim); white-space:nowrap;}
+  .mnhd:hover .ttl{color:var(--text);}
+  .mnhd .mini{flex:none; white-space:nowrap;}
+  .mnbody{padding:0 10px 10px;}
+  .mnbody textarea{width:100%; min-height:160px; resize:vertical; background:var(--panel3); color:var(--text);
+    border:1px solid var(--line); border-radius:8px; padding:10px 11px; font-family:inherit; font-size:13.5px; line-height:1.8;}
+  .mnbody textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
+  .mnbody.big textarea{height:70vh !important;}
+  .mnhint{font-size:10.5px; color:var(--dim); line-height:1.7; margin:6px 2px 0;}
+  .mnprev{position:relative; margin:0 10px 10px; padding:8px 10px; background:var(--panel3); border:1px solid var(--line);
+    border-radius:8px; font-size:12.5px; line-height:1.7; white-space:pre-wrap; max-height:78px; overflow:hidden; cursor:pointer;}
+  .mnprev:hover{border-color:var(--teal);}
+  .mnprev::after{content:''; position:absolute; left:0; right:0; bottom:0; height:26px; pointer-events:none;
+    background:linear-gradient(to bottom, rgba(0,0,0,0), var(--panel3));}
+  .mtrow .mttag.min{background:rgba(47,182,176,.14); color:var(--teal);}
   /* ─── 色の意味 ───────────────────────────────
      ティール = 会議で書くもの（議題・当日メモ）
      青       = カルテ（ガントの作業）＝別の世界のもの
@@ -2668,6 +2690,7 @@ function renderTopics(){
   // 「きょうは◯◯を流す日」は一覧でも回を開いていても出す（気づける場所が1つだと見落とす）
   try{ const pb=slackPlanBanner(); if(pb) box.insertAdjacentHTML('afterbegin', pb); }catch(err){}
   try{ tpGrowAll(); }catch(err){}                  // 記入欄の高さを中身に合わせる
+  try{ mnGrowAll(); }catch(err){}                  // 議事録欄も中身に合わせる
   updateTopicBtn();
 }
 function mtWhen(m){ return `${esc(m.date||'日付未設定')}${m.start?' '+esc(m.start)+(m.end?'〜'+esc(m.end):''):''}${m.room?'　@'+esc(m.room):''}`; }
@@ -2752,6 +2775,8 @@ function renderMeetingList(box){
       return `<div class="mtrow${past?' past':''}${isNext?' next':''}" data-open-mt="${esca(m.id)}">`+
         `<div class="l1"><span class="mtt">${esc(m.title||'(無題の定例)')}</span>`+
           (past?`<span class="mttag done">済</span>`:'')+(isNext?`<span class="mttag now">次回</span>`:'')+
+          // 議事録が書かれている回はひと目で分かるようにする（あとで読みに来る人のため）
+          (String(m.minutes||'').trim()?`<span class="mttag min" title="この回の議事録が書かれています">📝</span>`:'')+
           ((u,own)=>`<button class="mtgcal mtdrv${own?'':' off'}" data-drive="${esca(u)}"`+
             ` title="${own?'この回の資料フォルダをDriveで開く':'この回のフォルダは未登録です（打ち合わせ資料フォルダを開きます）'}">📁</button>`
           )(mtDriveOwn(m)||DRIVE_ROOT, !!mtDriveOwn(m))+
@@ -3335,6 +3360,7 @@ function renderMeetingTable(box){
        (meAuthorIsRaw()?`<br><b>表示名がメールのIDのままです。</b>上の「氏名」欄に名前を入れると、以降の書き込みに反映されます。`:'')+
      `</div>`;
   h+=note;   // 「ねらい」は入口の下（1回書けば済むものを先頭に置かない）
+  h+=minutesBox(m);   // 📝 この回の議事録（まとめ書き）。会議中に書く主役なので議題より上に置く
   // 済んだ議題（✓）はまとめて下に畳む。議事録として残すので消さない＝「過去ログ」扱い。
   const carOpen=carried.filter(t=>!t.done), ownOpen=own.filter(t=>!t.done);
   const doneRows=carried.filter(t=>t.done).concat(own.filter(t=>t.done));
@@ -3365,6 +3391,38 @@ function renderMeetingTable(box){
   if(_flashTid){ const el=box.querySelector('.tpcard[data-tid="'+_flashTid+'"]');
     if(el){ el.classList.add('flash'); el.scrollIntoView({block:'nearest'}); }
     _flashTid=null; }
+}
+// ── この回の議事録（まとめ書き）─────────────────────────────────
+// お題ごとの「当日メモ」だけだと、話が行ったり来たりする会議では書ききれない（ユーザーの実感・2026-09-14）。
+// そこで回ごとに自由記述を1枚置く。会議中はここにまとめ書き、次回からは文字起こしを丸ごと貼る。
+// ※お題ごとの当日メモは残す（併用できる）。ここに書いたものをSlackや議題へどう配るかは未定＝別途相談する。
+let _minOpen=_foldGet('ai_sched_mtminopen', true);    // 議事録欄を開いているか（自分の画面だけ・共有しない）
+let _minBig =_foldGet('ai_sched_mtminbig', false);    // 縦に大きく広げているか（長い文字起こしを読むとき）
+const MN_PH='会議中はここにまとめて書いてください（順番も体裁も気にしなくて大丈夫です）。\n\n次回からは文字起こしをそのまま貼り付けてもOK。長さの制限はありません。';
+// 文字数は改行を除いて数える（どれくらい貼ったかがひと目で分かればいい）
+function mnStat(s){ const t=String(s==null?'':s);
+  return t.trim() ? t.replace(/\n/g,'').length.toLocaleString()+'字 ／ '+t.split('\n').length+'行' : '未記入'; }
+// 中身のぶんだけ伸ばす。ただし文字起こしを貼ると青天井になるので上限を付ける（続きはスクロール／⤢で広げる）
+function mnGrow(ta){ if(!ta) return; if(_minBig){ ta.style.height=''; return; }
+  ta.style.height='auto'; ta.style.height=Math.min(460, Math.max(160, ta.scrollHeight+2))+'px'; }
+function mnGrowAll(){ document.querySelectorAll('#topicBody [data-mtmin]').forEach(mnGrow); }
+function minutesBox(m){
+  const v=String((m&&m.minutes)||''), has=!!v.trim();
+  let h=`<div class="mnbox${_minOpen?' on':''}">`+
+    `<div class="mnhd" id="mnToggle" title="${_minOpen?'畳みます':'開きます'}">`+
+      `<span class="cx">${_minOpen?'▾':'▸'}</span>`+
+      `<span class="ttl">📝 この回の議事録</span>`+
+      `<span class="sm">まとめ書き／文字起こしの貼り付け先</span>`+
+      `<span class="cnt">${esc(mnStat(v))}</span>`+
+      (has?`<button class="mini" id="mnCopy" title="議事録の全文をコピーします">📋</button>`:'')+
+      (_minOpen?`<button class="mini" id="mnBig" title="${_minBig?'元の高さに戻します':'縦に大きく広げます（長い文字起こしを読むとき）'}">${_minBig?'⤡':'⤢'}</button>`:'')+
+    `</div>`;
+  if(_minOpen) h+=`<div class="mnbody${_minBig?' big':''}">`+
+      `<textarea data-mtmin placeholder="${esca(MN_PH)}">${esc(v)}</textarea>`+
+      `<div class="mnhint">書いたそばから全員に共有されます（保存ボタンはありません）。`+
+        `お題ごとの「当日メモ」もこれまでどおり使えます。</div></div>`;
+  else if(has) h+=`<div class="mnprev" id="mnOpen" title="クリックで開きます">${esc(v)}</div>`;
+  return h+`</div>`;
 }
 // 概要欄は中身のぶんだけ伸ばす（会議中にスクロールさせない）
 function autoGrowNote(){ const ta=document.querySelector('#topicBody [data-mtnote]'); if(!ta) return;
@@ -3644,6 +3702,17 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#tpAddRow')){ addRow(); return; }
   if(e.target.closest('#tpQuickAdd')){ addTopicQuick(); return; }
   if(e.target.closest('#mtEditToggle')){ _mtEdit=!_mtEdit; renderTopics(); return; }
+  if(e.target.closest('#mnCopy')){ e.stopPropagation(); const m=state.meetings.find(x=>x.id===_openMeeting);
+    if(m){ try{ navigator.clipboard.writeText(String(m.minutes||'')); tpToast('この回の議事録をコピーしました'); }
+           catch(err){ alert('コピーできませんでした'); } } return; }
+  if(e.target.closest('#mnBig')){ e.stopPropagation(); _minBig=!_minBig;
+    try{ localStorage.setItem('ai_sched_mtminbig', _minBig?'1':'0'); }catch(err){} renderTopics(); return; }
+  const mno=e.target.closest('#mnOpen'), mnt=e.target.closest('#mnToggle');
+  if(mno||mnt){ _minOpen = mno ? true : !_minOpen;
+    try{ localStorage.setItem('ai_sched_mtminopen', _minOpen?'1':'0'); }catch(err){}
+    renderTopics();
+    if(_minOpen){ const ta=document.querySelector('#topicBody [data-mtmin]'); if(ta){ ta.focus(); ta.scrollIntoView({block:'nearest'}); } }
+    return; }
   if(e.target.closest('#noteDone')){ _noteEdit=false; renderTopics(); return; }
   if(e.target.closest('#noteEditBtn')){ _noteEdit=true; renderTopics();
     const ta=document.querySelector('#topicBody [data-mtnote]'); if(ta){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } return; }
@@ -3712,6 +3781,17 @@ document.getElementById('topicBody').addEventListener('input', e=>{
   m.note=ta.value; m._u=Date.now(); autoGrowNote();
   clearTimeout(_noteTimer); _noteTimer=setTimeout(persist, 600);
 });
+// 議事録：入力中は再描画しない（カーソルが飛ぶ）。文字数の表示だけ直接書き換える。
+// 文字起こしを貼ると一度に数万字動くので、共有までの間は少し長め（800ms）にしてある。
+let _minTimer=null;
+document.getElementById('topicBody').addEventListener('input', e=>{
+  const ta=e.target.closest('[data-mtmin]'); if(!ta) return;
+  const m=state.meetings.find(x=>x&&x.id===_openMeeting); if(!m) return;
+  if((m.minutes||'')===ta.value) return;
+  m.minutes=ta.value; m._u=Date.now(); mnGrow(ta);
+  const c=document.querySelector('#topicBody .mnhd .cnt'); if(c) c.textContent=mnStat(ta.value);
+  clearTimeout(_minTimer); _minTimer=setTimeout(persist, 800);
+});
 document.getElementById('topicBody').addEventListener('blur', e=>{
   const ed=e.target.closest('[data-edit]'); if(ed){
     if(_tpRendering || !ed.isConnected) return;       // 再描画で消える要素のblurは無視（空で上書きしてしまう）
@@ -3721,6 +3801,7 @@ document.getElementById('topicBody').addEventListener('blur', e=>{
     if(ed.dataset.field==='links'){ const c=ed.parentElement.querySelector('.tplinks'); if(c) c.innerHTML=tpLinkAnchors(_v); }
     return; }
   if(e.target.closest('[data-mtnote]')){ clearTimeout(_noteTimer); save(); }
+  if(e.target.closest('[data-mtmin]')){ clearTimeout(_minTimer); save(); }
 }, true);
 document.getElementById('topicBody').addEventListener('input', e=>{
   if(e.target && e.target.tagName==='TEXTAREA' && e.target.classList.contains('cell')) tpGrow(e.target);
