@@ -412,6 +412,20 @@
   .psbar i{display:block; height:100%; background:var(--teal);}
   .pssub{font-size:12px; line-height:1.6; color:var(--text); margin-top:3px;}
   .pssub em{color:var(--muted); font-style:normal;}
+  .pssub .sm{font-size:10.5px; color:var(--dim); font-weight:400; margin-left:6px;}
+  /* 人ブロックの見出しは押せる（会議を人単位で回すときに1人ずつ開く）*/
+  .psh{cursor:pointer; border-radius:8px; padding:2px 4px; margin:0 -4px;}
+  .psh:hover{background:var(--panel2);}
+  .psh .cx{width:11px; font-size:12px; line-height:1; color:var(--muted);}
+  .psbtns{display:flex; gap:6px; margin:-6px 0 10px;}
+  .psbtns button{background:var(--panel2); border:1px solid var(--line); color:var(--muted); border-radius:8px;
+    padding:4px 10px; font-size:11px; cursor:pointer; font-family:inherit;}
+  .psbtns button:hover{border-color:var(--teal); color:var(--text);}
+  /* 展開したときの1行＝押すとカルテが開く（その場で進捗を更新できるのが人単位進行の肝）*/
+  .psitem.go{cursor:pointer; border-radius:6px; padding:3px 6px 3px 16px; margin:0 -6px;}
+  .psitem.go:hover{background:var(--panel2);}
+  .psitem.go.done .n{color:var(--dim); text-decoration:line-through;}
+  .psitem.go em.warn{color:var(--bad,#e05b5b);}
   body.theme-light .pstag.ng{background:#eef1f5; color:#6b7787;}
   body.theme-light .pstag.wn{background:#fbf0d8; color:#9a6d05;}
   /* 週次サマリー */
@@ -4594,6 +4608,7 @@ const SL_KINDS=[
   {k:'agenda', label:'📋 議題つき',     hint:'次回の議題を一覧で知らせます。ねらい・メモも少し添えます。'},
   {k:'eve',    label:'⏰ 前日リマインド', hint:'あすの定例＋議題＋「進捗を更新してから来てください」。'},
   {k:'full',   label:'📝 議事録FB',     hint:'定例のあとに流すぶん。議事録（決まったこと・当日メモ）＋全体の数字・動き・要対応。'},
+  {k:'person', label:'👤 人別サマリー', hint:'担当ごとの抱え・要対応・今週。お題を集める代わりに「自分のぶんを見てきてください」と出すとき。'},
 ];
 let _slackKind='full';
 // 開いた場面で既定を変える（前日／当日ならリマインド）。フックからは 'call' を明示で渡す。
@@ -4710,6 +4725,7 @@ function slackReports(sinceYmd){
   });
   return out.sort((a,b)=>b.date.localeCompare(a.date)); }
 function slackText(kind){ kind=kind||_slackKind;
+  if(kind==='person') return slackPerson();
   if(kind==='call')   return slackCall();
   if(kind==='agenda') return slackAgenda();
   if(kind==='eve')    return slackEve();
@@ -4814,6 +4830,46 @@ function slackEve(){
   return L.join('\n'); }
 
 // ── 📝 議事録FB ─────────────────────────────────────────
+// ── 👤 人別サマリー ───────────────────────────────────────
+// お題が集まらないので、議題ではなく**担当ごとの持ち物**を並べて「自分のぶんを見てきて」と出す用。
+// 並びは画面の「👤 人ベース」と同じ（要対応が多い人が上）＝定例をこの順で回せる。
+// ⚠ state.slack.last は更新しない（差分の基準は 📝議事録FB だけ）＝postToSlack 側で kind を見て分けている。
+const SL_PS_MAX=4;      // 1人あたり何件まで並べるか（全部出すとチャンネルが埋まる）
+function slackPerson(){
+  ensureBoards();
+  const rows=personRows(), d=summaryData(), mm=summaryMeetings(), t=new Date(), L=[];
+  L.push('👤 *AI推進 担当別の進捗　'+(t.getMonth()+1)+'/'+t.getDate()+'*');
+  L.push('全体 '+d.pct+'%　｜　完了 '+d.done+'/'+d.total+'　｜　遅延 '+d.late.length+'件');
+  if(mm.next) L.push('次回の定例　'+mtWhenLine(mm.next));
+  L.push(slackLinks(mm));
+  // 要対応も今週の予定も無い人は、最後に1行でまとめる（名前は必ず出す＝漏れているのか無いのかが分かる）。
+  const hot=rows.filter(r=>r.act.length||r.weekOnly.length);
+  const calm=rows.filter(r=>!r.act.length&&!r.weekOnly.length);
+  hot.forEach(r=>{
+    L.push('');
+    L.push(SL_HR);
+    L.push('*'+r.name+'*　'+r.total+'件 ／ 進捗 '+r.pct+'%（完了 '+r.done+'・進行中 '+r.wip+'・未着手 '+r.todo+(r.hold?'・保留 '+r.hold:'')+'）');
+    if(r.act.length){
+      L.push('　⚠ 要対応 '+r.act.length+'件');
+      r.act.slice(0,SL_PS_MAX).forEach(v=>L.push('　・'+coName(v.x)+'（'+psActLabel(v)+'・'+getProgress(v.x.n)+'%）'));
+      if(r.act.length>SL_PS_MAX) L.push('　・ほか '+(r.act.length-SL_PS_MAX)+'件（ボードで見られます）');
+    }
+    if(r.weekOnly.length){
+      L.push('　📅 今週 '+r.weekOnly.length+'件：'+r.weekOnly.slice(0,SL_PS_MAX).map(x=>coName(x)).join(' ／ ')
+        +(r.weekOnly.length>SL_PS_MAX?' ほか'+(r.weekOnly.length-SL_PS_MAX)+'件':''));
+    }
+  });
+  if(calm.length){
+    L.push('');
+    L.push(SL_HR);
+    L.push('_要対応なし・今週の予定もなし：'+calm.map(r=>r.name).join('・')+'_');
+  }
+  L.push('');
+  L.push(SL_HR);
+  L.push('_定例はこの並びのまま、上から担当ごとに確認します。_');
+  L.push('_来る前に自分のぶんだけ更新しておいてください（30秒：ボードを開く → 自分の行の「進捗」バッジ → % を選ぶだけ）_');
+  return L.join('\n');
+}
 function slackFull(){
   ensureBoards();
   const co=callOutData(), d=co.d, st=co.st, mm=summaryMeetings(), t=new Date();
@@ -5083,6 +5139,17 @@ function openSlackCfg(kind){ closeMore(); _slackDraft=null;
   _slackKind = kind || slackDefaultKind();
   renderSlackCfg(); document.getElementById('slackModal').classList.add('on'); }
 // ===== 人ベースのサマリー =====
+// 開いている人（会議を人単位で回すときに1人ずつ開く）。画面の状態なので保存しない。
+let _psOpen=new Set();
+// 展開したときの並び：期限超過 → 遅れ → 停滞 → 進行中 → 未着手 → 保留 → 完了。
+// 「話す順」がそのまま上から並ぶようにする（会議の進行そのものになるため）。
+function psOrd(x, stale){ const ss=schedStatus(x.n);
+  if(ss==='overdue') return 0;
+  if(ss==='behind')  return 1;
+  if(stale) return 2;
+  const st=getStage(x.n);
+  if(st==='完了') return 6; if(st==='保留') return 5;
+  if(st==='未着手') return 4; return 3; }
 // 作業ベースだと「誰がどれだけ抱えているか／手が空いているか」が読めない。
 // 呼びかけにも人員配分にも使うので、要対応が多い人＝呼びかける順に並べる。
 function personRows(){
@@ -5135,24 +5202,46 @@ function renderSummaryPerson(){
    + `<div class="${withAct?'bad':''}"><b>${withAct}</b><span>要対応がある人</span></div>`
    + `<div><b>${free}</b><span>手が空いている人</span></div>`
    + `<div><b>${d.pct}%</b><span>全体進捗</span></div></div>`;
+  // 会議を人単位で回すための開閉。1人ずつ開いて担当作業を上から見ていく想定。
+  h+=`<div class="psbtns"><button id="psAllOpen">▾ 全員ひらく</button><button id="psAllClose">▸ 全部たたむ</button>`
+   + `<span class="pssub sm" style="margin-left:auto;align-self:center">名前を押すとその人の担当作業が全部出ます（作業を押すとカルテが開きます）</span></div>`;
   h+= rows.length? rows.map(r=>{
     const tag = r.name==='（担当未定）' ? '<span class="pstag wn">担当が決まっていません</span>'
              : r.ambiguous ? '<span class="pstag wn">同名候補が複数</span>'
              : !r.member ? '<span class="pstag ng">アプリ未ログイン</span>'
              : '';
-    let b=`<div class="psrow"><div class="psh"><b>${esc(r.name)}</b>${tag}`
+    const open=_psOpen.has(r.name);
+    let b=`<div class="psrow"><div class="psh" data-psopen="${esca(r.name)}" title="${open?'たたみます':'この人の担当作業をすべて出します'}">`
+      +`<span class="cx">${open?'▾':'▸'}</span><b>${esc(r.name)}</b>${tag}`
       +`<span class="psmeta">${r.total}件 ／ 進捗 ${r.pct}% ／ 完了 ${r.done}・進行中 ${r.wip}・未着手 ${r.todo}`
       +(r.hold?`・保留 ${r.hold}`:'')+`</span></div>`
       +`<div class="psbar"><i style="width:${r.pct}%"></i></div>`;
-    // 1段落に「／」で繋げると折り返して塊になり、何件あるか目で数えられない。1件1行にする。
-    if(r.act.length) b+=`<div class="pssub"><b>⚠ 要対応 ${r.act.length}件</b></div>`
-      + r.act.slice(0,CO_MAX).map(v=>`<div class="psitem"><span class="n">${esc(coName(v.x))}</span>`
-        + `<em>${esc(psActLabel(v))}・${getProgress(v.x.n)}%</em></div>`).join('')
-      + (r.act.length>CO_MAX?`<div class="psitem more">ほか ${r.act.length-CO_MAX}件</div>`:'');
-    if(r.weekOnly.length) b+=`<div class="pssub">📅 今週 ${r.weekOnly.length}件</div>`
-      + r.weekOnly.slice(0,CO_MAX).map(x=>`<div class="psitem"><span class="n">${esc(coName(x))}</span></div>`).join('')
-      + (r.weekOnly.length>CO_MAX?`<div class="psitem more">ほか ${r.weekOnly.length-CO_MAX}件</div>`:'');
-    if(!r.act.length && !r.week.length) b+=`<div class="pssub"><em>要対応なし・今週の予定もありません</em></div>`;
+    if(open){
+      // 開いたときは**担当作業を全部**出す（要対応・今週の小見出しは出さない＝同じ作業が二度並ぶため）。
+      // 並びが「話す順」になっているので、上から順に当たれば1人ぶんの進行になる。
+      const stMap=new Map(); r.act.forEach(v=>stMap.set(v.x.n.id, v));
+      const wk=new Set(r.week.map(x=>x.n.id));
+      b+=`<div class="pssub"><b>担当作業 ${r.total}件</b>`
+       + (r.act.length?`<span class="sm">うち要対応 ${r.act.length}件</span>`:`<span class="sm">要対応なし</span>`)+`</div>`
+       + r.items.slice().sort((x,y)=>psOrd(x,stMap.has(x.n.id))-psOrd(y,stMap.has(y.n.id))
+            || String(x.n.no||'').localeCompare(String(y.n.no||'')))
+          .map(x=>{ const st=getStage(x.n), v=stMap.get(x.n.id), ss=schedStatus(x.n);
+            const note=[ v?psActLabel(v):'', (!v&&wk.has(x.n.id)&&st!=='完了')?'今週':'' ].filter(Boolean).join('・');
+            return `<div class="psitem go${st==='完了'?' done':''}" data-psgo="${esca(x.n.id)}" title="押すとカルテが開きます">`
+              +`<span class="n">${lateMark(ss)}${esc(coName(x))}</span>`
+              +`<em${note&&v?' class="warn"':''}>${note?esc(note)+'・':''}${esc(st)} ${getProgress(x.n)}%`
+              +`${x.n.start&&x.n.end?' ／ '+mdNum(parse(x.n.start))+'〜'+mdNum(parse(x.n.end)):''}</em></div>`; }).join('');
+    } else {
+      // 1段落に「／」で繋げると折り返して塊になり、何件あるか目で数えられない。1件1行にする。
+      if(r.act.length) b+=`<div class="pssub"><b>⚠ 要対応 ${r.act.length}件</b></div>`
+        + r.act.slice(0,CO_MAX).map(v=>`<div class="psitem"><span class="n">${esc(coName(v.x))}</span>`
+          + `<em>${esc(psActLabel(v))}・${getProgress(v.x.n)}%</em></div>`).join('')
+        + (r.act.length>CO_MAX?`<div class="psitem more">ほか ${r.act.length-CO_MAX}件</div>`:'');
+      if(r.weekOnly.length) b+=`<div class="pssub">📅 今週 ${r.weekOnly.length}件</div>`
+        + r.weekOnly.slice(0,CO_MAX).map(x=>`<div class="psitem"><span class="n">${esc(coName(x))}</span></div>`).join('')
+        + (r.weekOnly.length>CO_MAX?`<div class="psitem more">ほか ${r.weekOnly.length-CO_MAX}件</div>`:'');
+      if(!r.act.length && !r.week.length) b+=`<div class="pssub"><em>要対応なし・今週の予定もありません</em></div>`;
+    }
     return b+`</div>`; }).join('')
    : `<div class="tpempty">担当欄に名前がある人が見つかりません。</div>`;
   box.innerHTML=h;
@@ -5279,12 +5368,21 @@ document.getElementById('slackModal').addEventListener('click', e=>{
 });
 document.getElementById('summaryModal').addEventListener('click', e=>{
   if(e.target.id==='summaryModal'||e.target.id==='summaryClose'){ document.getElementById('summaryModal').classList.remove('on'); return; }
+  // 見ている画面と同じものを投げる（人ベースを見ながら押したのに作業ベースが飛ぶと驚く）
   if(e.target.closest('#sumSlack')){ ensureBoards();
+    const sk=(_sumMode==='person')?'person':'full';
     if(/^https:\/\/hooks\.slack\.com\//.test(String(state.slack.url||'').trim())){
-      if(confirm('Slack'+(state.slack.label?('の '+state.slack.label):'の所定のチャンネル')+'に、いまの進捗要約を投稿します。よろしいですか？')) postToSlack(slackText('full'),'full');
-    } else openSlackCfg('full');
+      if(confirm('Slack'+(state.slack.label?('の '+state.slack.label):'の所定のチャンネル')+'に、いま見えている'+(sk==='person'?'担当別の進捗':'進捗要約')+'を投稿します。よろしいですか？')) postToSlack(slackText(sk),sk);
+    } else openSlackCfg(sk);
     return; }
   const cob=e.target.closest('#sumCallout'); if(cob){ try{ navigator.clipboard.writeText(callOutText()); const o=cob.textContent; cob.textContent='✓ コピーしました（メールに貼ってください）'; setTimeout(()=>{cob.textContent=o;},1800); }catch(err){ alert('コピーできませんでした'); } return; }
+  const po=e.target.closest('[data-psopen]');
+  if(po){ const n=po.dataset.psopen; if(_psOpen.has(n)) _psOpen.delete(n); else _psOpen.add(n); renderSummary(); return; }
+  if(e.target.closest('#psAllOpen')){ personRows().forEach(r=>_psOpen.add(r.name)); renderSummary(); return; }
+  if(e.target.closest('#psAllClose')){ _psOpen.clear(); renderSummary(); return; }
+  // 作業を押したらカルテを開く＝会議中にその場で進捗・週報を書けるようにする（サマリーは閉じる）
+  const pg=e.target.closest('[data-psgo]');
+  if(pg){ document.getElementById('summaryModal').classList.remove('on'); openDetail(pg.dataset.psgo); return; }
   const sg=e.target.closest('[data-summode]'); if(sg){ _sumMode=sg.dataset.summode;
     try{ localStorage.setItem('ai_sched_summode', _sumMode); }catch(err){}
     renderSummary(); return; }
