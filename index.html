@@ -957,7 +957,9 @@
   .mnhd .sm{flex:1 1 auto; min-width:0; font-size:10.5px; color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .mnhd .cnt{flex:none; margin-left:auto; font-size:10.5px; color:var(--dim); white-space:nowrap;}
   .mnhd:hover .ttl{color:var(--text);}
-  .mnhd .mini{flex:none; white-space:nowrap;}
+  .mnhd .mini{flex:none; white-space:nowrap; width:auto; height:auto; line-height:1.6; font-size:12px;
+    padding:4px 10px; border-radius:7px; background:var(--panel3); border:1px solid var(--line); color:var(--text);}
+  .mnhd .mini:hover{background:var(--panel2); border-color:var(--teal);}
   .mnbody{padding:0 10px 10px;}
   .mnbody textarea{width:100%; min-height:160px; resize:vertical; background:var(--panel3); color:var(--text);
     border:1px solid var(--line); border-radius:8px; padding:10px 11px; font-family:inherit; font-size:13.5px; line-height:1.8;}
@@ -2716,6 +2718,9 @@ function mtSorted(){ return state.meetings.filter(m=>m).slice().sort((a,b)=>Stri
 function defaultMeetingId(){ const list=mtSorted(), todayY=ymd(new Date());
   return (list.find(m=>m.date&&m.date>=todayY) || list[list.length-1] || {}).id || null; }
 function showTopicPanel(){ document.getElementById('topicModal').classList.add('on'); document.body.classList.add('tpon');
+  // ⚠ 高さ合わせは**表示された後**にやる。renderTopics の時点ではモーダルが非表示で
+  //   scrollHeight が 0 になり、議事録欄が最小の高さのままになる（2026-09-15に発覚）。
+  try{ mnGrowAll(); autoGrowNote(); tpGrowAll(); }catch(e){}
   if(window.__reclampDetail) window.__reclampDetail();
   if(typeof computeKPIs==='function') computeKPIs(); }   // カルテが開いていれば、はみ出さない幅に詰め直す
 function _tpOpen(){ return document.body.classList.contains('tpon'); }
@@ -5120,7 +5125,7 @@ function slPersonBlock(r, max, withWeek, detail){
 // 定例の当日に流すこともある。mm.prev だと当日は「前々回」を拾ってしまうのでこちらで取る。
 function slMinutesMt(){ ensureBoards(); const t=ymd(new Date());
   return mtSorted().filter(m=>m&&m.date&&m.date<=t&&String(m.minutes||'').trim()).pop()||null; }
-const SL_MIN_LINES=15, SL_MIN_CHARS=120;
+const SL_MIN_LINES=24, SL_MIN_CHARS=120;
 // 要点の行が1つも無いとき（＝文字起こしを貼っただけ）は先頭を出すしかないが、
 // 挨拶を15行も流しても意味がないので短くする。書式を直してもらうのが本筋（画面で促す）。
 const SL_MIN_HEAD_LINES=5;
@@ -5129,13 +5134,21 @@ const SL_MIN_HEAD_LINES=5;
 // 何も見つからなければ先頭から。**どちらで出したかは必ず文面に書く**（読む人が全部だと思わないように）。
 const SL_MIN_KEY=/(決ま|決定|宿題|TODO|ToDo|やること|持ち帰|次回まで|期限|までに)/;
 const SL_MIN_HEAD=/^[→⇒>*・※◆●□■▶‐–—-]/;
+const SL_MIN_TTL=30;   // 見出しとして拾う行の長さの上限（長い文は見出しではない）
 function slMinutesPick(v){
   const rows=String(v||'').replace(/\r\n?/g,'\n').split('\n').map(x=>x.trim()).filter(Boolean);
   if(!rows.length) return null;
-  const hit=rows.filter(x=>SL_MIN_HEAD.test(x)||SL_MIN_KEY.test(x));
-  const pick=hit.length?hit:rows, lim=hit.length?SL_MIN_LINES:SL_MIN_HEAD_LINES;
-  return { rows: pick.slice(0,lim).map(x=>x.length>SL_MIN_CHARS?x.slice(0,SL_MIN_CHARS)+'…':x),
-           more: Math.max(0, pick.length-lim), all: rows.length, points: hit.length>0 };
+  const isPt=x=>SL_MIN_HEAD.test(x)||SL_MIN_KEY.test(x);
+  // ⚠「山根さん」→「→やるものから取り組む」のような書き方だと、見出しが落ちて
+  //   誰の話か分からない箇条書きだけが並ぶ（2026-09-15・実物の議事録で判明）。
+  //   **次の行が「→」で始まるなら、その上の短い1行も見出しとして拾う。**
+  const keep=rows.map((x,i)=> isPt(x) || (x.length<=SL_MIN_TTL && i+1<rows.length && SL_MIN_HEAD.test(rows[i+1])));
+  const hit=rows.filter(isPt);
+  const pick=hit.length?rows.filter((x,i)=>keep[i]):rows, lim=hit.length?SL_MIN_LINES:SL_MIN_HEAD_LINES;
+  const cut=pick.slice(0,lim);
+  while(cut.length && !isPt(cut[cut.length-1])) cut.pop();   // 見出しだけで終わらせない（尻切れに見える）
+  return { rows: cut.map(x=>x.length>SL_MIN_CHARS?x.slice(0,SL_MIN_CHARS)+'…':x),
+           more: Math.max(0, pick.length-cut.length), all: rows.length, points: hit.length>0 };
 }
 function slMinutesBlock(){
   const m=slMinutesMt(); if(!m) return [];
