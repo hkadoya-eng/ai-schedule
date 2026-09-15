@@ -822,6 +822,11 @@
   .wmadv>summary{cursor:pointer; color:var(--dim); font-size:12px;}
   .wmrow{display:flex; align-items:baseline; gap:8px; padding:5px 8px; border-radius:7px; cursor:pointer; font-size:12.5px;}
   .wmrow:hover{background:var(--panel2);}
+  .wmrow.static{cursor:default;} .wmrow.static:hover{background:none;}
+  /* アプリ→シートへ戻すブロック（向きが逆なので色で分ける）*/
+  .wmback{border:1px solid rgba(242,199,96,.45); background:rgba(242,199,96,.08); border-radius:10px; padding:2px 10px 10px; margin-top:14px;}
+  .wmback .wmhd{margin-top:10px;}
+  .wmback .btn{margin-top:8px;}
   .wmrow .wmt{font-weight:700; flex:none; min-width:170px;}
   .wmrow .wmd{color:var(--muted); font-size:12px;}
   /* きょうが投稿日のときだけ出る帯 */
@@ -3829,6 +3834,9 @@ document.getElementById('topicBody').addEventListener('keydown', e=>{
 // シートが正なのは「作業ナンバー・作業名・担当・領域」。進捗や期限はアプリが正なので触らない。
 // 消えた作業は**消さない**（シートの貼り忘れ・範囲選択ミスで作業が消えると被害が大きい）。一覧で見せるだけ。
 let _wmDiff=null, _wmPick={};
+let _wmRows=null;      // 直近に読んだシートの行（順番のまま）＝担当ペア列を作り直すのに使う
+let _wmRolePick={};    // 📤「ボードの担当をシートへ」の行ごとのチェック（node.id→bool・既定ON）
+let _wmMsg='';         // 直近のメッセージ（チェックの付け外しで消えないように覚えておく）
 function wmKey(x){ return String(x||'').replace(/[\s　]/g,'').replace(/[・\/／]/g,''); }
 function wmSmalls(){ const out=[]; walkAll(state.tree, n=>{ if(n&&n.kind==='small') out.push(n); }); return out; }
 // 貼り付けはタブ区切り（スプレッドシートからのコピー）。列の並びは No.／領域／担当ペア／作業 を前提にする。
@@ -3874,6 +3882,12 @@ function wmDiff(rows){
     if(fields.length) upd.push({ n, r, fields });
   });
   return { add, upd, only: smalls.filter(n=>!seen[n.id]) }; }
+// 担当は**アプリ側で直していることがある**（2026-09-15・ユーザーがブラウザで修正）。
+// シートの値で黙って上書きすると、ボードでの修正が巻き戻る。**担当だけ既定でチェックを外す**。
+// （picked() の既定が true なので、外すときは _wmPick に false を入れておく必要がある）
+function wmInitPick(d){ const p={};
+  if(d) d.upd.forEach((u,i)=>u.fields.forEach(f=>{ if(f.f==='role') p['u|'+i+'|'+f.f]=false; }));
+  return p; }
 function wmRowHtml(key, label, detail, on){
   return '<label class="wmrow"><input type="checkbox" data-wm="'+esca(key)+'"'+(on?' checked':'')+'>'+
     '<span class="wmt">'+label+'</span><span class="wmd">'+detail+'</span></label>'; }
@@ -3882,6 +3896,18 @@ function wmHead(icon, title, n, sub){
     (sub?'<span class="sub">'+sub+'</span>':'')+
     '<span class="all"><button class="lnk" data-wmall="1">全部えらぶ</button>'+
     '<button class="lnk" data-wmall="0">全部はずす</button></span></div>'; }
+// シートの行順に「担当ペア」列を作る（アプリに同じ作業があればアプリの値、無ければシートのまま）。
+// 列まるごと差し替える形にするのは、No.で1件ずつ探して貼るより事故が少ないため。
+function wmRoleColumn(){
+  if(!_wmRows || !_wmRows.length) return [];
+  const smalls=wmSmalls(), byNo={}, byName={};
+  smalls.forEach(n=>{ const k=normNo(n.no); if(k) byNo[k]=n; byName[wmKey(n.name)]=n; });
+  return _wmRows.map(r=>{ const n=(r.no&&byNo[r.no])||byName[wmKey(r.name)];
+    const v=n?String(n.role||'').trim():'';
+    if(!v) return r.role||'';
+    // チェックを外した行は**シートの値のまま**にする（ボード側が古いこともあるため）
+    if(v!==String(r.role||'').trim() && _wmRolePick[n.id]===false) return r.role||'';
+    return v; }); }
 function wmPreviewHtml(d){
   let h='';
   if(!d.add.length && !d.upd.length){
@@ -3890,8 +3916,30 @@ function wmPreviewHtml(d){
   if(d.upd.length){
     h+=wmHead('✏️','シートと違う作業', d.upd.length, 'チェックしたものを、シートの値に直します');
     d.upd.forEach((u,i)=>{ u.fields.forEach(f=>{
-      h+=wmRowHtml('u|'+i+'|'+f.f, esc(u.n.name), esc(f.label)+'：'+esc(f.from)+' → <b>'+esc(f.to)+'</b>', true); }); });
+      h+=wmRowHtml('u|'+i+'|'+f.f, esc(u.n.name), esc(f.label)+'：'+esc(f.from)+' → <b>'+esc(f.to)+'</b>',
+        _wmPick['u|'+i+'|'+f.f]!==false); }); });
+    if(d.upd.some(u=>u.fields.some(f=>f.f==='role')))
+      h+='<div class="hint">担当は<b>既定でチェックを外してあります</b>（ボードで直したものが巻き戻らないように）。'+
+         'シート側が正しいときだけチェックしてください。</div>';
   }
+  { // 向きが逆のぶん＝ボードで直した担当をシートへ戻す。今回ユーザーがブラウザで担当を直したため追加（2026-09-15）。
+    const rb=d.upd.filter(u=>u.fields.some(f=>f.f==='role')), col=wmRoleColumn();
+    if(rb.length && col.length){
+      h+='<div class="wmback">'+
+         '<div class="wmhd"><span class="ic">📤</span>ボードの担当をシートへ<span class="n">'+rb.length+'件</span>'+
+         '<span class="sub">ボードで直したほうが正しいとき</span></div>';
+      rb.forEach(u=>{ const f=u.fields.find(x=>x.f==='role');
+        h+='<label class="wmrow"><input type="checkbox" data-wmrole="'+esca(u.n.id)+'"'+
+           (_wmRolePick[u.n.id]===false?'':' checked')+'>'+
+           '<span class="wmt">'+esc(u.n.name)+'</span>'+
+           '<span class="wmd">シート：'+esc(f.to)+' → <b>'+esc(f.from)+'</b>（ボード）</span></label>'; });
+      h+='<div class="hint">外した行は<b>シートの値のまま</b>にします（ボード側が古いときはここを外す）。</div>';
+      h+='<div class="hint"><b>担当ペア列を丸ごと差し替えます（'+col.length+'行）。</b>'+
+         '③月次ガントで<b>担当ペア列の「いちばん上のデータ行」</b>を選んで貼り付け（Ctrl+V）してください。'+
+         '1行目は「'+esc(col[0]||'（空）')+'」／最終行は「'+esc(col[col.length-1]||'（空）')+'」になります。'+
+         '貼る前に、その2つがシートの上端・下端と合っているか確かめてください。</div>'+
+         '<button class="btn" id="wmRoleCopy">📋 担当ペア列をコピー（'+col.length+'行）</button></div>';
+    } }
   if(d.add.length){
     h+=wmHead('➕','シートにあってボードに無い作業', d.add.length, 'チェックしたものを新しく足します');
     d.add.forEach((a,i)=>{ h+=wmRowHtml('a|'+i, esc(a.name),
@@ -3906,6 +3954,7 @@ function wmPreviewHtml(d){
   return h; }
 // 結果だけ描き直す（貼り付け中に全体を作り直すと、入力欄からフォーカスが外れてしまう）
 function wmRenderResult(msg, isErr){
+  if(!isErr) _wmMsg=msg||_wmMsg;
   const m=document.getElementById('wmMsg'), box=document.getElementById('wmResult');
   if(m) m.innerHTML = msg ? ('<div class="wmmsg'+(isErr?' err':'')+'">'+esc(msg)+'</div>') : '';
   if(box) box.innerHTML = _wmDiff ? wmPreviewHtml(_wmDiff) : '';
@@ -3925,7 +3974,7 @@ function wmCompare(){
     const cells=first.split('\t').length;
     wmRenderResult('読み取れませんでした。1行目は '+cells+'列で「'+first.slice(0,60)+'」でした。'+
       '見出し（No.／領域／担当ペア／作業）の行から下を、まとめて選んでコピーしてください。', true); return; }
-  _wmDiff=wmDiff(rows); _wmPick={};
+  _wmRows=rows; _wmDiff=wmDiff(rows); _wmPick=wmInitPick(_wmDiff); _wmRolePick={};
   wmRenderResult(rows.length+'行を読みました。'); }
 function renderWmModal(text, err){
   const box=document.getElementById('wmBody'); if(!box) return;
@@ -3947,7 +3996,7 @@ function renderWmModal(text, err){
       '「AI推進スケジューラ_定例シート受け口（GAS）.gs.txt」に書いてあります（社内限定デプロイでOK）。</div>'+
     '</details>';
   wmRenderResult(err||'', !!err); }
-function openWmModal(){ closeMore(); ensureBoards(); _wmDiff=null; _wmPick={}; renderWmModal(''); 
+function openWmModal(){ closeMore(); ensureBoards(); _wmDiff=null; _wmRows=null; _wmPick={}; _wmRolePick={}; _wmMsg=''; renderWmModal(''); 
   document.getElementById('wmModal').classList.add('on'); }
 // 新しい作業を入れる場所＝領域（中項目）。無ければ作る（大項目は先頭のものにぶら下げる）。
 function wmMidFor(area){
@@ -3986,7 +4035,7 @@ document.getElementById('wmModal').addEventListener('click', e=>{
       if(!js || !Array.isArray(js.rows)) throw new Error(js&&js.error?js.error:'rows が返ってきません');
       const rows=js.rows.map(r=>({ no:normNo(r.no), area:String(r.area||'').trim(),
         role:String(r.role||'').trim(), name:String(r.name||'').trim() })).filter(r=>r.name);
-      _wmDiff=wmDiff(rows); _wmPick={};
+      _wmRows=rows; _wmDiff=wmDiff(rows); _wmPick=wmInitPick(_wmDiff); _wmRolePick={};
       renderWmModal('', 'シートから '+rows.length+'行を読みました。');
     }).catch(err=>{ _wmDiff=null; renderWmModal('', '読み込みに失敗しました: '+err.message); });
     return; }
@@ -3997,6 +4046,12 @@ document.getElementById('wmModal').addEventListener('click', e=>{
     while(el && el.classList && el.classList.contains('wmrow')){
       const cb=el.querySelector('[data-wm]'); if(cb){ cb.checked=on; _wmPick[cb.dataset.wm]=on; }
       el=el.nextElementSibling; }
+    return; }
+  if(e.target.closest('#wmRoleCopy')){ const col=wmRoleColumn();
+    if(!col.length){ alert('先にシートの内容を読み込んでください。'); return; }
+    try{ navigator.clipboard.writeText(col.join('\n'));
+         alert('担当ペア列（'+col.length+'行）をコピーしました。\n\n③月次ガントの「担当ペア」列の、いちばん上のデータ行を選んで貼り付けてください。\n\n※ 1行目「'+(col[0]||'（空）')+'」／最終行「'+(col[col.length-1]||'（空）')+'」');
+    }catch(err){ alert('コピーできませんでした'); }
     return; }
   if(e.target.closest('#wmCheck')){ wmCompare(); return; }
   if(e.target.closest('#wmApply')){
@@ -4015,6 +4070,8 @@ document.getElementById('wmModal').addEventListener('input', e=>{
   if(!e.target || e.target.id!=='wmPaste') return;
   clearTimeout(_wmTimer); _wmTimer=setTimeout(wmCompare, 150); });
 document.getElementById('wmModal').addEventListener('change', e=>{
+  const rr=e.target.closest('[data-wmrole]');
+  if(rr){ _wmRolePick[rr.dataset.wmrole]=rr.checked; wmRenderResult(_wmMsg); return; }
   const cb=e.target.closest('[data-wm]'); if(!cb) return;
   _wmPick[cb.dataset.wm]=cb.checked; });
 
