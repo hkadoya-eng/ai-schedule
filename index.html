@@ -964,6 +964,20 @@
   .mnbody textarea:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
   .mnbody.big textarea{height:70vh !important;}
   .mnhint{font-size:10.5px; color:var(--dim); line-height:1.7; margin:6px 2px 0;}
+  .mnpts{font-size:11px; line-height:1.7; margin:6px 2px 0; color:var(--muted);}
+  .mnpts:empty{display:none;}
+  .mnchk{margin:8px 0 0; padding:8px 10px; background:var(--panel3); border:1px solid var(--line); border-radius:8px; font-size:11.5px;}
+  .mnchk.ok{color:var(--muted);}
+  .mnchk .ch{display:flex; align-items:center; font-weight:700; color:var(--muted); margin-bottom:4px;}
+  .mnchk .ch .x{margin-left:auto; background:none; border:none; color:var(--dim); font-size:11px; cursor:pointer; font-family:inherit;}
+  .mnchk .cr{display:flex; align-items:center; gap:7px; flex-wrap:wrap; padding:3px 0; line-height:1.7;}
+  .mnchk .ln{flex:none; color:var(--dim); font-size:10.5px; min-width:44px;}
+  .mnchk .w{font-weight:700;}
+  .mnchk .s{color:var(--dim); font-size:10.5px;}
+  .mnchk button[data-mnfix]{background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    border-radius:7px; padding:2px 9px; font-size:11px; cursor:pointer; font-family:inherit;}
+  .mnchk button[data-mnfix]:hover{border-color:var(--teal);}
+  .mnchk .hint{margin-top:5px;}
   .mnprev{position:relative; margin:0 10px 10px; padding:8px 10px; background:var(--panel3); border:1px solid var(--line);
     border-radius:8px; font-size:12.5px; line-height:1.7; white-space:pre-wrap; max-height:78px; overflow:hidden; cursor:pointer;}
   .mnprev:hover{border-color:var(--teal);}
@@ -3438,6 +3452,76 @@ function mnStat(s){ const t=String(s==null?'':s);
 function mnGrow(ta){ if(!ta) return; if(_minBig){ ta.style.height=''; return; }
   ta.style.height='auto'; ta.style.height=Math.min(460, Math.max(160, ta.scrollHeight+2))+'px'; }
 function mnGrowAll(){ document.querySelectorAll('#topicBody [data-mtmin]').forEach(mnGrow); }
+// 書式を守ってもらう唯一の方法は、**書いているその場で結果を見せること**。
+// 「→」で始まる行が拾われる仕組みなので、拾えているか／いないかをこの1行で出す。
+// ── 議事録の誤字チェック（文字起こし向け）───────────────────────────
+// ⚠ **意味は見ていない**。アプリが確実に知っていること＝**担当者の名前**と、
+//   機械的に分かる崩れ（半角カナ・同じ文字の連続）だけを拾う。
+//   「文意が変」「言い回しが違う」の類はここでは分からない（人かLLMの仕事）。
+let _mnChk=null;                       // チェック結果（画面の状態・保存しない）
+// 既知の名前＝担当欄から集めた人＋ログイン名簿。ownersOf を通すので表記ゆれは寄っている。
+function mnKnownNames(){
+  const set=new Set();
+  try{ collectLeafInfo().forEach(x=>ownersOf(x.role).forEach(n=>set.add(n))); }catch(e){}
+  ((state&&state.members)||[]).forEach(m=>{ const n=String((m&&m.name)||'').trim(); if(n) set.add(n); });
+  return [...set].filter(Boolean);
+}
+// 編集距離（1文字違いの候補を出すためだけなので素朴な実装で足りる）
+function mnLev(a,b){
+  a=[...String(a||'')]; b=[...String(b||'')];
+  if(Math.abs(a.length-b.length)>1) return 9;
+  const d=[...Array(a.length+1)].map((_,i)=>[i]);
+  for(let j=1;j<=b.length;j++) d[0][j]=j;
+  for(let i=1;i<=a.length;i++) for(let j=1;j<=b.length;j++)
+    d[i][j]=Math.min(d[i-1][j]+1, d[i][j-1]+1, d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+  return d[a.length][b.length];
+}
+const MN_CHK_MAX=20;                   // 出しすぎると読まれない
+// 名前らしい形＝漢字/カタカナ1〜4文字（＋「(真)」のような括弧つき）。
+// ⚠ ひらがなを入れると「たき台を伊藤」「決まったこと」まで名前として拾ってしまう（実測）。
+// ⚠ 敬称に「様」を入れると「仕様書」の“様”に当たる。**さん だけ**にする。
+const MN_NM='[一-龥ァ-ヶー]{1,4}(?:[(（][一-龥ぁ-んァ-ヶ]{1,3}[)）])?';
+function mnNameRe(){ return new RegExp('('+MN_NM+')さん|(?:^|[\\s、。])('+MN_NM+')[：:]', 'g'); }
+function mnCheck(v){
+  const lines=String(v||'').replace(/\r\n?/g,'\n').split('\n');
+  const known=mnKnownNames(), kn=known.map(normName);
+  const out=[], seen=new Set();
+  lines.forEach((line,i)=>{
+    const re=mnNameRe(); let m;
+    while((m=re.exec(line))){
+      let nm=String(m[1]||m[2]||'').trim(); if(!nm) continue;
+      nm=CO_ALIAS[nm]||nm;                                  // 伊藤 → 伊藤(真) など、担当欄と同じ寄せ方をする
+      const k=normName(nm); if(k.length<2) continue;
+      if(kn.indexOf(k)>=0) continue;                        // 知っている名前
+      if(seen.has(nm)) continue; seen.add(nm);
+      const cand=known.filter(x=>mnLev(normName(x),k)===1);
+      out.push({ line:i+1, kind:'name', word:nm, cand });
+    }
+    if(/[｡-ﾟ]/.test(line)) out.push({ line:i+1, kind:'半角カナ', word:'' });
+    const rep=line.match(/(.)\1{3,}/); if(rep) out.push({ line:i+1, kind:'同じ文字の連続', word:rep[0] });
+  });
+  return out.slice(0, MN_CHK_MAX);
+}
+function mnCheckHtml(){
+  if(!_mnChk) return '';
+  if(!_mnChk.length) return '<div class="mnchk ok">✅ 機械的に拾える崩れは見つかりませんでした（文意までは見ていません）。</div>';
+  return '<div class="mnchk"><div class="ch">🔍 気になったところ '+_mnChk.length+'件'+
+    '<button class="x" id="mnChkClose">閉じる</button></div>'+
+    _mnChk.map(r=> r.kind==='name'
+      ? '<div class="cr"><span class="ln">'+r.line+'行目</span><span class="w">'+esc(r.word)+'</span>'+
+        (r.cand.length? '<span class="s">もしかして</span>'+r.cand.map(c=>'<button data-mnfix="'+esca(r.word+'|'+c)+'">'+esc(c)+' に直す</button>').join('')
+                      : '<span class="s">担当者リストに無い名前です（新しい方なら問題ありません）</span>')+'</div>'
+      : '<div class="cr"><span class="ln">'+r.line+'行目</span><span class="s">'+esc(r.kind)+(r.word?'：'+esc(r.word):'')+'</span></div>'
+    ).join('')+
+    '<div class="hint">名前と書き方の崩れだけを見ています。<b>文意の誤りまでは分かりません。</b></div></div>';
+}
+function mnPointsMsg(v){
+  const t=String(v||''); if(!t.trim()) return '';
+  const p=slMinutesPick(t); if(!p) return '';
+  return p.points
+    ? '✅ Slackにはこの中の <b>'+(p.rows.length+p.more)+'行</b>（「→」で始まる行・決まったこと／宿題／期限を含む行）が出ます'
+    : '⚠ 要点の行が見つかりません。<b>残したい行は「→」で始めて</b>ください（このままだと先頭'+p.rows.length+'行だけ出ます）';
+}
 function minutesBox(m){
   const v=String((m&&m.minutes)||''), has=!!v.trim();
   let h=`<div class="mnbox${_minOpen?' on':''}">`+
@@ -3446,12 +3530,16 @@ function minutesBox(m){
       `<span class="ttl">📝 この回の議事録</span>`+
       `<span class="sm">まとめ書き／文字起こしの貼り付け先</span>`+
       `<span class="cnt">${esc(mnStat(v))}</span>`+
+      (has?`<button class="mini" id="mnChk" title="名前の誤変換や書き方の崩れを探します（文意までは見ません）">🔍 誤字</button>`:'')+
       (has?`<button class="mini" id="mnCopy" title="議事録の全文をコピーします">📋</button>`:'')+
       (_minOpen?`<button class="mini" id="mnBig" title="${_minBig?'元の高さに戻します':'縦に大きく広げます（長い文字起こしを読むとき）'}">${_minBig?'⤡':'⤢'}</button>`:'')+
     `</div>`;
   if(_minOpen) h+=`<div class="mnbody${_minBig?' big':''}">`+
       `<textarea data-mtmin placeholder="${esca(MN_PH)}">${esc(v)}</textarea>`+
+      mnCheckHtml()+
+      `<div class="mnpts">${mnPointsMsg(v)}</div>`+
       `<div class="mnhint">書いたそばから全員に共有されます（保存ボタンはありません）。`+
+        `<b>残したい行は「→」で始める</b>と、定例のあとのSlackにその行が出ます。`+
         `お題ごとの「当日メモ」もこれまでどおり使えます。</div></div>`;
   else if(has) h+=`<div class="mnprev" id="mnOpen" title="クリックで開きます">${esc(v)}</div>`;
   return h+`</div>`;
@@ -3737,6 +3825,19 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#mnCopy')){ e.stopPropagation(); const m=state.meetings.find(x=>x.id===_openMeeting);
     if(m){ try{ navigator.clipboard.writeText(String(m.minutes||'')); tpToast('この回の議事録をコピーしました'); }
            catch(err){ alert('コピーできませんでした'); } } return; }
+  if(e.target.closest('#mnChk')){ e.stopPropagation();
+    const m=state.meetings.find(x=>x.id===_openMeeting); if(!m) return;
+    _mnChk=mnCheck(m.minutes); renderTopics(); return; }
+  if(e.target.closest('#mnChkClose')){ e.stopPropagation(); _mnChk=null; renderTopics(); return; }
+  const mfx=e.target.closest('[data-mnfix]');
+  if(mfx){ e.stopPropagation();
+    const [from,to]=mfx.dataset.mnfix.split('|');
+    const m=state.meetings.find(x=>x.id===_openMeeting); if(!m||!from||!to) return;
+    // 置換は全文いっぺんに。共有ボードなので確認してから。
+    const n=String(m.minutes||'').split(from).length-1;
+    if(!confirm('議事録の中の「'+from+'」'+n+'か所を「'+to+'」に直します。よろしいですか？\n\n※ Ctrl+Z では戻せません（議事録は履歴に載せていません）。')) return;
+    m.minutes=String(m.minutes||'').split(from).join(to); m._u=Date.now(); save();
+    _mnChk=mnCheck(m.minutes); renderTopics(); return; }
   if(e.target.closest('#mnBig')){ e.stopPropagation(); _minBig=!_minBig;
     try{ localStorage.setItem('ai_sched_mtminbig', _minBig?'1':'0'); }catch(err){} renderTopics(); return; }
   const mno=e.target.closest('#mnOpen'), mnt=e.target.closest('#mnToggle');
@@ -3822,6 +3923,7 @@ document.getElementById('topicBody').addEventListener('input', e=>{
   if((m.minutes||'')===ta.value) return;
   m.minutes=ta.value; m._u=Date.now(); mnGrow(ta);
   const c=document.querySelector('#topicBody .mnhd .cnt'); if(c) c.textContent=mnStat(ta.value);
+  const pt=document.querySelector('#topicBody .mnpts'); if(pt) pt.innerHTML=mnPointsMsg(ta.value);
   clearTimeout(_minTimer); _minTimer=setTimeout(persist, 800);
 });
 document.getElementById('topicBody').addEventListener('blur', e=>{
@@ -5019,6 +5121,9 @@ function slPersonBlock(r, max, withWeek, detail){
 function slMinutesMt(){ ensureBoards(); const t=ymd(new Date());
   return mtSorted().filter(m=>m&&m.date&&m.date<=t&&String(m.minutes||'').trim()).pop()||null; }
 const SL_MIN_LINES=15, SL_MIN_CHARS=120;
+// 要点の行が1つも無いとき（＝文字起こしを貼っただけ）は先頭を出すしかないが、
+// 挨拶を15行も流しても意味がないので短くする。書式を直してもらうのが本筋（画面で促す）。
+const SL_MIN_HEAD_LINES=5;
 // 文字起こしを丸ごと貼ってあることがある＝全文は出せない。
 // 「→・※」などで始まる行や「決まった／宿題／期限」を含む行があれば**そこだけ**拾う（＝要点）。
 // 何も見つからなければ先頭から。**どちらで出したかは必ず文面に書く**（読む人が全部だと思わないように）。
@@ -5028,16 +5133,16 @@ function slMinutesPick(v){
   const rows=String(v||'').replace(/\r\n?/g,'\n').split('\n').map(x=>x.trim()).filter(Boolean);
   if(!rows.length) return null;
   const hit=rows.filter(x=>SL_MIN_HEAD.test(x)||SL_MIN_KEY.test(x));
-  const pick=hit.length?hit:rows;
-  return { rows: pick.slice(0,SL_MIN_LINES).map(x=>x.length>SL_MIN_CHARS?x.slice(0,SL_MIN_CHARS)+'…':x),
-           more: Math.max(0, pick.length-SL_MIN_LINES), all: rows.length, points: hit.length>0 };
+  const pick=hit.length?hit:rows, lim=hit.length?SL_MIN_LINES:SL_MIN_HEAD_LINES;
+  return { rows: pick.slice(0,lim).map(x=>x.length>SL_MIN_CHARS?x.slice(0,SL_MIN_CHARS)+'…':x),
+           more: Math.max(0, pick.length-lim), all: rows.length, points: hit.length>0 };
 }
 function slMinutesBlock(){
   const m=slMinutesMt(); if(!m) return [];
   const p=slMinutesPick(m.minutes); if(!p) return [];
   const L=[''];
   L.push(SL_HR);
-  L.push('*'+slMd(m.date)+'の議事録*'+(p.points?'（要点を抜き出しています）':'（先頭 '+p.rows.length+'行）'));
+  L.push('*'+slMd(m.date)+'の議事録*'+(p.points?'（要点を抜き出しています）':'（要点の行が無いので先頭 '+p.rows.length+'行）'));
   p.rows.forEach(x=>L.push('　　'+x));
   if(p.more) L.push('　　…ほか '+p.more+'行');
   L.push('　　_全文（'+p.all+'行）はボードの「📝 この回の議事録」で読めます。_');
