@@ -824,6 +824,16 @@
   .wmrow:hover{background:var(--panel2);}
   .wmrow.static{cursor:default;} .wmrow.static:hover{background:none;}
   .wmonly .hint.warn{color:#c2555f;}
+  /* 定例シートとの差分を知らせる帯（開いたときに勝手に見にいく）*/
+  #sheetBanner:empty{display:none;}
+  .shbn{display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:0 14px 8px;
+    background:rgba(242,199,96,.12); border:1px solid rgba(242,199,96,.5); border-radius:10px; padding:8px 12px; font-size:12.5px;}
+  .shbn b{font-weight:700;}
+  .shbn .sm{color:var(--dim); font-size:11px;}
+  .shbn button{margin-left:auto; background:var(--panel3); border:1px solid var(--line); color:var(--text);
+    border-radius:8px; padding:4px 12px; font-size:11.5px; cursor:pointer; font-family:inherit;}
+  .shbn button:hover{border-color:var(--teal);}
+  .shbn button.x{margin-left:0; padding:4px 9px; color:var(--dim);}
   .wmonly .btn{margin-top:8px;}
   /* アプリ→シートへ戻すブロック（向きが逆なので色で分ける）*/
   .wmback{border:1px solid rgba(242,199,96,.45); background:rgba(242,199,96,.08); border-radius:10px; padding:2px 10px 10px; margin-top:14px;}
@@ -1252,6 +1262,7 @@
   </div>
 </header>
 
+<div id="sheetBanner"></div>
 <div class="kpibar" id="kpibar"></div>
 <div id="msBar"></div>
 
@@ -3911,6 +3922,13 @@ function wmAreaMap(){ const m={};
 function wmNewRows(){ return (_wmDiff?_wmDiff.only:[]).filter(n=>_wmNewPick[n.id]!==false); }
 function wmNewRowsTsv(){ const am=wmAreaMap();
   return wmNewRows().map(n=>[normNo(n.no)||'', am[n.id]||'', String(n.role||'').trim(), String(n.name||'').trim()].join('\t')).join('\n'); }
+function wmSetRows(rows){ _wmRows=rows; _wmDiff=wmDiff(rows);
+  _wmPick=wmInitPick(_wmDiff); _wmRolePick={}; _wmNewPick={}; }
+// GASが返す行をアプリの形に揃える（受け口から読むときと、帯の自動チェックで共通）
+function wmRowsFromGas(js){
+  if(!js || !Array.isArray(js.rows)) return null;
+  return js.rows.map(r=>({ no:normNo(r.no), area:String(r.area||'').trim(),
+    role:String(r.role||'').trim(), name:String(r.name||'').trim() })).filter(r=>r.name); }
 function wmRoleColumn(){
   if(!_wmRows || !_wmRows.length) return [];
   const smalls=wmSmalls(), byNo={}, byName={};
@@ -3998,7 +4016,7 @@ function wmCompare(){
     const cells=first.split('\t').length;
     wmRenderResult('読み取れませんでした。1行目は '+cells+'列で「'+first.slice(0,60)+'」でした。'+
       '見出し（No.／領域／担当ペア／作業）の行から下を、まとめて選んでコピーしてください。', true); return; }
-  _wmRows=rows; _wmDiff=wmDiff(rows); _wmPick=wmInitPick(_wmDiff); _wmRolePick={}; _wmNewPick={};
+  wmSetRows(rows);
   wmRenderResult(rows.length+'行を読みました。'); }
 function renderWmModal(text, err){
   const box=document.getElementById('wmBody'); if(!box) return;
@@ -4020,6 +4038,44 @@ function renderWmModal(text, err){
       '「AI推進スケジューラ_定例シート受け口（GAS）.gs.txt」に書いてあります（社内限定デプロイでOK）。</div>'+
     '</details>';
   wmRenderResult(err||'', !!err); }
+// ── 定例シートとの差分を、開いたときに勝手に見にいく（2026-09-15）──────────────
+// ユーザーの言葉：「毎回おれが指示する流れだと漏れがでそう」。
+// 受け口（GAS）が登録されていれば起動後に静かに読みにいき、**違いがあるときだけ帯を出す**。
+// ⚠ 勝手に取り込むことは絶対にしない（共有ボードなので、反映は必ず人が押す）。
+// ⚠ 失敗しても何も出さない（起動のたびにエラーが出ると邪魔になるだけ）。
+const SHEET_CHK_KEY='ai_sched_sheetchk';     // 端末ローカル：最後に見にいった日（1日1回でいい）
+let _shRows=null;                            // 自動チェックで読んだ行（帯の「見る」で使い回す）
+function sheetChkDue(){ try{ return localStorage.getItem(SHEET_CHK_KEY)!==ymd(new Date()); }catch(e){ return true; } }
+function sheetChkDone(){ try{ localStorage.setItem(SHEET_CHK_KEY, ymd(new Date())); }catch(e){} }
+function autoSheetCheck(force){
+  const u=syncUrl(); if(!u) return;                      // 受け口が無ければ何もしない（設定を急かさない）
+  if(!force && !sheetChkDue()) return;
+  gasGet(u,'gantt').then(js=>{
+    const rows=wmRowsFromGas(js); if(!rows || !rows.length) return;
+    sheetChkDone(); _shRows=rows;
+    const d=wmDiff(rows);
+    const role=d.upd.filter(x=>x.fields.some(f=>f.f==='role')).length;
+    const other=d.upd.length-role;
+    if(!d.upd.length && !d.add.length && !d.only.length) return;   // 揃っていれば黙っている
+    const box=document.getElementById('sheetBanner'); if(!box) return;
+    const bits=[];
+    if(role)        bits.push('担当 '+role+'件');
+    if(other)       bits.push('作業名・No. '+other+'件');
+    if(d.add.length)  bits.push('シートだけ '+d.add.length+'件');
+    if(d.only.length) bits.push('ボードだけ '+d.only.length+'件');
+    box.innerHTML='<div class="shbn"><b>📊 定例シートと違うところが '+(d.upd.length+d.add.length+d.only.length)+'件あります</b>'+
+      '<span class="sm">'+esc(bits.join('／'))+'</span>'+
+      '<button id="shGo">見て直す</button><button class="x" id="shX" title="きょうは出さない">✕</button></div>';
+  }).catch(()=>{});
+}
+document.addEventListener('click', e=>{
+  if(e.target.closest('#shX')){ const b=document.getElementById('sheetBanner'); if(b) b.innerHTML=''; return; }
+  if(e.target.closest('#shGo')){
+    const b=document.getElementById('sheetBanner'); if(b) b.innerHTML='';
+    openWmModal();
+    if(_shRows){ wmSetRows(_shRows); renderWmModal('', 'シートから '+_shRows.length+'行を読みました。'); }
+    return; }
+});
 function openWmModal(){ closeMore(); ensureBoards(); _wmDiff=null; _wmRows=null; _wmPick={}; _wmRolePick={}; _wmNewPick={}; _wmMsg=''; renderWmModal(''); 
   document.getElementById('wmModal').classList.add('on'); }
 // 新しい作業を入れる場所＝領域（中項目）。無ければ作る（大項目は先頭のものにぶら下げる）。
@@ -4059,7 +4115,7 @@ document.getElementById('wmModal').addEventListener('click', e=>{
       if(!js || !Array.isArray(js.rows)) throw new Error(js&&js.error?js.error:'rows が返ってきません');
       const rows=js.rows.map(r=>({ no:normNo(r.no), area:String(r.area||'').trim(),
         role:String(r.role||'').trim(), name:String(r.name||'').trim() })).filter(r=>r.name);
-      _wmRows=rows; _wmDiff=wmDiff(rows); _wmPick=wmInitPick(_wmDiff); _wmRolePick={}; _wmNewPick={};
+      wmSetRows(rows);
       renderWmModal('', 'シートから '+rows.length+'行を読みました。');
     }).catch(err=>{ _wmDiff=null; renderWmModal('', '読み込みに失敗しました: '+err.message); });
     return; }
@@ -4572,13 +4628,30 @@ function staleLabel(v){ return v.days===null ? '更新の記録なし' : (v.days
 // 全角（）は副担当（例「蔵本（山根）」）＝別の人として拾う。
 // 半角()は名前の一部（例「伊藤(真)」）＝くっつけたまま。実データがこの使い分けになっている。
 // ただし全角（）に人名でない注記が入ることもある（例「山口（単独）」）ので下の語は落とす。
-const CO_NOT_PERSON=/^(単独|要検討|検討中|未定|未割当|予定|兼任|サブ|補助|確認|調整中|応相談|TBD|[-—―?？])$/;
+const CO_NOT_PERSON=/^(単独|要検討|検討中|未定|未割当|予定|兼任|サブ|補助|確認|調整中|応相談|他|その他|ほか|不明|各自|全員|TBD|or|OR|[-—―?？])$/;
+// 同じ人が別の書き方で並ぶと、サマリーに2人として出てしまう（2026-09-15：伊藤が2人いた）。
+// 左＝ゆれた書き方／右＝正式。**この現場に1人しかいない姓だけ**足すこと（伊藤が2人いる案件では書かない）。
+const CO_ALIAS={ '伊藤':'伊藤(真)' };
+// 担当欄の書き方は人によってバラバラなので、ここで**人名だけ**を取り出す。
+//  ・全角（）＝副担当として別人で拾う（「蔵本（山根）」→ 蔵本・山根）
+//  ・半角()＝名前の一部（「伊藤(真)」はそのまま1人）
+//  ・空白でも区切る。ただし「山根T or 角谷T」の or は先に消す（区切りの順番を変えないこと）
+//  ・「演出：角谷」「映像：角谷・緑川」のような**頭のラベルは落とす**
+//  ・「他？」「（要検討）」などは人ではないので拾わない（2026-09-15・ユーザー指示「他？とかは一旦拾わないで」）
+//  ・表記ゆれは CO_ALIAS で1人に寄せる（同じ人が2人並ぶため）
 function ownersOf(role){
   let t=String(role||'').trim(); if(!t) return [];
   t=t.replace(/（([^）]*)）/g, '・$1');
-  return t.split(/[・,、\/／]|\s+or\s+/)
-    .map(v=>v.trim().replace(/[？?]+$/,'').replace(/T$/,'').trim())
-    .filter(v=>v && !CO_NOT_PERSON.test(v));
+  const out=[];
+  t.split(/[・,、\/／]|\s+or\s+|\s+/).forEach(v=>{
+    let x=String(v||'').trim()
+      .replace(/^[^：:]{1,6}[：:]/,'')          // 「演出：」「映像：」などの見出しを落とす
+      .trim().replace(/[？?]+$/,'').replace(/T$/,'').trim();
+    if(!x || CO_NOT_PERSON.test(x)) return;
+    x=CO_ALIAS[x]||x;
+    if(out.indexOf(x)<0) out.push(x);         // 同じ欄に2回出てきても1人
+  });
+  return out;
 }
 function callOutData(){
   const d=summaryData(), st=staleList();
@@ -6340,6 +6413,8 @@ window.__initApp = function(board){
   try{ applySeeds(); }catch(e){ console.error('[seed]', e); }   // 確定済みの予定を1回だけ投入
   lastSnap=snap(); updateUndoUI(); syncToolbar(); render();
   try{ scrollToTodayOnBoot(); }catch(e){}          // 起動位置を「今日」に合わせる
+  // シートとの差分は開いたときに勝手に見にいく（1日1回・受け口があるときだけ・失敗しても黙る）
+  setTimeout(()=>{ try{ autoSheetCheck(); }catch(e){} }, 1500);
 };
 window.__applyRemote = function(board){          // 他の人の更新を反映（入力中は上書きしない）
   if(!board || !board.tree) return;
