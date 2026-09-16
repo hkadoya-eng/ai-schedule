@@ -932,6 +932,10 @@
   .qhelp{width:16px; height:16px; border-radius:50%; border:1px solid var(--line); background:var(--panel3);
     color:var(--muted); font-size:10.5px; line-height:1; cursor:pointer; font-family:inherit; padding:0;}
   .qhelp:hover{border-color:var(--teal); color:var(--teal);}
+  /* 2026-09-16：前の回の議題は、この欄からは消せなかった（元の回を開くしかなかった）。
+     ふだんは目立たせず、ホバーで赤くする。data-del は既存の delTopic に乗る（確認あり・Ctrl+Zで戻る）。 */
+  .tpcdel{opacity:.45; padding:0 8px;}
+  .tpcdel:hover{opacity:1; color:#d64550; border-color:#d64550;}
   /* 概要：ふだんは本文だけ。押すと書き換えモード */
   .notelab{font-size:10.5px; font-weight:700; color:var(--muted); margin:0 2px 4px;}
   .noteview{position:relative; background:var(--panel2); border:1px solid var(--line); border-radius:10px;
@@ -3441,6 +3445,7 @@ function renderMeetingTable(box){
     cand.map(t=>{ const src=state.meetings.find(x=>x&&x.id===t.meetingId);
       return `<div class="candrow"><div class="ct">${esc(t.todo||'(無題)')}`+
         `<span class="cs">${esc((src&&src.title)||'')}${t.name?' ／ '+esc(t.name):''}</span></div>`+
+        `<button class="act ghost tpcdel" data-del="${esca(t.id)}" title="この議題を削除します（元の回からも消えます／Ctrl+Zで戻せます）">🗑</button>`+
         `<button class="act carry" data-carryto="${esca(t.id)}" title="この回の議題に移す">＋ この回へ</button></div>`;
     }).join('')+
     ((n=>n?`<div class="tpmoved" style="padding-top:6px">これより前の回にも未対応が ${n} 件あります（定例一覧から開けます）</div>`:'')(carryOlderCount(m)))+
