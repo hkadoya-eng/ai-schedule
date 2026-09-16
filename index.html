@@ -18,7 +18,7 @@
   *{box-sizing:border-box;}
   html,body{margin:0;height:100%;}
   body{font-family:"Meiryo","Segoe UI",sans-serif; color:var(--text); background:#f5f7fa;
-    font-size:13px; display:flex; flex-direction:column; height:100vh;}
+    font-size:14px; display:flex; flex-direction:column; height:100vh;}   /* 2026-09-16：全体的に1px大きく（ユーザー要望） */
   header{padding:9px 16px; background:#fff; border-bottom:1px solid var(--line);
     display:flex; align-items:center; gap:14px; flex:0 0 auto; flex-wrap:wrap;}
   header h1{font-size:16px; margin:0; font-weight:700;}
@@ -915,15 +915,20 @@
   /* ★入口：まずここに一言書く */
   .tpquick{display:flex; gap:7px; margin-top:2px;}
   .tpquick input{flex:1; min-width:0; background:#fff; color:var(--text); border:1px solid var(--topic-bd);
-    border-radius:9px; padding:12px 14px; font-family:inherit; font-size:14px; box-shadow:0 1px 3px rgba(0,0,0,.04);}
+    border-radius:9px; padding:14px 15px; font-family:inherit; font-size:15.5px; box-shadow:0 1px 3px rgba(0,0,0,.04);}
   .tpquick input::placeholder{color:var(--dim);}
   .tpquick input:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
-  .tpquick button{flex:none; background:var(--teal); color:#04222b; font-weight:700; border:none; border-radius:9px;
-    padding:0 20px; cursor:pointer; font-family:inherit; font-size:13.5px;}
+  .tpquick button{flex:none; background:var(--teal); color:#04222b; font-weight:800; border:none; border-radius:9px;
+    padding:0 24px; cursor:pointer; font-family:inherit; font-size:15px;}
   .tpquick button:hover{filter:brightness(1.06);}
   /* 入口の見出し。この画面でまずやることが一目で分かるようにする（設定は下に畳む） */
-  .tpaddlab{font-size:12px; font-weight:700; color:var(--teal); margin:2px 2px 5px; letter-spacing:.3px;}
-  .tpquickhint{font-size:10.5px; color:var(--dim); margin:5px 2px 14px; line-height:1.6;}
+  /* 2026-09-16：ここが『みんなが書く場所』だと一目で分かるように、枠で囲って主役にする（ユーザー要望）*/
+  .tpaddcard{background:linear-gradient(180deg,rgba(47,182,176,.11),rgba(47,182,176,.03));
+    border:1px solid rgba(47,182,176,.38); border-radius:12px; padding:13px 13px 9px; margin:2px 0 14px;}
+  .tpaddlab{font-size:15.5px; font-weight:800; color:var(--teal); margin:0 2px 3px; letter-spacing:.3px;}
+  .tpaddsub{font-size:12.5px; color:var(--muted); margin:0 2px 10px; line-height:1.65;}
+  .tpaddsub b{color:var(--text);}
+  .tpquickhint{font-size:12px; color:var(--dim); margin:7px 2px 0; line-height:1.65;}
   .qhelp{width:16px; height:16px; border-radius:50%; border:1px solid var(--line); background:var(--panel3);
     color:var(--muted); font-size:10.5px; line-height:1; cursor:pointer; font-family:inherit; padding:0;}
   .qhelp:hover{border-color:var(--teal); color:var(--teal);}
@@ -933,6 +938,7 @@
     padding:10px 34px 10px 12px; margin-bottom:12px; font-size:13px; line-height:1.75; white-space:pre-wrap; cursor:pointer;}
   .noteview:hover{border-color:var(--teal);}
   .noteview .pen{position:absolute; right:10px; top:8px; font-size:11px; color:var(--dim);}
+  /* 2026-09-16：ねらい／議事録は『当日に本人が書く欄』なので、ふだんは小さく畳んでおく（ユーザー要望）*/
   .noteadd{display:block; width:100%; text-align:left; background:none; border:1px dashed var(--line); color:var(--muted);
     border-radius:10px; padding:9px 12px; margin-bottom:12px; cursor:pointer; font-family:inherit; font-size:12.5px;}
   .noteadd:hover{border-color:var(--teal); color:var(--text);}
@@ -3399,7 +3405,10 @@ function renderMeetingTable(box){
   }
   // ★入口：この画面でやることは「議題を1件足す」。ここを主役にして一番上に置く。
   // 「ねらい」は1回書けば済む設定なので、入口より下に、畳んだまま置く（表向きは設定を見せない）。
-  h+=`<div class="tpaddlab">＋ 議題を追加</div>`+
+  h+=`<div class="tpaddcard">`+
+     `<div class="tpaddlab">💬 話したいことを、ここに書く</div>`+
+     `<div class="tpaddsub"><b>だれでも書けます。</b>次の定例で話したいこと・相談したいことを1行で。`+
+       `思いついた時点でOK（あとから直せます）。</div>`+
      `<div class="tpquick"><input id="tpQuick" type="text" autocomplete="off"`+
      ` placeholder="例）演出仕様書の分担を決めたい"><button id="tpQuickAdd">追加</button></div>`+
      // 注記は常駐させない。読ませないと使えない画面にすると、説明する人が毎回口で言うことになる。
@@ -3409,7 +3418,8 @@ function renderMeetingTable(box){
        (_tpQuickHelp?` Enterでも追加できます${meAuthor()?`／名前は「${esc(meAuthor())}」で入ります`:''}。詳しいメモは追加したあと「▸ 詳細」から。`+
          ` ✓ は「この回で話した」の印です（タスクの完了ではありません）。話せなかったものは「▶ ◯/◯の定例へ送る」で次に回せます。`:'')+
        (meAuthorIsRaw()?`<br><b>表示名がメールのIDのままです。</b>上の「氏名」欄に名前を入れると、以降の書き込みに反映されます。`:'')+
-     `</div>`;
+     `</div>`+
+     `</div>`;   // .tpaddcard を閉じる
   h+=note;   // 「ねらい」は入口の下（1回書けば済むものを先頭に置かない）
   h+=minutesBox(m);   // 📝 この回の議事録（まとめ書き）。会議中に書く主役なので議題より上に置く
   // 済んだ議題（✓）はまとめて下に畳む。議事録として残すので消さない＝「過去ログ」扱い。
@@ -3447,7 +3457,9 @@ function renderMeetingTable(box){
 // お題ごとの「当日メモ」だけだと、話が行ったり来たりする会議では書ききれない（ユーザーの実感・2026-09-14）。
 // そこで回ごとに自由記述を1枚置く。会議中はここにまとめ書き、次回からは文字起こしを丸ごと貼る。
 // ※お題ごとの当日メモは残す（併用できる）。ここに書いたものをSlackや議題へどう配るかは未定＝別途相談する。
-let _minOpen=_foldGet('ai_sched_mtminopen', true);    // 議事録欄を開いているか（自分の画面だけ・共有しない）
+// 2026-09-16：既定を『畳む』に変えた（当日に書く欄なので、ふだんは場所を取らせない）。
+// ⚠ 保存キーごと変えている（前のキーのままだと、以前『開く』で保存した人に効かない）。
+let _minOpen=_foldGet('ai_sched_mtminopen2', false);   // 議事録欄を開いているか（自分の画面だけ・共有しない）
 let _minBig =_foldGet('ai_sched_mtminbig', false);    // 縦に大きく広げているか（長い文字起こしを読むとき）
 const MN_PH='会議中はここにまとめて書いてください（順番も体裁も気にしなくて大丈夫です）。\n\n次回からは文字起こしをそのまま貼り付けてもOK。長さの制限はありません。';
 // 文字数は改行を除いて数える（どれくらい貼ったかがひと目で分かればいい）
@@ -3847,7 +3859,7 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     try{ localStorage.setItem('ai_sched_mtminbig', _minBig?'1':'0'); }catch(err){} renderTopics(); return; }
   const mno=e.target.closest('#mnOpen'), mnt=e.target.closest('#mnToggle');
   if(mno||mnt){ _minOpen = mno ? true : !_minOpen;
-    try{ localStorage.setItem('ai_sched_mtminopen', _minOpen?'1':'0'); }catch(err){}
+    try{ localStorage.setItem('ai_sched_mtminopen2', _minOpen?'1':'0'); }catch(err){}
     renderTopics();
     if(_minOpen){ const ta=document.querySelector('#topicBody [data-mtmin]'); if(ta){ ta.focus(); ta.scrollIntoView({block:'nearest'}); } }
     return; }
