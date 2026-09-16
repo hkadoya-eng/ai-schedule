@@ -1079,7 +1079,8 @@
   .tpfoot .mvbtns button{background:none; border:1px solid var(--line); color:var(--muted); cursor:pointer;
     border-radius:6px; padding:3px 8px; margin-left:4px; font-family:inherit; font-size:10.5px;}
   .tpfoot .mvbtns button:hover{border-color:var(--teal); color:var(--text);}
-  .tpfoot .delrow{margin-left:auto;}
+  .tpfoot .delrow{margin-left:auto; font-size:12.5px; border-color:var(--line); opacity:.75;}
+  .tpfoot .delrow:hover{opacity:1;}
   .tpcard .exp{flex:none; cursor:pointer; font-size:11.5px; padding:3px 9px; border-radius:6px; white-space:nowrap; font-family:inherit;}
   .tpcard.open{border-color:var(--teal); box-shadow:0 2px 14px rgba(0,0,0,.06);}
   .memoprev{font-size:12.5px; color:var(--muted); line-height:1.6; padding:2px 8px 2px 32px; cursor:pointer;
@@ -3336,11 +3337,13 @@ function tpCard(t){
       `<div class="tpfoot">`+
         `<button class="act" data-tpmore="${esca(t.id)}" title="参考リンク・関連するカルテ・当日メモ・決まったことの欄を出します">`+
           `${_tpMore.has(t.id)?'▾ とじる':'＋ 欄を足す'}</button>`+
+        // 2026-09-16：削除を「…」の中に隠していて見つけられなかった（ユーザー指摘）。
+        // 開いているカードには **いつでも 🗑 削除 を出す**。「…」は順番の入れ替え専用にする。
         (_tpOps.has(t.id)
           ?`<span class="mvbtns">順番 <button data-mv="${esca(t.id)}|-1" title="上へ">▲ 上へ</button>`+
-            `<button data-mv="${esca(t.id)}|1" title="下へ">▼ 下へ</button></span>`+
-            `<button class="delrow" data-del="${esca(t.id)}" title="この議題を削除">🗑 この議題を削除</button>`
-          :`<button class="act ghost" data-tpops="${esca(t.id)}" title="話す順を変える・この議題を削除する">…</button>`)+
+            `<button data-mv="${esca(t.id)}|1" title="下へ">▼ 下へ</button></span>`
+          :`<button class="act ghost" data-tpops="${esca(t.id)}" title="話す順番を入れ替えます">↕ 順番</button>`)+
+        `<button class="delrow" data-del="${esca(t.id)}" title="この議題を削除します（Ctrl+Zで戻せます）">🗑 削除</button>`+
       `</div>`+
     `</div>`;
   }
