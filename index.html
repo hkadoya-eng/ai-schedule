@@ -4892,9 +4892,13 @@ function slackDefaultKind(){
 //   📣 お題ください … 7日前 ／ 📋 議題つき … 3日前 ／ ⏰ リマインド … 前日
 //   📝 議事録FB     … 定例の翌日（議事録＝決まったこと・当日メモが載る＝その回の締め）
 // ⚠ **自動では送らない**。「きょうが投稿日」を画面で知らせるところまで（このプロジェクトの原則）。
-const SL_SCHED={ call:-7, agenda:-3, eve:-1, full:1 };
+// 📋議題つき＝定例の4日前＝月曜16時の定例に対する**直前の木曜＝【推奨TIME】企画_AI作業（毎週木10:00〜12:00）**。
+// その朝に届くように投げる（GASのトリガーが朝9〜10時台なので、推奨TIMEが始まる頃には読める）。
+// ⚠ 📣お題ください は 📋議題つき に**合流させた**ので、自動の予定からは外してある（手で送ることはできる）。
+const SL_SCHED={ call:-7, agenda:-4, eve:-1, full:1 };
+const REC_TIME='10:00〜12:00';   // 【推奨TIME】企画_AI作業（毎週木・主催 山根さん）の時間帯
 const SL_PLAN_GRACE=6;      // 予定日を過ぎても、何日は「まだ流していません」と出すか
-const SL_WHEN={ call:'7日前', agenda:'3日前', eve:'前日', full:'翌日' };
+const SL_WHEN={ call:'7日前', agenda:'4日前（推奨TIME）', eve:'前日', full:'翌日' };
 // 定例ごとに「自動で流す／流さない」を持つ（m.auto）。無ければ全部ON＝これまで通り。
 // ⚠ 実際に自動で送るのはGAS（app/gas_slack_auto.gs）。アプリはこの印を共有ボードに書くだけ。
 function mtAuto(m,k){ const a=(m&&m.auto)||null; return a ? (a[k]!==false) : true; }
@@ -4923,8 +4927,7 @@ function slackPlan(){
   ensureBoards(); const mm=summaryMeetings(), out=[];
   if(mm.prev&&mm.prev.date) out.push({ k:'full', mt:mm.prev.date, date:slPlanDate(mm.prev.date,'full'), note:'定例の翌日' });
   if(mm.next&&mm.next.date){
-    out.push({ k:'call',   mt:mm.next.date, date:slPlanDate(mm.next.date,'call'),   note:'7日前' });
-    out.push({ k:'agenda', mt:mm.next.date, date:slPlanDate(mm.next.date,'agenda'), note:'3日前' });
+    out.push({ k:'agenda', mt:mm.next.date, date:slPlanDate(mm.next.date,'agenda'), note:'4日前＝推奨TIMEの朝' });
     out.push({ k:'eve',    mt:mm.next.date, date:slPlanDate(mm.next.date,'eve'),    note:'前日（土日なら当日の朝）' });
   }
   return out.sort((a,b)=>a.date.localeCompare(b.date)); }
@@ -4935,8 +4938,8 @@ function slackMarkSent(kind){ ensureBoards();
   const p=slackPlan().filter(x=>x.k===kind).pop(); if(!p) return;
   state.slack.sent=state.slack.sent||{}; state.slack.sent[slSentKey(p)]=Date.now();
   state.slack._u=Date.now(); save(); }
-// 3日前の「議題つき」は、議題が溜まっていないと中身が薄い＝お題の募集をもう一度出す。
-function slEffKind(p){ return (p.k==='agenda' && summaryMeetings().nextTp.length<2) ? 'call' : p.k; }
+// 2026-09-16：📋議題つき の中に**お題の募集も入れた**ので、差し替えはしない（1本で両方まかなう）。
+function slEffKind(p){ return p.k; }
 function slKindLabel(k){ return (SL_KINDS.find(x=>x.k===k)||{}).label||k; }
 function slMd(d){ const x=parse(d); return (x.getMonth()+1)+'/'+x.getDate()+'('+_WD[x.getDay()]+')'; }
 // きょう出すぶん。過ぎたぶんも数日は出す＝流し忘れに気づける。
@@ -5043,17 +5046,26 @@ function slackCall(){
 function slackAgenda(){
   ensureBoards(); const mm=summaryMeetings(), L=[];
   if(!mm.next) return slNoMeeting();
-  L.push('📋 *次回のAI推進定例　'+slMtTitle(mm.next)+'*');
+  L.push('☕ *きょうは【推奨TIME】企画_AI作業　'+REC_TIME+'*');
+  L.push('AIに働いてもらう2時間です。まずは自分の担当をひとつ、動かすところから。');
+  L.push('');
+  L.push('📋 *次回の定例　'+slMtTitle(mm.next)+'*');
   const note=slCut(mm.next.note,120); if(note) L.push('_ねらい：'+note+'_');
   L.push(slackLinks(mm));
+  slMinutesBlock(true).forEach(x=>L.push(x));   // 前回の議事録の要点（うろ覚え防止）
   L.push('');
   if(mm.nextTp.length){
     const open=mm.nextTp.filter(t=>!t.done).length;
     L.push(SL_HR);
-    L.push('*議題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
+    L.push('*いまの議題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
     mm.nextTp.slice(0,SL_AG_MAX).forEach(t=>L.push(slTopicLine(t,true)));
     if(mm.nextTp.length>SL_AG_MAX) L.push('・ほか '+(mm.nextTp.length-SL_AG_MAX)+'件（ボードで見られます）');
-  } else { L.push(SL_HR); L.push('*議題*　まだ登録がありません'); }
+    L.push('お題の追加は当日まで受付中です。思いついた瞬間が足しどきです。');
+  } else {
+    L.push(SL_HR);
+    L.push('*いまの議題*　まだゼロ件です。このままだと世界一短い定例になります。');
+    L.push('「これ、みんなで決めたいな」が浮かんだら、忘れる前にボードへ。一言でOKです（30秒）。');
+  }
   if(mm.prev && mm.prevOpen.length){
     L.push('');
     L.push(SL_HR);
@@ -5062,7 +5074,7 @@ function slackAgenda(){
     if(mm.prevOpen.length>SL_TP_MAX) L.push('・ほか '+(mm.prevOpen.length-SL_TP_MAX)+'件');
   }
   L.push('');
-  L.push('_当日までなら足せます：ボードを開く →「📝 打合せ予定」→［追加］_');
+  L.push('_足し方：ボードを開く →「📝 打合せ予定」→ 上の欄に一言書いて［追加］（30秒）。当日までなら足せます。_');
   return L.join('\n'); }
 
 // ── ⏰ 前日リマインド ───────────────────────────────────
@@ -5150,12 +5162,14 @@ function slMinutesPick(v){
   return { rows: cut.map(x=>x.length>SL_MIN_CHARS?x.slice(0,SL_MIN_CHARS)+'…':x),
            more: Math.max(0, pick.length-cut.length), all: rows.length, points: hit.length>0 };
 }
-function slMinutesBlock(){
+function slMinutesBlock(head){
   const m=slMinutesMt(); if(!m) return [];
   const p=slMinutesPick(m.minutes); if(!p) return [];
   const L=[''];
   L.push(SL_HR);
-  L.push('*'+slMd(m.date)+'の議事録*'+(p.points?'（要点を抜き出しています）':'（要点の行が無いので先頭 '+p.rows.length+'行）'));
+  // head を渡すと見出しを変えられる（推奨TIMEの回では「前回はこう決まりました」にする）
+  L.push(head ? '*前回（'+slMd(m.date)+'）はこう決まりました*（うろ覚え防止用）'
+              : '*'+slMd(m.date)+'の議事録*'+(p.points?'（要点を抜き出しています）':'（要点の行が無いので先頭 '+p.rows.length+'行）'));
   p.rows.forEach(x=>L.push('　　'+x));
   if(p.more) L.push('　　…ほか '+p.more+'行');
   L.push('　　_全文（'+p.all+'行）はボードの「📝 この回の議事録」で読めます。_');
