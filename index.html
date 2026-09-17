@@ -1277,7 +1277,7 @@
     </span>
     <button class="btn" id="todayBtn" title="今日の位置へスクロール">📍<span class="lbl"> 今日</span></button>
     <button class="btn" id="findBtn" title="作業・議題・議事メモをまとめて探す（Ctrl+F）">🔍<span class="lbl"> 検索</span></button>
-    <button class="btn" id="topicBtn" title="打合せ予定・議題を開く（話したいことを書く）">📝 打合せ予定</button>
+    <button class="btn" id="topicBtn" title="打合せ予定を開く（次の定例で話したい「お題」を、だれでもここに書けます）">📝 打合せ予定</button>
     <button class="btn" id="sumBtn" title="今週のサマリー（進捗・遅延・今週やること）">📊 サマリー</button>
     <span class="tsep"></span>
     <!-- 右：管理・状態 -->
@@ -2853,7 +2853,7 @@ function renderMeetingList(box){
   // 日付未設定は「これから」に入れる（消えると気づけない）。
   const past=list.filter(m=>m.date&&m.date<todayY);
   const up=list.filter(m=>!(m.date&&m.date<todayY));
-  let h=`<div class="tpsec">定例一覧（クリックで概要・議題を記入／📅でカレンダー登録）</div>`;
+  let h=`<div class="tpsec">定例一覧（「次回」の回をクリック → その回で話したい<b>お題</b>を書けます／📅でカレンダー登録）</div>`;
   if(!list.length) h+=`<div class="tpempty">定例がまだありません。下の「＋ 定例を追加」から登録してください。</div>`;
   else {
     h+= up.length ? up.map(mtRow).join('')
@@ -3413,11 +3413,12 @@ function renderMeetingTable(box){
   // ★入口：この画面でやることは「議題を1件足す」。ここを主役にして一番上に置く。
   // 「ねらい」は1回書けば済む設定なので、入口より下に、畳んだまま置く（表向きは設定を見せない）。
   h+=`<div class="tpaddcard">`+
-     `<div class="tpaddlab">💬 話したいことを、ここに書く</div>`+
-     `<div class="tpaddsub"><b>だれでも書けます。</b>次の定例で話したいこと・相談したいことを1行で。`+
-       `思いついた時点でOK（あとから直せます）。</div>`+
+     `<div class="tpaddlab">💬 ここに「お題」を追加してください</div>`+
+     `<div class="tpaddsub"><b>やることは1つだけ：この回で話したいこと・相談したいことを下の欄に1行書いて「追加」を押す。</b>`+
+       `<br>だれでも・いつでも書けます（担当や順番はありません）。うまくまとまっていなくて大丈夫です。`+
+       `あとから直せる・消せるので、思いついた時点で置いておいてください。書いた人の名前は自動で入ります。</div>`+
      `<div class="tpquick"><input id="tpQuick" type="text" autocomplete="off"`+
-     ` placeholder="例）演出仕様書の分担を決めたい"><button id="tpQuickAdd">追加</button></div>`+
+     ` placeholder="例）演出仕様書の分担を決めたい／◯◯の作業を自動化できないか相談したい"><button id="tpQuickAdd">追加</button></div>`+
      // 注記は常駐させない。読ませないと使えない画面にすると、説明する人が毎回口で言うことになる。
      // 「?」を押した人にだけ出す（表示名がメールIDのままの警告だけは、直してほしい情報なので常に出す）。
      `<div class="tpquickhint">`+
@@ -3440,7 +3441,7 @@ function renderMeetingTable(box){
   h+=tpFoldGroup(doneRows,'tpdone','✓ この回で話した（記録）','done',
         _tpFoldDone && !doneRows.some(t=>_tpOpenCards.has(t.id)));
   // ✓の説明はクイック追加欄の「?」に移した（常駐させない）
-  if(!rows.length) h+=`<div class="tpempty">まだ議題がありません。上の欄に一言書いて「追加」してみてください。</div>`;
+  if(!rows.length) h+=`<div class="tpempty">まだお題がありません。<b>上の欄に一言書いて「追加」を押すだけ</b>です。どんな小さなことでも構いません。</div>`;
   // 前の回で未対応のまま終わった議題＝この回に入れるかどうかを、ここで一覧して選べるようにする
   const cand=carryCandidates(m);
   if(cand.length) h+=`<div class="tpgrp cand"><div class="gh">🔁 前の回で未対応の議題 <span class="n">${cand.length}</span>`+
