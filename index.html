@@ -978,6 +978,17 @@
   .mnhint{font-size:10.5px; color:var(--dim); line-height:1.7; margin:6px 2px 0;}
   .mnpts{font-size:11px; line-height:1.7; margin:6px 2px 0; color:var(--muted);}
   .mnpts:empty{display:none;}
+  /* 添削の状態。未添削は赤（ユーザー指定「赤文字で未添削と分かるように」）*/
+  .mnhd .mnrev{flex:none; font-size:10.5px; font-weight:700; white-space:nowrap; padding:1px 7px; border-radius:9px;}
+  .mnhd .mnrev.ng{color:var(--crimson); background:rgba(194,85,99,.13);}
+  .mnhd .mnrev.ok{color:var(--teal);}
+  .mnrevrow{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:8px 2px 0; font-size:11.5px;}
+  .mnrevrow label{display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--text); cursor:pointer;}
+  .mnrevrow .s{flex:1 1 240px; font-size:10.5px; color:var(--dim); line-height:1.6;}
+  .mnrevrow .s.ng{color:var(--crimson);}
+  .mnrevrow .mini{flex:none; width:auto; height:auto; font-size:11.5px; padding:2px 8px; border-radius:6px;
+    background:var(--panel3); border:1px solid var(--line); color:var(--text); cursor:pointer;}
+  .mtrow .mttag.rev{background:rgba(194,85,99,.14); color:var(--crimson);}
   .mnchk{margin:8px 0 0; padding:8px 10px; background:var(--panel3); border:1px solid var(--line); border-radius:8px; font-size:11.5px;}
   .mnchk.ok{color:var(--muted);}
   .mnchk .ch{display:flex; align-items:center; font-weight:700; color:var(--muted); margin-bottom:4px;}
@@ -2841,6 +2852,7 @@ function renderMeetingList(box){
           (past?`<span class="mttag done">済</span>`:'')+(isNext?`<span class="mttag now">次回</span>`:'')+
           // 議事録が書かれている回はひと目で分かるようにする（あとで読みに来る人のため）
           (String(m.minutes||'').trim()?`<span class="mttag min" title="この回の議事録が書かれています">📝</span>`:'')+
+          ((st)=>st&&st.k!=='done'?`<span class="mttag rev" title="この回の議事録はまだ添削されていません">未添削</span>`:'')(mnRevState(m))+
           ((u,own)=>`<button class="mtgcal mtdrv${own?'':' off'}" data-drive="${esca(u)}"`+
             ` title="${own?'この回の資料フォルダをDriveで開く':'この回のフォルダは未登録です（打ち合わせ資料フォルダを開きます）'}">📁</button>`
           )(mtDriveOwn(m)||DRIVE_ROOT, !!mtDriveOwn(m))+
@@ -3550,14 +3562,50 @@ function mnPointsMsg(v){
     ? '✅ Slackにはこの中の <b>'+(p.rows.length+p.more)+'行</b>（「→」で始まる行・決まったこと／宿題／期限を含む行）が出ます'
     : '⚠ 要点の行が見つかりません。<b>残したい行は「→」で始めて</b>ください（このままだと先頭'+p.rows.length+'行だけ出ます）';
 }
+// ── 議事録の添削の状態（2026-09-24）─────────────────────────────
+// 書き終えたら ☑（m.minReady＝その時刻）。火〜金の朝8時にClaude（定期実行）がDriveの写しを見て添削し、
+// 直しをGASの指示ファイルに置く → その日の夜22時にボードへ当たる。
+// 添削した印は**議事録の末尾の1行** `［添削済 YYYY-MM-DD HH:MM］`（時刻＝Claudeが読んだ写しの時刻）。
+// ⚠ GASに新しい欄を足すと貼り直しになるので、今ある mtText だけで置ける形にしてある。
+// ☑の時刻が印より新しい＝「もう一度添削に出した」なので未添削に戻る。
+const MN_REV_RE=/［添削済 (\d{4}-\d{2}-\d{2}) (\d{2}:\d{2})］/g;
+const MN_REV_FROM='2026-09-28';   // これより前の回は手で添削済み（印が無いので対象外）
+function mnRevAt(v){ let x, t=0; MN_REV_RE.lastIndex=0;
+  while((x=MN_REV_RE.exec(String(v||'')))){ const d=Date.parse(x[1]+'T'+x[2]+':00+09:00'); if(d>t) t=d; }
+  return t; }
+function mnRevState(m){
+  if(!m||!m.date||m.date<MN_REV_FROM||!String(m.minutes||'').trim()) return null;
+  const at=mnRevAt(m.minutes), rd=Number(m.minReady)||0;
+  if(at && at>=rd) return { k:'done', at };
+  return rd ? { k:'wait', rd } : { k:'todo' };
+}
+function mnMdHm(t){ const d=new Date(t);
+  return (d.getMonth()+1)+'/'+d.getDate()+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }
+function mnRevChip(st){
+  if(!st) return '';
+  return st.k==='done'
+    ? `<span class="mnrev ok" title="${esca(mnMdHm(st.at))} 時点の内容を添削済みです">✅ 添削済</span>`
+    : `<span class="mnrev ng" title="${st.k==='wait'?'添削に出しています（火〜金の朝8時に添削）':'書き終えたら、開いて「書き終えた」に☑してください'}">未添削</span>`;
+}
+function mnRevRow(st){
+  if(!st) return '';
+  if(st.k==='done') return `<div class="mnrevrow"><span class="s">✅ ${esc(mnMdHm(st.at))} 時点の内容を添削済みです。`+
+      `あとから大きく書き足したときは、もう一度出してください。</span>`+
+      `<button class="mini" id="mnReReq">🔁 もう一度添削に出す</button></div>`;
+  return `<div class="mnrevrow"><label><input type="checkbox" id="mnReady"${st.k==='wait'?' checked':''}> 書き終えた（添削に出す）</label>`+
+    (st.k==='wait'
+      ? `<span class="s ng">未添削：${esc(mnMdHm(st.rd))} に出しました。次の火〜金の朝8時に添削され、その日の夜22時にこの欄へ反映されます。</span>`
+      : `<span class="s ng">未添削：書き終えたら☑してください。火〜金の朝8時にClaudeが添削し、その日の夜22時にこの欄へ反映されます。</span>`)+
+    `</div>`;
+}
 function minutesBox(m){
-  const v=String((m&&m.minutes)||''), has=!!v.trim();
+  const v=String((m&&m.minutes)||''), has=!!v.trim(), rv=mnRevState(m);
   let h=`<div class="mnbox${_minOpen?' on':''}">`+
     `<div class="mnhd" id="mnToggle" title="${_minOpen?'畳みます':'開きます'}">`+
       `<span class="cx">${_minOpen?'▾':'▸'}</span>`+
       `<span class="ttl">📝 この回の議事録</span>`+
       `<span class="sm">まとめ書き／文字起こしの貼り付け先</span>`+
-      `<span class="cnt">${esc(mnStat(v))}</span>`+
+      `<span class="cnt">${esc(mnStat(v))}</span>`+mnRevChip(rv)+
       (has?`<button class="mini" id="mnChk" title="名前の誤変換や書き方の崩れを探します（文意までは見ません）">🔍 誤字</button>`:'')+
       (has?`<button class="mini" id="mnCopy" title="議事録の全文をコピーします">📋</button>`:'')+
       (_minOpen?`<button class="mini" id="mnBig" title="${_minBig?'元の高さに戻します':'縦に大きく広げます（長い文字起こしを読むとき）'}">${_minBig?'⤡':'⤢'}</button>`:'')+
@@ -3565,7 +3613,7 @@ function minutesBox(m){
   if(_minOpen) h+=`<div class="mnbody${_minBig?' big':''}">`+
       `<textarea data-mtmin placeholder="${esca(MN_PH)}">${esc(v)}</textarea>`+
       mnCheckHtml()+
-      `<div class="mnpts">${mnPointsMsg(v)}</div>`+
+      `<div class="mnpts">${mnPointsMsg(v)}</div>`+mnRevRow(rv)+
       `<div class="mnhint">書いたそばから全員に共有されます（保存ボタンはありません）。`+
         `<b>残したい行は「→」で始める</b>と、定例のあとのSlackにその行が出ます。`+
         `お題ごとの「当日メモ」もこれまでどおり使えます。</div></div>`;
@@ -3856,6 +3904,9 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#mnChk')){ e.stopPropagation();
     const m=state.meetings.find(x=>x.id===_openMeeting); if(!m) return;
     _mnChk=mnCheck(m.minutes); renderTopics(); return; }
+  if(e.target.closest('#mnReReq')){ e.stopPropagation();
+    const m=state.meetings.find(x=>x.id===_openMeeting); if(!m) return;
+    m.minReady=Date.now(); m._u=Date.now(); save(); renderTopics(); tpToast('もう一度添削に出しました'); return; }
   if(e.target.closest('#mnChkClose')){ e.stopPropagation(); _mnChk=null; renderTopics(); return; }
   const mfx=e.target.closest('[data-mnfix]');
   if(mfx){ e.stopPropagation();
@@ -3953,6 +4004,13 @@ document.getElementById('topicBody').addEventListener('input', e=>{
   const c=document.querySelector('#topicBody .mnhd .cnt'); if(c) c.textContent=mnStat(ta.value);
   const pt=document.querySelector('#topicBody .mnpts'); if(pt) pt.innerHTML=mnPointsMsg(ta.value);
   clearTimeout(_minTimer); _minTimer=setTimeout(persist, 800);
+});
+// 「書き終えた（添削に出す）」の☑。外すと出す前に戻る（0にする＝消さない。マージで古い値が残らないように）。
+document.getElementById('topicBody').addEventListener('change', e=>{
+  if(!e.target || e.target.id!=='mnReady') return;
+  const m=state.meetings.find(x=>x&&x.id===_openMeeting); if(!m) return;
+  clearTimeout(_minTimer);
+  m.minReady=e.target.checked?Date.now():0; m._u=Date.now(); save(); renderTopics();
 });
 document.getElementById('topicBody').addEventListener('blur', e=>{
   const ed=e.target.closest('[data-edit]'); if(ed){
@@ -5171,7 +5229,7 @@ const SL_MIN_KEY=/(決ま|決定|宿題|TODO|ToDo|やること|持ち帰|次回�
 const SL_MIN_HEAD=/^[→⇒>*・※◆●□■▶‐–—-]/;
 const SL_MIN_TTL=30;   // 見出しとして拾う行の長さの上限（長い文は見出しではない）
 function slMinutesPick(v){
-  const rows=String(v||'').replace(/\r\n?/g,'\n').split('\n').map(x=>x.trim()).filter(Boolean);
+  const rows=String(v||'').replace(/\r\n?/g,'\n').split('\n').map(x=>x.trim()).filter(x=>x&&!/^［添削済 /.test(x));   // 添削の印はSlackに出さない
   if(!rows.length) return null;
   const isPt=x=>SL_MIN_HEAD.test(x)||SL_MIN_KEY.test(x);
   // ⚠「山根さん」→「→やるものから取り組む」のような書き方だと、見出しが落ちて
@@ -5192,7 +5250,7 @@ function slMinutesBlock(head){
   L.push(SL_HR);
   // head を渡すと見出しを変えられる（推奨TIMEの回では「前回はこう決まりました」にする）
   L.push(head ? '*前回（'+slMd(m.date)+'）はこう決まりました* （うろ覚え防止用）'
-              : '*'+slMd(m.date)+'の議事録*'+(p.points?'（要点を抜き出しています）':'（要点の行が無いので先頭 '+p.rows.length+'行）'));
+              : '*'+slMd(m.date)+'の議事録* '+(p.points?'（要点を抜き出しています）':'（要点の行が無いので先頭 '+p.rows.length+'行）'));
   p.rows.forEach(x=>L.push('　　'+x));
   if(p.more) L.push('　　…ほか '+p.more+'行');
   L.push('　　_全文（'+p.all+'行）はボードの「📝 この回の議事録」で読めます。_');
