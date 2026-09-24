@@ -5080,7 +5080,7 @@ function slackAgenda(){
   if(mm.nextTp.length){
     const open=mm.nextTp.filter(t=>!t.done).length;
     L.push(SL_HR);
-    L.push('*いまの議題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
+    L.push('*いまの議題* （'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
     mm.nextTp.slice(0,SL_AG_MAX).forEach(t=>L.push(slTopicLine(t,true)));
     if(mm.nextTp.length>SL_AG_MAX) L.push('・ほか '+(mm.nextTp.length-SL_AG_MAX)+'件（ボードで見られます）');
     L.push('お題の追加は当日まで受付中です。思いついた瞬間が足しどきです。');
@@ -5092,7 +5092,7 @@ function slackAgenda(){
   if(mm.prev && mm.prevOpen.length){
     L.push('');
     L.push(SL_HR);
-    L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いている議題*（'+mm.prevOpen.length+'件）');
+    L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いている議題* （'+mm.prevOpen.length+'件）');
     mm.prevOpen.slice(0,SL_TP_MAX).forEach(t=>L.push(slTopicLine(t,false)));
     if(mm.prevOpen.length>SL_TP_MAX) L.push('・ほか '+(mm.prevOpen.length-SL_TP_MAX)+'件');
   }
@@ -5114,7 +5114,7 @@ function slackEve(){
   if(mm.nextTp.length){
     L.push('');
     L.push(SL_HR);
-    L.push('*議題*（'+mm.nextTp.length+'件）');
+    L.push('*議題* （'+mm.nextTp.length+'件）');
     mm.nextTp.slice(0,SL_TP_MAX).forEach(t=>L.push(slTopicLine(t,false)));
     if(mm.nextTp.length>SL_TP_MAX) L.push('・ほか '+(mm.nextTp.length-SL_TP_MAX)+'件（ボードで見られます）');
   } else {
@@ -5191,7 +5191,7 @@ function slMinutesBlock(head){
   const L=[''];
   L.push(SL_HR);
   // head を渡すと見出しを変えられる（推奨TIMEの回では「前回はこう決まりました」にする）
-  L.push(head ? '*前回（'+slMd(m.date)+'）はこう決まりました*（うろ覚え防止用）'
+  L.push(head ? '*前回（'+slMd(m.date)+'）はこう決まりました* （うろ覚え防止用）'
               : '*'+slMd(m.date)+'の議事録*'+(p.points?'（要点を抜き出しています）':'（要点の行が無いので先頭 '+p.rows.length+'行）'));
   p.rows.forEach(x=>L.push('　　'+x));
   if(p.more) L.push('　　…ほか '+p.more+'行');
@@ -5242,7 +5242,7 @@ function slackFull(){
     const open=mm.nextTp.filter(t=>!t.done).length;
     L.push('');
     L.push(SL_HR);
-    L.push('*次回の議題*（'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
+    L.push('*次回の議題* （'+mm.nextTp.length+'件'+(open<mm.nextTp.length?'・未対応 '+open:'')+'）');
     const note=String(mm.next.note||'').replace(/\s+/g,' ').trim();
     if(note) L.push('_ねらい：'+(note.length>90?note.slice(0,90)+'…':note)+'_');
     mm.nextTp.slice(0,SL_TP_MAX).forEach(t=>{
@@ -5259,7 +5259,7 @@ function slackFull(){
     // 文言は「片づいていない」→「前回から続いている」。チャンネルで人の目に触れるので、
     // 状態の説明だけにして責める語感を残さない（ユーザー指示・2026-08-21）。
     L.push(SL_HR);
-    L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いている議題*（'+mm.prevOpen.length+'件）');
+    L.push('*前回（'+mtWhenLine(mm.prev)+'）から続いている議題* （'+mm.prevOpen.length+'件）');
     mm.prevOpen.slice(0,SL_TP_MAX).forEach(t=>{
       L.push('・'+(t.todo||'(無題)')+(t.name?'（'+t.name+'）':''));
     });
@@ -5270,7 +5270,7 @@ function slackFull(){
   if(mm.prev && mm.prevDone.length){
     L.push('');
     L.push(SL_HR);
-    L.push('*前回（'+mtWhenLine(mm.prev)+'）で決まったこと*（'+mm.prevDone.length+'件）');
+    L.push('*前回（'+mtWhenLine(mm.prev)+'）で決まったこと* （'+mm.prevDone.length+'件）');
     mm.prevDone.slice(0,SL_RES_MAX).forEach(t=>{
       const who=[String(t.owner||'').trim(), t.due?('〜'+mdNum(parse(t.due))):''].filter(Boolean).join('・');
       L.push('・'+(t.todo||'(無題)')+(who?'（'+who+'）':''));
@@ -5289,7 +5289,7 @@ function slackFull(){
     if(notes.length){
       L.push('');
       L.push(SL_HR);
-      L.push('*前回の当日メモ*（'+notes.length+'件）');
+      L.push('*前回の当日メモ* （'+notes.length+'件）');
       notes.slice(0,SL_RES_MAX).forEach(v=>{
         L.push('・'+(v.t.todo||'(無題)')+(v.from?'　_（'+v.from+'に記入）_':''));
         slLines(v.body).forEach(x=>L.push(x));
@@ -5301,7 +5301,7 @@ function slackFull(){
     if(reps.length){
       L.push('');
       L.push(SL_HR);
-      L.push('*前回からの報告*（'+reps.length+'件）');
+      L.push('*前回からの報告* （'+reps.length+'件）');
       reps.slice(0,SL_REP_MAX).forEach(r=>{
         L.push('・'+slackItem(r.x));
         slLines(r.text).forEach(x=>L.push(x));
@@ -5347,7 +5347,7 @@ function slackFull(){
     if(soon.length){
       L.push('');
       L.push(SL_HR);
-      L.push('*今週が期限*（'+soon.length+'件・遅延分は上に出ています）');
+      L.push('*今週が期限* （'+soon.length+'件・遅延分は上に出ています）');
       soon.slice(0,SL_WEEK_MAX).forEach(v=>L.push('・'+slackItem(v.x)+'　〜'+mdNum(v.e)+'　'+getProgress(v.x.n)+'%'));
       if(soon.length>SL_WEEK_MAX) L.push('・ほか '+(soon.length-SL_WEEK_MAX)+'件（ボードで見られます）');
     } }
