@@ -5188,7 +5188,7 @@ function slackEve(){
     L.push('');
     L.push(SL_HR);
     L.push('*来る前に、自分の進捗だけ更新をお願いします*');
-    L.push('全体 '+d.pct+'%　｜　完了 '+d.done+'/'+d.total+'　｜　遅延 '+d.late.length+'件　｜　'+STALE_DAYS+'日以上動いてない '+st.length+'件');
+    L.push('全体 '+d.pct+'%　｜　完了 '+d.done+'/'+d.total+'　｜　'+lateSplitTxt(d.late)+'　｜　'+STALE_DAYS+'日以上動いてない '+st.length+'件');
     const rows=co.people.map(p=>({p, ci:coItems(p)})).filter(v=>v.ci.act>0);
     if(rows.length) L.push('_要対応：'+rows.slice(0,CO_MAX).map(v=>v.p.name+' '+v.ci.act).join('・')+'（内訳はボードで見られます）_');
   }
@@ -5204,10 +5204,14 @@ function slackEve(){
 const SL_PS_MAX=4;      // 1人あたり何件まで並べるか（全部出すとチャンネルが埋まる）
 const SL_PS_ITEMS=2;    // 📝議事録FBの中の「担当別」で1人あたり何件出すか（こちらは短く）
 // 人1人ぶんの行。📝議事録FB と 👤人別サマリー の両方から呼ぶ（文面がずれないように1か所にまとめる）。
+// 「遅延」は期限前の“ペース遅れ”も含んでいて期限切れに読めた（2026-09-28）→ 期限切れ／予定より遅れ に分けて書く
+function lateSplit(list){ const ov=list.filter(x=>schedStatus(x.n)==='overdue').length; return { ov, bh:list.length-ov }; }
+function lateSplitTxt(list){ const s=lateSplit(list); return '期限切れ '+s.ov+'件・予定より遅れ '+s.bh+'件'; }
 function slPersonBlock(r, max, withWeek, detail){
   const L=[];
-  const lt=r.act.filter(v=>schedStatus(v.x.n)).length, sl=r.act.length-lt;
-  const bd=[lt?'遅延'+lt:'', sl?'停滞'+sl:''].filter(Boolean).join('・');
+  const ov=r.act.filter(v=>schedStatus(v.x.n)==='overdue').length, bh=r.act.filter(v=>schedStatus(v.x.n)==='behind').length;
+  const sl=r.act.length-ov-bh;
+  const bd=[ov?'期限切れ'+ov:'', bh?'遅れ'+bh:'', sl?'停滞'+sl:''].filter(Boolean).join('・');
   L.push('・*'+r.name+'*　'+r.total+'件・進捗 '+r.pct+'%'
     + (detail?'（完了 '+r.done+'・進行中 '+r.wip+'・未着手 '+r.todo+(r.hold?'・保留 '+r.hold:'')+'）':'')
     + (r.act.length?('　⚠ 要対応 '+r.act.length+'件'+(bd?'（'+bd+'）':'')):''));
@@ -5265,7 +5269,7 @@ function slackPerson(){
   ensureBoards();
   const rows=personRows(), d=summaryData(), mm=summaryMeetings(), t=new Date(), L=[];
   L.push('👤 *AI推進 担当別の進捗　'+(t.getMonth()+1)+'/'+t.getDate()+'*');
-  L.push('全体 '+d.pct+'%　｜　完了 '+d.done+'/'+d.total+'　｜　遅延 '+d.late.length+'件');
+  L.push('全体 '+d.pct+'%　｜　完了 '+d.done+'/'+d.total+'　｜　'+lateSplitTxt(d.late));
   if(mm.next) L.push('次回の定例　'+mtWhenLine(mm.next));
   L.push(slackLinks(mm));
   // 要対応も今週の予定も無い人は、最後に1行でまとめる（名前は必ず出す＝漏れているのか無いのかが分かる）。
@@ -5293,7 +5297,7 @@ function slackFull(){
   const dl=(cur,key)=>{ if(!last || last[key]==null) return '';
     const v=cur-last[key]; return v===0?'（前回と同じ）':'（前回 '+last[key]+' → '+(v>0?'+':'−')+Math.abs(v)+'）'; };
   L.push('📝 *AI推進 定例のまとめ　'+(t.getMonth()+1)+'/'+t.getDate()+'*');
-  L.push('全体 '+d.pct+'%'+dl(d.pct,'pct')+'　｜　完了 '+d.done+'/'+d.total+'　｜　遅延 '+d.late.length+'件'+dl(d.late.length,'late')+'　｜　'+STALE_DAYS+'日以上動いてない '+st.length+'件'+dl(st.length,'stale'));
+  L.push('全体 '+d.pct+'%'+dl(d.pct,'pct')+'　｜　完了 '+d.done+'/'+d.total+'　｜　'+lateSplitTxt(d.late)+dl(d.late.length,'late').replace(/^（/,'（合計・')+'　｜　'+STALE_DAYS+'日以上動いてない '+st.length+'件'+dl(st.length,'stale'));
   { const a=actualHours(); if(a.cnt) L.push('AI工数削減（実績）'+a.old+'h → '+a.act+'h ＝ *'+a.pct+'%減*'); }
   if(mm.next) L.push('次回の定例　'+mtWhenLine(mm.next));
   L.push(slackLinks(mm));   // ボード／その回の資料／定例シート
@@ -5395,13 +5399,13 @@ function slackFull(){
   { const prs=personRows(), hot=prs.filter(r=>r.act.length);
     if(!hot.length) L.push('*要対応なし* 🎉 全部きちんと動いています');
     else {
-      L.push('*担当別*　（遅延＝期限を過ぎている／停滞＝'+STALE_DAYS+'日以上だれも触っていない）');
+      L.push('*担当別*　（期限切れ＝期限を過ぎている／遅れ＝期限前だが進捗が少ない／停滞＝'+STALE_DAYS+'日以上だれも触っていない）');
       hot.slice(0,CO_MAX).forEach(r=>{ slPersonBlock(r, SL_PS_ITEMS, false, false).forEach(x=>L.push(x)); });
       if(hot.length>CO_MAX) L.push('・ほか '+(hot.length-CO_MAX)+'人（ボードでご確認ください）');
       // 出ていない人は「担当が無い」のではなく「遅延も停滞も無い」。名前が消えると
       // 「自分は関係ない／漏れている」のどちらか分からないので、必ず名前を出す。
       const calm=prs.filter(r=>!r.act.length).map(r=>r.name);
-      if(calm.length) L.push('_遅延・停滞なし：'+calm.join('・')+'_');
+      if(calm.length) L.push('_期限切れ・遅れ・停滞なし：'+calm.join('・')+'_');
     } }
   // ③ これから期限が来るもの。遅れてから言うより先に言うほうが効く。
   // 遅延・停滞で既に名前が出た作業は除く（同じ作業が2回並ぶと読まれなくなる）。
@@ -5410,7 +5414,7 @@ function slackFull(){
     if(soon.length){
       L.push('');
       L.push(SL_HR);
-      L.push('*今週が期限* （'+soon.length+'件・遅延分は上に出ています）');
+      L.push('*今週が期限* （'+soon.length+'件・要対応の分は上に出ています）');
       soon.slice(0,SL_WEEK_MAX).forEach(v=>L.push('・'+slackItem(v.x)+'　〜'+mdNum(v.e)+'　'+getProgress(v.x.n)+'%'));
       if(soon.length>SL_WEEK_MAX) L.push('・ほか '+(soon.length-SL_WEEK_MAX)+'件（ボードで見られます）');
     } }
@@ -5593,7 +5597,7 @@ function personRows(){
   return rows;
 }
 function psActLabel(v){
-  const t=[]; if(schedStatus(v.x.n)) t.push(schedStatus(v.x.n)==='overdue'?'期限超過':'予定より遅れ');
+  const t=[]; if(schedStatus(v.x.n)) t.push(schedStatus(v.x.n)==='overdue'?'期限切れ':'予定より遅れ');
   if(v.sv) t.push(staleLabel(v.sv));
   return t.join('・');
 }
