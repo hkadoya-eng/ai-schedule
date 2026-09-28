@@ -4882,7 +4882,10 @@ function coItems(p){
 }
 function coTags(r){
   const t=[];
-  if(r.late) t.push('遅延'+(coDue(r.x)?' 〜'+coDue(r.x):'')+'・'+getProgress(r.x.n)+'%');
+  // 「遅延」だと期限前の“ペース遅れ”まで期限切れに読める（2026-09-28・ユーザー指摘）ので分けて書く
+  if(r.late){ const due=coDue(r.x), pg=getProgress(r.x.n)+'%';
+    t.push(schedStatus(r.x.n)==='overdue' ? '期限切れ'+(due?'（〜'+due+'）':'')+'・'+pg
+                                          : '予定より遅れ'+(due?'（期限 '+due+'）':'')+'・'+pg); }
   if(r.stale) t.push(staleLabel(r.stale));
   if(!r.late && !r.stale && r.week) t.push('今週');
   return t.join(' ／ ');
@@ -4892,7 +4895,9 @@ function callOutText(){
   const mm=summaryMeetings(), t=new Date(), L=[];
   L.push('【AI推進 進捗共有 '+(t.getMonth()+1)+'/'+t.getDate()+'】');
   L.push('');
-  L.push('全体 '+d.pct+'％ ／ 完了 '+d.done+'/'+d.total+' ／ 遅延 '+d.late.length+'件 ／ '+STALE_DAYS+'日以上動いていない '+st.length+'件');
+  { const nOv=d.late.filter(x=>schedStatus(x.n)==='overdue').length;
+    L.push('全体 '+d.pct+'％ ／ 完了 '+d.done+'/'+d.total+' ／ 期限切れ '+nOv+'件・予定より遅れ '+(d.late.length-nOv)+'件 ／ '+STALE_DAYS+'日以上動いていない '+st.length+'件');
+    L.push('※ 期限切れ＝期限を過ぎて未完了／予定より遅れ＝期限前だが、期間の進み具合に対して進捗が少ないもの'); }
   { const a=actualHours(); if(a.cnt) L.push('AI工数削減（実績）'+a.old+'h → '+a.act+'h ＝ '+a.pct+'％減'); }
   if(mm.next) L.push('次回の定例 '+mtWhenLine(mm.next)+(mm.next.title?'（'+mm.next.title+'）':''));
   L.push('ボード '+APP_URL);
