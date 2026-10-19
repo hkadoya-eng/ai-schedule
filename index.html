@@ -988,6 +988,11 @@
   .mnhd .mnrev{flex:none; font-size:10.5px; font-weight:700; white-space:nowrap; padding:1px 7px; border-radius:9px;}
   .mnhd .mnrev.ng{color:var(--crimson); background:rgba(194,85,99,.13);}
   .mnhd .mnrev.ok{color:var(--teal);}
+  .mnhd .mnrev.lk{color:var(--muted); border:1px solid var(--line);}
+  .mnlock{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:0 2px 8px; font-size:11.5px; color:var(--muted);}
+  .mnlock.adm{color:#b57a06;}
+  .mnlock button{flex:none; white-space:nowrap;}
+  .mnbody textarea.ro{opacity:.85; cursor:default;}
   .mnrevrow{display:flex; flex-wrap:wrap; align-items:center; gap:6px 10px; margin:8px 2px 0; font-size:11.5px;}
   .mnrevrow label{display:inline-flex; align-items:center; gap:5px; font-weight:700; color:var(--text); cursor:pointer;}
   .mnrevrow .s{flex:1 1 240px; font-size:10.5px; color:var(--dim); line-height:1.6;}
@@ -2761,6 +2766,7 @@ function showTopicPanel(){ document.getElementById('topicModal').classList.add('
   if(typeof computeKPIs==='function') computeKPIs(); }   // カルテが開いていれば、はみ出さない幅に詰め直す
 function _tpOpen(){ return document.body.classList.contains('tpon'); }
 function closeTopics(){ document.getElementById('topicModal').classList.remove('on'); document.body.classList.remove('tpon');
+  _mnUnlock.clear();   // 管理者の一時解除は、画面を閉じたら元に戻す
   if(typeof computeKPIs==='function') computeKPIs(); }
 function openTopics(mtId){ ensureBoards();
   _openMeeting = (typeof mtId==='string' && mtId) ? mtId : defaultMeetingId(); _mtEdit=_noteEdit=_gcMenu=false;
@@ -3612,25 +3618,48 @@ function mnRevRow(st){
       : `<span class="s ng">未添削：書き終えたら☑してください。火〜金の朝8時にClaudeが添削し、その日の夜22時にこの欄へ反映されます。</span>`)+
     `</div>`;
 }
+// ── 議事録の締め切り（2026-10-19 角谷さん決定）──────────────────────
+// 「次の定例が始まった時点」でその回の議事録は読むだけにする（後から書き換わらない記録にするため）。
+// 解除できるのは管理者だけ（その画面を開いている間だけ有効）。お題の当日メモ等は対象外。
+// ※ 自動添削（GAS）は画面を通らないので締め切り後も動く＝☑した回の添削は従来どおり。
+const MN_ADMINS=['h.kadoya@key-cre.co.jp'];
+function isAdminUser(){ return MN_ADMINS.indexOf(String(window.__user||'').trim().toLowerCase())>=0; }
+let _mnUnlock=new Set();     // 管理者が一時的に開けた回（保存しない）
+function mnNextMt(m){ if(!m||!m.date) return null;
+  const k=x=>(x.date||'')+' '+(x.start||'00:00');
+  return (state.meetings||[]).filter(x=>x&&x.id!==m.id&&x.date&&k(x)>k(m)).sort((a,b)=>k(a)<k(b)?-1:1)[0]||null; }
+function mnLockAt(m){ const nx=mnNextMt(m); return nx ? Date.parse(nx.date+'T'+(nx.start||'00:00')+':00+09:00') : 0; }
+function mnClosed(m){ const at=mnLockAt(m); return !!at && Date.now()>=at; }        // 締め切り済みか
+function mnLocked(m){ return !!m && mnClosed(m) && !_mnUnlock.has(m.id); }           // いま編集できないか
+function mnLockRow(m){
+  const at=mnLockAt(m);
+  if(!mnClosed(m)) return at ? `<div class="mnlock open">✏ 次の定例（${esc(mnMdHm(at))}）が始まると、この議事録は締め切られて読むだけになります。</div>` : '';
+  if(_mnUnlock.has(m.id)) return `<div class="mnlock adm">🔓 管理者として編集中です（この画面を閉じると元に戻ります）`+
+    `<button class="mini" id="mnRelock">🔒 締める</button></div>`;
+  return `<div class="mnlock">🔒 次の定例が始まったので締め切りました（読むだけ）。`+
+    (isAdminUser()?`<button class="mini" id="mnUnlock" title="管理者だけが解除できます">✏ 編集する（管理者）</button>`:'直したいときは管理者に相談してください。')+`</div>`;
+}
 function minutesBox(m){
-  const v=String((m&&m.minutes)||''), has=!!v.trim(), rv=mnRevState(m);
+  const v=String((m&&m.minutes)||''), has=!!v.trim(), rv=mnRevState(m), lk=mnLocked(m);
   let h=`<div class="mnbox${_minOpen?' on':''}">`+
     `<div class="mnhd" id="mnToggle" title="${_minOpen?'畳みます':'開きます'}">`+
       `<span class="cx">${_minOpen?'▾':'▸'}</span>`+
       `<span class="ttl">📝 この回の議事録</span>`+
       `<span class="sm">まとめ書き／文字起こしの貼り付け先</span>`+
       `<span class="cnt">${esc(mnStat(v))}</span>`+mnRevChip(rv)+
+      (mnClosed(m)?`<span class="mnrev lk" title="次の定例が始まったので締め切りました">${lk?'🔒 締切':'🔓 編集中'}</span>`:'')+
       (has?`<button class="mini" id="mnChk" title="名前の誤変換や書き方の崩れを探します（文意までは見ません）">🔍 誤字</button>`:'')+
       (has?`<button class="mini" id="mnCopy" title="議事録の全文をコピーします">📋</button>`:'')+
       (_minOpen?`<button class="mini" id="mnBig" title="${_minBig?'元の高さに戻します':'縦に大きく広げます（長い文字起こしを読むとき）'}">${_minBig?'⤡':'⤢'}</button>`:'')+
     `</div>`;
   if(_minOpen) h+=`<div class="mnbody${_minBig?' big':''}">`+
-      `<textarea data-mtmin placeholder="${esca(MN_PH)}">${esc(v)}</textarea>`+
+      mnLockRow(m)+
+      `<textarea data-mtmin placeholder="${esca(MN_PH)}"${lk?' readonly class="ro"':''}>${esc(v)}</textarea>`+
       mnCheckHtml()+
       `<div class="mnpts">${mnPointsMsg(v)}</div>`+mnRevRow(rv)+
-      `<div class="mnhint">書いたそばから全員に共有されます（保存ボタンはありません）。`+
+      (lk?'':`<div class="mnhint">書いたそばから全員に共有されます（保存ボタンはありません）。`+
         `<b>残したい行は「→」で始める</b>と、定例のあとのSlackにその行が出ます。`+
-        `お題ごとの「当日メモ」もこれまでどおり使えます。</div></div>`;
+        `お題ごとの「当日メモ」もこれまでどおり使えます。</div>`)+`</div>`;
   else if(has) h+=`<div class="mnprev" id="mnOpen" title="クリックで開きます">${esc(v)}</div>`;
   return h+`</div>`;
 }
@@ -3885,7 +3914,7 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     if(k==='past'){ _mtFoldPast=!_mtFoldPast; try{ localStorage.setItem('ai_sched_mtfoldpast', _mtFoldPast?'1':'0'); }catch(err){} }
     else { _tpFoldDone=!_tpFoldDone; try{ localStorage.setItem('ai_sched_tpfolddone', _tpFoldDone?'1':'0'); }catch(err){} }
     renderTopics(); return; }
-  if(e.target.closest('#tpBack')){ _openMeeting=null; _mtEdit=_noteEdit=_gcMenu=false; renderTopics(); return; }
+  if(e.target.closest('#tpBack')){ _openMeeting=null; _mtEdit=_noteEdit=_gcMenu=false; _mnUnlock.clear(); renderTopics(); return; }
   if(e.target.closest('#mtAddToggle')){ const f=document.getElementById('mtAddForm');
     if(f){ const show=(f.style.display==='none'); f.style.display=show?'flex':'none';
       if(show){ prefillNextIfEmpty(); const t=document.getElementById('mtTitle'); if(t) t.focus(); } } return; }
@@ -3922,10 +3951,16 @@ document.getElementById('topicBody').addEventListener('click', e=>{
     const m=state.meetings.find(x=>x.id===_openMeeting); if(!m) return;
     m.minReady=Date.now(); m._u=Date.now(); save(); renderTopics(); tpToast('もう一度添削に出しました'); return; }
   if(e.target.closest('#mnChkClose')){ e.stopPropagation(); _mnChk=null; renderTopics(); return; }
+  if(e.target.closest('#mnUnlock')){ e.stopPropagation();
+    if(!isAdminUser()) return;
+    if(!confirm('締め切った議事録を、管理者として編集できるようにします。\n（この画面を閉じると元の「読むだけ」に戻ります）')) return;
+    _mnUnlock.add(_openMeeting); renderTopics(); return; }
+  if(e.target.closest('#mnRelock')){ e.stopPropagation(); _mnUnlock.delete(_openMeeting); renderTopics(); return; }
   const mfx=e.target.closest('[data-mnfix]');
   if(mfx){ e.stopPropagation();
     const [from,to]=mfx.dataset.mnfix.split('|');
     const m=state.meetings.find(x=>x.id===_openMeeting); if(!m||!from||!to) return;
+    if(mnLocked(m)){ alert('この議事録は締め切り済みのため直せません（管理者が「編集する」で解除すると直せます）。'); return; }
     // 置換は全文いっぺんに。共有ボードなので確認してから。
     const n=String(m.minutes||'').split(from).length-1;
     if(!confirm('議事録の中の「'+from+'」'+n+'か所を「'+to+'」に直します。よろしいですか？\n\n※ Ctrl+Z では戻せません（議事録は履歴に載せていません）。')) return;
@@ -4013,6 +4048,7 @@ let _minTimer=null;
 document.getElementById('topicBody').addEventListener('input', e=>{
   const ta=e.target.closest('[data-mtmin]'); if(!ta) return;
   const m=state.meetings.find(x=>x&&x.id===_openMeeting); if(!m) return;
+  if(mnLocked(m)){ ta.value=m.minutes||''; return; }     // 締め切り後は書き換えない（readonlyの保険）
   if((m.minutes||'')===ta.value) return;
   m.minutes=ta.value; m._u=Date.now(); mnGrow(ta);
   const c=document.querySelector('#topicBody .mnhd .cnt'); if(c) c.textContent=mnStat(ta.value);
