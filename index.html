@@ -4560,11 +4560,11 @@ function fdMark(text, q, len){
 function runFind(){
   const q=String((document.getElementById('findInput')||{}).value||'').trim().toLowerCase();
   const box=document.getElementById('findBody'); if(!box) return;
-  if(q.length<1){ box.innerHTML='<div class="tpempty">探したい言葉を入れてください。作業名・担当・議題・当日メモ・決まったことから探します。</div>'; return; }
+  if(q.length<1){ box.innerHTML='<div class="tpempty">探したい言葉を入れてください。作業名・担当・カルテの中身（やること・AIがやる／人がやる等）・議題・当日メモ・決まったことから探します。</div>'; return; }
   ensureBoards();
   const tasks=[], topics=[], mts=[];
   walkAll(state.tree, nd=>{ if(!nd) return;
-    const fields=[nd.name, nd.role, nd.note, nd.aiDoes, nd.humanDoes, nd.tools, nd.usage, nd.bg];
+    const fields=[nd.name, nd.role, nd.note, nd.summary, nd.aiDoes, nd.humanDoes, nd.tools, nd.usage, nd.bg];
     const f=fields.find(v=>fdHit(v,q)); if(f===undefined) return;
     tasks.push({ nd:nd, snip:fdMark(fields.filter(v=>fdHit(v,q))[0], q) }); });
   (state.topics||[]).forEach(t=>{ if(!t) return;
