@@ -590,6 +590,12 @@
   .pickrow button.on.ch-human{background:#e8a15e;}
   .pickrow button.on.pr-high{background:#c25563; color:#fff;} .pickrow button.on.pr-mid{background:#f2b13d; color:#2a1e05;}
   .pickrow button.on.pr-low{background:#5f7086; color:#fff;}
+  .pickrow button.on.ol-ok{background:#49c98a;} .pickrow button.on.ol-risk{background:#f2b13d; color:#2a1e05;}
+  .pickrow button.on.ol-stop{background:#c25563; color:#fff;}
+  .olmark{font-size:10px; margin-left:6px; padding:1px 7px; border-radius:10px; cursor:pointer; white-space:nowrap; font-weight:700;}
+  .olmark.ol-risk{background:rgba(242,177,61,.22); color:#b57a06; border:1px solid rgba(242,177,61,.55);}
+  .olmark.ol-stop{background:rgba(194,85,99,.18); color:#c25563; border:1px solid rgba(194,85,99,.5);}
+  #dtNext{min-height:60px;}
   .aih{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
   .aih .col{border:1px solid var(--line); border-radius:10px; padding:9px 10px;}
   .aih .ai{background:rgba(47,182,176,.10); border-color:rgba(47,182,176,.35);}
@@ -1514,6 +1520,12 @@ function stageInfo(k){ return STAGES.find(s=>s.key===k) || STAGES[0]; }
 // 担い手・優先度・期限・工数
 const CHARGES=[{k:'ai',label:'AI主体',cls:'ch-ai',who:'ai'},{k:'collab',label:'人＋AI',cls:'ch-collab',who:'collab'},{k:'human',label:'人主体',cls:'ch-human',who:'human'}];
 const PRIOS=[{k:'high',label:'高',cls:'pr-high'},{k:'mid',label:'中',cls:'pr-mid'},{k:'low',label:'低',cls:'pr-low'}];
+// 見通し（2026-10-19 山根さんの相談「担当者が次回までの予定と見通しを報告する」への対応）。
+// 次の定例で「遅れそう」「着手できない」を拾えるように、表の行にも印を出す。
+const OUTLOOKS=[{k:'ok',label:'予定通り',cls:'ol-ok'},{k:'risk',label:'遅れそう',cls:'ol-risk'},{k:'stop',label:'着手できない',cls:'ol-stop'}];
+function outlookInfo(k){ return OUTLOOKS.find(o=>o.k===k)||null; }
+function outlookMark(t){ const o=outlookInfo(t&&t.outlook); if(!o||o.k==='ok') return '';
+  return `<span class="olmark ${o.cls}" data-detail="${t.id}" title="見通し：${o.label}${t.nextTodo?'／次回まで：'+esc(String(t.nextTodo).slice(0,60)):''}">${o.label}</span>`; }
 function chargeInfo(k){ return CHARGES.find(c=>c.k===k)||null; }
 function chargeColor(ch){ return ch==='ai'?'var(--teal)':ch==='collab'?'#49c98a':ch==='human'?'#e8a15e':'var(--navy)'; }  // バー色＝担い手
 // 行に置く担い手バッジ（クリックで 未設定→AI→協働→人 と循環）。末端タスクのみ。
@@ -2188,6 +2200,7 @@ function smallRowHTML(t, counter){
      pdotHTML(t)+ chgTagHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
+     outlookMark(t)+
      hideDoneChip(t)+
      `<span class="ctrls">`+
        `<button class="mini add" data-addchild="${t.id}" title="＋タスク（サブタスク追加）">＋</button>`+
@@ -2233,6 +2246,7 @@ function taskRowHTML(t, counter, depth, stepNo){
      pdotHTML(t)+ chgTagHTML(t)+
      `<span class="iname opener" data-detail="${t.id}" title="${esc(t.name)} ／ クリックで詳細">${esc(t.name)}</span>`+
      (hasLink?`<span class="linkmark" data-detail="${t.id}" title="関連あり">🔗</span>`:'')+
+     outlookMark(t)+
      `<span class="ctrls"><button class="mini add" data-addchild="${t.id}" title="＋タスク（さらに下の階層）">＋</button></span>`+
      `</div></td>`;
   h+=`<td class="sl c-role role" data-f="role" contenteditable="true" title="担当（クリックして入力）">${esc(t.role||'')}</td>`;
@@ -4564,7 +4578,7 @@ function runFind(){
   ensureBoards();
   const tasks=[], topics=[], mts=[];
   walkAll(state.tree, nd=>{ if(!nd) return;
-    const fields=[nd.name, nd.role, nd.note, nd.summary, nd.aiDoes, nd.humanDoes, nd.tools, nd.usage, nd.bg];
+    const fields=[nd.name, nd.role, nd.note, nd.summary, nd.nextTodo, nd.aiDoes, nd.humanDoes, nd.tools, nd.usage, nd.bg];
     const f=fields.find(v=>fdHit(v,q)); if(f===undefined) return;
     tasks.push({ nd:nd, snip:fdMark(fields.filter(v=>fdHit(v,q))[0], q) }); });
   (state.topics||[]).forEach(t=>{ if(!t) return;
@@ -6322,6 +6336,14 @@ function openDetail(id){
   }
 
   if(isLeafReport){
+    // 次回までにやること・見通し（定例で各自が報告する用）。進捗のすぐ下に置く。
+    const ol=outlookInfo(t.outlook);
+    html+=`<div class="fld wide"><label>📅 次回までにやること・見通し <span class="hint" style="margin:0 0 0 6px">次の定例までの予定を一言で。見通しは選ぶだけ</span></label>
+      <textarea id="dtNext" rows="2" placeholder="例）章立てを確定して、ドラフトを蔵本さんに共有する">${esca(t.nextTodo||'')}</textarea>
+      <div class="pickrow" id="dtOutlook" style="margin-top:7px">`+
+        OUTLOOKS.map(o=>`<button data-outlook="${o.k}" class="${o.cls}${t.outlook===o.k?' on':''}">${o.label}</button>`).join('')+
+      `</div>`+(t.outlookAt?`<div style="font-size:11px; color:var(--muted); margin-top:5px">見通しの更新: ${esc(t.outlookBy||'')} ・ ${esc(fmtWhen(t.outlookAt))}${ol?'（'+ol.label+'）':''}</div>`:'')+
+      `</div>`;
     // 人とAIの役割
     html+=`<div class="fld wide"><label>人とAIの役割分担</label><div class="aih">
         <div class="col ai"><div class="h">🤖 AIがやる</div><textarea id="dtAi" placeholder="AIに任せること">${esca(t.aiDoes||'')}</textarea></div>
@@ -6402,6 +6424,15 @@ function openDetail(id){
   const smEl=document.getElementById('dtSummary');
   if(smEl){ smEl.addEventListener('input', ()=>{ t.summary=smEl.value; persist(); });
     smEl.addEventListener('blur', ()=>save()); }
+  // 次回までにやること・見通し
+  const nxEl=document.getElementById('dtNext');
+  if(nxEl){ nxEl.addEventListener('input', ()=>{ t.nextTodo=nxEl.value; persist(); });
+    nxEl.addEventListener('blur', ()=>{ save(); render(); }); }
+  const olE=document.getElementById('dtOutlook');
+  if(olE) olE.addEventListener('click', e=>{ const b=e.target.closest('button[data-outlook]'); if(!b) return;
+    t.outlook=(t.outlook===b.dataset.outlook)?'':b.dataset.outlook;
+    t.outlookAt=new Date().toISOString(); t.outlookBy=currentUser();
+    save(); olE.querySelectorAll('button').forEach(x=>x.classList.toggle('on', x.dataset.outlook===t.outlook)); render(); });
 
   // 担い手
   const cE=document.getElementById('dtCharge');
@@ -6503,6 +6534,7 @@ function renderDepInfo(txt){
 function flushDetail(){ if(detailId==null) return; const r=findNode(detailId); if(!r) return; const t=r.node;
   const nm=document.getElementById('dtNameEdit'); if(nm) t.name=nm.value;
   const smf=document.getElementById('dtSummary'); if(smf) t.summary=smf.value;
+  const nxf=document.getElementById('dtNext'); if(nxf) t.nextTodo=nxf.value;
   const ai=document.getElementById('dtAi'); if(ai) t.aiDoes=ai.value;
   const hu=document.getElementById('dtHu'); if(hu) t.humanDoes=hu.value;
   const tl=document.getElementById('dtTools'); if(tl) t.tools=tl.value;
