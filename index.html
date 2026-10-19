@@ -5487,8 +5487,12 @@ function slackDmGuess(){ const em=String(window.__user||'').trim(); const id=em.
 function slackDmTarget(){
   try{ const v=String(localStorage.getItem('ai_sched_slackdm')||'').trim(); if(v) return v; }catch(e){}
   return slackDmGuess(); }
-function slackReady(){ ensureBoards();
-  return /^https:\/\/hooks\.slack\.com\//.test(String((state.slack&&state.slack.url)||'').trim()); }
+// 旧方式：ボードに URL が入っている（Supabase の切り替え SQL を実行する前）
+function slackLegacyUrl(){ ensureBoards(); const u=String((state.slack&&state.slack.url)||'').trim();
+  return /^https:\/\/hooks\.slack\.com\//.test(u) ? u : ''; }
+// 新方式：URL は Supabase の保管庫。ボードには「登録済み」の印だけ
+function slackVaulted(){ ensureBoards(); return !!(state.slack&&state.slack.configured) && !!window.__slackRpc; }
+function slackReady(){ return !!slackLegacyUrl() || slackVaulted(); }
 // 「登録したらSlackで知らせる」の記憶。共有ボードに入れず端末ローカル（人によって好みが違う操作なので）
 function mtNotifyPref(){ try{ return localStorage.getItem('ai_sched_mtnotify')!=='0'; }catch(e){ return true; } }
 // channel を渡すとその宛先に送る（'@ユーザー名' で本人へのDM）。投稿前の見た目確認に使う。
@@ -5496,15 +5500,27 @@ function mtNotifyPref(){ try{ return localStorage.getItem('ai_sched_mtnotify')!=
 //   2026-09-01に実物で確認済み（@h.kadoya へDMが届いた）。
 async function postToSlack(text, kind, channel){
   ensureBoards();
-  const url=String((state.slack&&state.slack.url)||'').trim();
-  if(!/^https:\/\/hooks\.slack\.com\//.test(url)){
-    alert('先に ⚙管理 →「💬 Slack投稿の設定」で Incoming Webhook の URL を登録してください。');
+  const url=slackLegacyUrl();
+  if(!url && !slackVaulted()){
+    alert('Slack の送信先がまだ登録されていません。管理者に登録を依頼してください（⚙管理 →「💬 Slack投稿の設定」）。');
     openSlackCfg(); return false; }
+  let res='sent';                                    // 'ok' 確認できた / 'sent' 届いたはずだが確認不可 / 'ng'
+  let msg='';
+  if(!url){
+    // 新方式：Supabase に送ってもらう（URL はブラウザに来ない）。受付番号で結果を数秒だけ確かめる。
+    try{
+      const rid=await window.__slackRpc('slack_post', { p_text:text, p_channel:channel||null });
+      let st=null;
+      for(let i=0;i<8 && st==null;i++){ await new Promise(r=>setTimeout(r,700));
+        try{ st=await window.__slackRpc('slack_post_status', { p_id:rid }); }catch(e){ break; } }
+      if(st===200){ res='ok'; }
+      else if(st!=null){ res='ng'; msg='Slackが '+st+' を返しました（送信先が失効している可能性があります。管理者に連絡してください）'; }
+      else { res='sent'; msg='送信は受け付けましたが、結果をまだ確認できていません。チャンネルをご確認ください。'; }
+    }catch(e){ res='ng'; msg=String((e&&e.message)||e); }
+  } else {
   const pay={ text:text };
   if(channel){ pay.channel=channel; pay.username='AI推進スケジューラ（テスト）'; pay.icon_emoji=':test_tube:'; }
   const body='payload='+encodeURIComponent(JSON.stringify(pay));
-  let res='sent';                                    // 'ok' 確認できた / 'sent' 届いたはずだが確認不可 / 'ng'
-  let msg='';
   try{
     const r=await fetch(url,{ method:'POST', headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body:body });
     if(r.ok){ res='ok'; }
@@ -5512,6 +5528,7 @@ async function postToSlack(text, kind, channel){
   }catch(e){
     // ネットワーク断もCORSも同じ例外になるため区別できない。再送はしない。
     res='sent'; msg='ブラウザの制限で送信結果を読み取れませんでした。チャンネルをご確認ください。';
+  }
   }
   if(res!=='ng'){
     // last＝「議事録FB」の差分の基準。お題募集や前日リマインドで上書きすると、
@@ -5534,12 +5551,24 @@ async function postToSlack(text, kind, channel){
 }
 function renderSlackCfg(){
   ensureBoards(); const box=document.getElementById('slackBody'); if(!box) return;
-  const sl=state.slack, ok=/^https:\/\/hooks\.slack\.com\//.test(String(sl.url||'').trim());
+  const sl=state.slack, ok=slackReady(), legacy=slackLegacyUrl();
   let h='';
-  h+='<div class="mlabel">Incoming Webhook の URL</div>';
-  h+='<div class="mrow"><input id="slackUrl" style="flex:1" placeholder="https://hooks.slack.com/services/..." value="'+esc(sl.url||'')+'"></div>';
-  h+='<div class="smnote">Slack →「アプリを追加」→ <b>Incoming Webhooks</b> → 投稿したいチャンネルを選ぶと発行されます。'
-    +'URLは<b>チャンネル1つに固定</b>。ここに入れると<b>全員のボードで使えます</b>（ボードは @key-cre.co.jp のログイン者だけが読めます）。</div>';
+  h+='<div class="mlabel">Slack の送信先（Incoming Webhook）</div>';
+  if(slackVaulted() && !legacy){
+    h+='<div class="smnote">✅ <b>登録済み</b>です。URL は安全な場所（Supabase の保管庫）にしまってあり、画面やボードのデータには出しません。</div>';
+  } else if(legacy){
+    h+='<div class="smnote warn">⚠ いまは URL がボードのデータに入っています（ログインできる人なら読める状態）。管理者が Supabase で切り替えの SQL を実行すると、安全な保管庫に移ります。</div>';
+  } else {
+    h+='<div class="smnote warn">まだ登録されていません。</div>';
+  }
+  if(isAdminUser()){
+    h+='<div class="mrow"><input id="slackUrlNew" type="password" autocomplete="off" style="flex:1" placeholder="新しい URL（https://hooks.slack.com/services/...）">'
+      +'<button id="slackUrlSet">登録・変更</button></div>';
+    h+='<div class="smnote">管理者だけに出ています。Slack →「アプリを追加」→ <b>Incoming Webhooks</b> → チャンネルを選ぶと発行されます。'
+      +'登録した URL は二度と画面に表示されません（作り直したときは、新しい URL をここに入れ直してください）。</div>';
+  } else {
+    h+='<div class="smnote">送信先の登録・変更は管理者だけができます。</div>';
+  }
   h+='<div class="mlabel">チャンネル名（表示用・任意）</div>';
   h+='<div class="mrow"><input id="slackLabel" style="flex:1" placeholder="#ai-suishin" value="'+esc(sl.label||'')+'"></div>';
   { const la=sl.lastAny||sl.last;
@@ -5582,14 +5611,23 @@ function renderSlackCfg(){
   h+='<div class="mlabel">自分にDMで試す宛先（この端末だけに保存）</div>';
   h+='<div class="mrow"><input id="slackDm" style="flex:1" placeholder="@h.kadoya" value="'+esc(slackDmTarget())+'"></div>';
   h+='<div class="smnote">'+(slackDmStored()?'':'ログイン中のアカウントから<b>推測して入れてあります</b>（違う場合は書き換えてください）。')+'Slackのユーザー名を<b>＠つき</b>で入れると、下の「🧪 自分にDMで試す」で<b>いま見えている文面が自分にだけ</b>届きます（チャンネルには出ません）。9人に出す前の見た目確認用です。</div>';
-  if(!ok) h+='<div class="smnote warn">URLが未登録（または形式ちがい）です。投稿ボタンは押せません。</div>';
+  if(!ok) h+='<div class="smnote warn">送信先が未登録です。投稿ボタンは押せません。</div>';
   box.innerHTML=h;
   const dmi=document.getElementById('slackDm');
   if(dmi) dmi.addEventListener('change', ()=>{ try{ localStorage.setItem('ai_sched_slackdm', dmi.value.trim()); }catch(e){} renderSlackCfg(); });
-  const u=document.getElementById('slackUrl'), l=document.getElementById('slackLabel');
-  const put=()=>{ state.slack.url=u.value.trim(); state.slack.label=l.value.trim(); state.slack._u=Date.now(); save(); };
-  if(u) u.addEventListener('change', ()=>{ put(); renderSlackCfg(); });
-  if(l) l.addEventListener('change', put);
+  const l=document.getElementById('slackLabel');
+  if(l) l.addEventListener('change', ()=>{ state.slack.label=l.value.trim(); state.slack._u=Date.now(); save(); });
+  // 送信先の登録（管理者だけ）。URL はボードに入れず、Supabase の保管庫へ直接渡す。
+  const us=document.getElementById('slackUrlSet');
+  if(us) us.addEventListener('click', async ()=>{
+    const inp=document.getElementById('slackUrlNew'); const v=String((inp&&inp.value)||'').trim();
+    if(!/^https:\/\/hooks\.slack\.com\//.test(v)){ alert('https://hooks.slack.com/ で始まる URL を入れてください。'); return; }
+    if(!window.__slackRpc){ alert('ログイン中のときだけ登録できます。'); return; }
+    try{ await window.__slackRpc('slack_set_webhook', { p_url:v });
+      if(inp) inp.value='';
+      state.slack.url=''; state.slack.configured=true; state.slack._u=Date.now(); save();
+      alert('送信先を登録しました（URL は保管庫にしまい、画面には残していません）。'); renderSlackCfg();
+    }catch(e){ alert('登録できませんでした。\n'+String((e&&e.message)||e)+'\n\n（Supabase で supabase_slack_secret.sql を実行済みか確認してください）'); } });
   // 編集は共有ボードに入れない（1回きりの文面なので、他の人の画面に出す意味がない）
   const ta=document.getElementById('slackMsg');
   if(ta) ta.addEventListener('input', ()=>{ _slackDraft=ta.value; });
@@ -5836,7 +5874,7 @@ document.getElementById('summaryModal').addEventListener('click', e=>{
   // 見ている画面と同じものを投げる（人ベースを見ながら押したのに作業ベースが飛ぶと驚く）
   if(e.target.closest('#sumSlack')){ ensureBoards();
     const sk=(_sumMode==='person')?'person':'full';
-    if(/^https:\/\/hooks\.slack\.com\//.test(String(state.slack.url||'').trim())){
+    if(slackReady()){
       if(confirm('Slack'+(state.slack.label?('の '+state.slack.label):'の所定のチャンネル')+'に、いま見えている'+(sk==='person'?'担当別の進捗':'進捗要約')+'を投稿します。よろしいですか？')) postToSlack(slackText(sk),sk);
     } else openSlackCfg(sk);
     return; }
@@ -6762,6 +6800,13 @@ window.__saveBoard=function(){
       maybeSnapshot(st);                                   // 1日1回、その日の状態を控えておく
     }catch(e){ setStatus('保存失敗: '+(e&&e.message||e),'#d64550'); console.error('[save]', e); }
   }, 700);
+};
+// ===== Slack 送信は Supabase 経由（2026-10-19）=====
+// Webhook URL は app_secrets に保管され、画面には渡らない。送信・登録は関数を呼ぶだけ（supabase_slack_secret.sql）。
+window.__slackRpc = async function(fn, args){
+  const { data, error } = await sb.rpc(fn, args||{});
+  if(error) throw error;
+  return data;
 };
 // ===== 日次スナップショット（誤操作・全消しからの復旧用）=====
 // schedule_board は1行を上書きし続けるので履歴が残らない。1日1回だけ別テーブルに控える。
