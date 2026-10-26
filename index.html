@@ -6210,14 +6210,18 @@ function parseChecksheet(rows){
 }
 function stripWorkNo(s){ return String(s||'').replace(/^\s*\d+[\.\s　]*/,'').trim(); }
 function leadNo(s){ const m=/^\s*0*(\d+)/.exec(String(s||'')); return m?parseInt(m[1],10):null; }   // 先頭のNo.(先頭ゼロ無視)
+// 名前の比較用：カッコ書きの補足と空白を除く（2026-10-26 蔵本さん：「ゲーム性提案資料（企画検討資料）作成」が
+// ボードの「ゲーム性提案資料作成」に紐づかなかった。カッコで言い足すのはよくあるので、比べるときは無視する）
+function workKey(s){ return stripWorkNo(s).replace(/[（(【\[][^）)】\]]*[）)】\]]/g,'').replace(/[\s　]+/g,''); }
 function findWorkByName(name){
-  const byNo=leadNo(name), key=stripWorkNo(name);
-  let exact=null, part=null, noHit=null;
+  const byNo=leadNo(name), key=stripWorkNo(name), key2=workKey(name);
+  let exact=null, part=null, noHit=null, loose=null;
   walkAll(state.tree, n=>{ if(n.kind!=='small') return;
     if(byNo!=null && n.no!=null && String(n.no)!==''){ const nn=parseInt(String(n.no).replace(/[^\d]/g,''),10); if(nn===byNo) noHit=noHit||n; }
-    const nm=stripWorkNo(n.name);
-    if(key && nm===key){ exact=exact||n; } else if(nm && key && (nm.indexOf(key)>=0 || key.indexOf(nm)>=0)){ part=part||n; } });
-  return noHit||exact||part;   // No.一致を最優先
+    const nm=stripWorkNo(n.name), nm2=workKey(n.name);
+    if(key && nm===key){ exact=exact||n; } else if(nm && key && (nm.indexOf(key)>=0 || key.indexOf(nm)>=0)){ part=part||n; }
+    else if(nm2 && key2 && (nm2===key2 || nm2.indexOf(key2)>=0 || key2.indexOf(nm2)>=0)){ loose=loose||n; } });
+  return noHit||exact||part||loose;   // No.一致を最優先。カッコを無視した一致は最後の手段
 }
 // チェックシートの対象作業が表に無い時、新規作業として追加する
 function createWorkForChecksheet(rawName){
