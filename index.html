@@ -1038,6 +1038,42 @@
   .tpcard:focus-within{border-color:var(--teal);}
   .tpcard.done:not(.open){opacity:.55;}   /* 開いて記入中のカードは薄くしない（✓のあとに議事録を書くため） */
   .tpcard.carried{border-left:3px solid #e0a12c;}
+  /* 定例中の画面：話題1行＋「決まったこと」を最初から見せる。報告は名前と資料リンクだけ */
+  .lvmode{display:flex; gap:6px; margin:-4px 0 12px;}
+  .lvmode button{flex:1; background:var(--panel3); border:1px solid var(--line); color:var(--muted); border-radius:8px;
+    padding:7px 10px; cursor:pointer; font-family:inherit; font-size:12.5px; font-weight:700;}
+  .lvmode button.on{background:var(--teal); border-color:var(--teal); color:#04222b;}
+  .lvhint{font-size:12.5px; color:var(--muted); line-height:1.65; margin:0 2px 12px;}
+  .lvhint b{color:var(--text);}
+  .lvrow{border:1px solid var(--topic-bd); border-radius:10px; background:var(--topic-bg); padding:8px 10px; margin-bottom:8px;}
+  .lvrow:focus-within{border-color:var(--teal);}
+  .lvrow.done{opacity:.6;} .lvrow.done:focus-within{opacity:1;}
+  .lvrow.carried{border-left:3px solid #e0a12c;}
+  .lvrow .lvtop{display:flex; align-items:flex-start; gap:8px;}
+  .lvrow .lvtx{flex:1; min-width:0; font-size:14px; font-weight:700; line-height:1.5; padding:2px 4px;}
+  .lvrow .lvwho{flex:none; font-size:11.5px; color:var(--muted); padding-top:4px; white-space:nowrap;}
+  .lvrow .chk{flex:none; width:24px; height:24px; border-radius:7px; border:1px solid rgba(47,182,176,.45); background:var(--panel3);
+    color:rgba(47,182,176,.30); cursor:pointer; font-size:14px; font-weight:900; display:inline-flex; align-items:center; justify-content:center;}
+  .lvrow .chk:hover{background:rgba(47,182,176,.14); color:var(--teal); border-color:var(--teal);}
+  .lvrow.done .chk{background:var(--teal); color:#04222b; border-color:var(--teal);}
+  .lvrow .lvres{margin-top:6px; padding-left:32px;}
+  .lvrow .lvres label{display:block; font-size:11.5px; font-weight:700; color:var(--teal); margin:0 0 3px 2px;}
+  .lvrow .lvres textarea{display:block; width:100%; box-sizing:border-box; min-height:34px;}
+  .lvrow.rp{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .lvrow.rp .lvnm{flex:0 0 auto; min-width:70px; font-size:13.5px; font-weight:700; padding:2px 4px;}
+  .lvrow.rp .lvtx{flex:1 1 140px; font-weight:400; font-size:13px;}
+  .lvrow.rp .lvlink{flex:1 1 180px; min-width:0; background:var(--panel3); color:var(--text); border:1px solid var(--line);
+    border-radius:7px; padding:5px 8px; font-family:inherit; font-size:12px;}
+  .lvrow .lvbtn{flex:none; background:var(--panel3); border:1px solid var(--line); color:var(--muted); border-radius:7px;
+    padding:4px 9px; cursor:pointer; font-family:inherit; font-size:11.5px; white-space:nowrap; text-decoration:none;}
+  .lvrow .lvbtn:hover{border-color:var(--teal); color:var(--text);}
+  .lvrow .lvbtn.del:hover{border-color:#d64550; color:#d64550;}
+  .lvadd{display:flex; gap:7px; margin-top:2px;}
+  .lvadd input{flex:1; min-width:0; background:var(--panel3); color:var(--text); border:1px solid var(--topic-bd);
+    border-radius:9px; padding:10px 12px; font-family:inherit; font-size:14px;}
+  .lvadd input:focus{outline:none; border-color:var(--teal); box-shadow:0 0 0 1px var(--teal);}
+  .lvadd button{flex:none; background:var(--teal); color:#04222b; font-weight:800; border:none; border-radius:9px;
+    padding:0 16px; cursor:pointer; font-family:inherit; font-size:13.5px; white-space:nowrap;}
   .tpcard .r1{display:flex; align-items:flex-start; gap:8px;}
   .tpcard .r2{display:flex; align-items:center; gap:6px; margin-top:4px; padding-left:32px;}
   .tpcard .r2 .carry{margin-left:auto;}
@@ -3406,6 +3442,61 @@ function tpGroup(rows, label, cls){
   return `<div class="tpgrp ${cls||''}"><div class="gh">${label} <span class="n">${rows.length}</span></div>`+
     rows.map(tpCard).join('')+`</div>`;
 }
+// ── 定例中の画面（2026-11-02 ユーザー要望）──────────────────────────
+// 報告はそれぞれが自分の Excel を映すので、ここで中身を見せる必要はない。定例の場で要るのは
+// 「話したこと・決まったことを、その場で残す」場所。事前のお題も、その場で出た話も同じ並びに入れ、
+// 「決まったこと」を最初から見せる。細かい話は書かせない（文字起こしから AI が議事録にまとめる）。
+// 報告は kind:'report' の議題として持つ（Slack・GAS の議題一覧にもそのまま載る）。
+let _mtLive=new Map();   // 会議id→true/false（画面の状態・保存しない）。未設定なら「当日なら定例中」
+function mtLiveOn(m){ return _mtLive.has(m.id) ? _mtLive.get(m.id) : (m.date===ymd(new Date())); }
+function isReport(t){ return !!(t && t.kind==='report'); }
+function lvModeBar(m){ const on=mtLiveOn(m);
+  return `<div class="lvmode"><button data-lvmode="1" class="${on?'on':''}" title="会議中：話題と決まったことだけを並べます">🎤 定例中の画面</button>`+
+    `<button data-lvmode="0" class="${on?'':'on'}" title="会議の前後：お題を集める・メモや背景を書く">📝 準備の画面</button></div>`; }
+function lvReportRow(t){
+  const url=(String(t.links||'').match(/https?:\/\/[^\s　"'<>]+/)||[])[0]||'';
+  return `<div class="lvrow rp">`+
+    `<div class="cell lvnm" contenteditable="true" data-edit="${esca(t.id)}" data-field="name" data-ph="名前">${esc(t.name||'')}</div>`+
+    `<div class="cell lvtx" contenteditable="true" data-edit="${esca(t.id)}" data-field="todo" data-ph="何の報告か（一言・任意）">${esc(t.todo||'')}</div>`+
+    `<input class="lvlink" data-tfield="links" data-tid="${esca(t.id)}" value="${esca(t.links||'')}" placeholder="資料のURL（任意）">`+
+    (url?`<a class="lvbtn" href="${esca(url)}" target="_blank" rel="noopener" title="資料を開く">📎 開く</a>`:'')+
+    `<button class="lvbtn del" data-del="${esca(t.id)}" title="この報告を消します（Ctrl+Zで戻せます）">🗑</button></div>`;
+}
+function lvTopicRow(t){
+  return `<div class="lvrow${t.done?' done':''}${t.from?' carried':''}">`+
+    `<div class="lvtop"><button class="chk" data-toggle="${esca(t.id)}" title="${t.done?'「まだ話していない」に戻す':'話した（済）にする'}">✓</button>`+
+      tpCell(t,'todo','lvtx','話題')+
+      (t.name?`<span class="lvwho">👤 ${esc(t.name)}</span>`:'')+`</div>`+
+    `<div class="lvres"><label>✅ 決まったこと</label>`+
+      tpArea(t,'result','result','決まったら一言（なければ空でOK）')+`</div>`+
+  `</div>`;
+}
+function renderMeetingLive(m, rows){
+  const reps=tpOrdered(rows.filter(isReport));
+  const tps=rows.filter(t=>!isReport(t));
+  const list=tpOrdered(tps.filter(t=>t.from)).concat(tpOrdered(tps.filter(t=>!t.from)));
+  return `<div class="lvhint">会議中にやることは2つだけです。<b>① 話題を足す　② 決まったことを一言書く</b>。`+
+      `細かい話は書かなくて大丈夫です（あとで文字起こしから AI が議事録にまとめます）。</div>`+
+    `<div class="tpgrp"><div class="gh">📣 報告 <span class="n">${reps.length}</span>`+
+      `<span class="sm" style="font-weight:400">中身はそれぞれの資料で。ここは名前とリンクだけ</span></div>`+
+      reps.map(lvReportRow).join('')+
+      `<div class="lvadd"><input id="lvRpName" type="text" autocomplete="off" placeholder="報告する人の名前（例：伊藤さん）">`+
+      `<button id="lvRpAdd">＋ 報告を足す</button></div></div>`+
+    `<div class="tpgrp"><div class="gh">💬 話題 <span class="n">${list.length}</span></div>`+
+      list.map(lvTopicRow).join('')+
+      `<div class="lvadd"><input id="tpQuick" type="text" autocomplete="off" placeholder="話題を一言（例：次回からオンライン・録音にする）">`+
+      `<button id="tpQuickAdd">＋ 話題を足す</button></div></div>`+
+    minutesBox(m);
+}
+function addReportQuick(){
+  const el=document.getElementById('lvRpName'); if(!el||!_openMeeting) return;
+  const v=el.value.trim(); if(!v){ el.focus(); return; }
+  // 報告は「その場で話したもの」なので最初から済（✓）にする。未済のままだと次回の持ち越し候補や未対応の数に混ざる。
+  state.topics.push({ id:uid('tp'), meetingId:_openMeeting, kind:'report', done:true, name:v, todo:'報告',
+    detail:'', links:'', ord:nextOrd(_openMeeting), _u:Date.now() });
+  save(); renderTopics();
+  const n=document.getElementById('lvRpName'); if(n){ n.value=''; n.focus(); }
+}
 function renderMeetingTable(box){
   const m=state.meetings.find(x=>x.id===_openMeeting);
   const rows=state.topics.filter(t=>t&&t.meetingId===_openMeeting);
@@ -3422,7 +3513,7 @@ function renderMeetingTable(box){
         `</div>`:'')+
         `<div class="mthead"><div class="ttl">${esc(m.title||'定例')}</div>`+
           `<div class="whenline">${esc(mtWhenLine(m))}`+
-          `<button class="mini" id="mtEditToggle" title="定例名・日付・時刻・会議室を変更する（Googleカレンダー側は連動しません）">${_mtEdit?'とじる':'✎ 変更'}</button></div></div>`+drvBar(m);
+          `<button class="mini" id="mtEditToggle" title="定例名・日付・時刻・会議室を変更する（Googleカレンダー側は連動しません）">${_mtEdit?'とじる':'✎ 変更'}</button></div></div>`+drvBar(m)+lvModeBar(m);
   if(_mtEdit) h+=`<div class="tpmeta"><input class="mtedit tpttl-in" data-mt="title" value="${esca(m.title||'')}" placeholder="定例名">`+
           `<div class="mtline"><input class="mtedit" type="date" data-mt="date" value="${esca(m.date||'')}">`+
           `<select class="mtedit tsel" data-mt="start" title="開始">${timeOpts(m.start||'','開始')}</select><span class="mtsep">〜</span>`+
@@ -3432,6 +3523,7 @@ function renderMeetingTable(box){
           `<div class="mtline"><input class="mtedit drvin" data-mt="drive" value="${esca(m.drive||'')}"`+
             ` placeholder="資料フォルダのURL（DriveでフォルダをコピーしたURLを貼る）"></div>`+
           mtAutoRow(m,true)+`</div>`;
+  if(mtLiveOn(m)){ box.innerHTML=h+renderMeetingLive(m, rows); return; }   // 定例中の画面
   // 会議の概要：ふだんは本文だけ見せて、押したら書き換えられる（空の入力欄を並べない）
   let note='';
   if(_noteEdit){
@@ -3940,6 +4032,9 @@ document.getElementById('topicBody').addEventListener('click', e=>{
   if(e.target.closest('#tpGcal')){ const m=state.meetings.find(x=>x.id===_openMeeting); if(m) openGcal(m); return; }
   if(e.target.closest('#tpAddRow')){ addRow(); return; }
   if(e.target.closest('#tpQuickAdd')){ addTopicQuick(); return; }
+  if(e.target.closest('#lvRpAdd')){ addReportQuick(); return; }
+  const lvm=e.target.closest('[data-lvmode]');
+  if(lvm){ if(_openMeeting) _mtLive.set(_openMeeting, lvm.dataset.lvmode==='1'); renderTopics(); return; }
   if(e.target.closest('#mtEditToggle')){ _mtEdit=!_mtEdit; renderTopics(); return; }
   if(e.target.closest('#mnCopy')){ e.stopPropagation(); const m=state.meetings.find(x=>x.id===_openMeeting);
     if(m){ try{ navigator.clipboard.writeText(String(m.minutes||'')); tpToast('この回の議事録をコピーしました'); }
@@ -4079,6 +4174,7 @@ document.getElementById('topicBody').addEventListener('input', e=>{
 document.getElementById('topicBody').addEventListener('keydown', e=>{
   if(e.target.id==='mtTitle' && e.key==='Enter'){ e.preventDefault(); addMeeting(); }
   if(e.target.id==='tpQuick' && e.key==='Enter'){ e.preventDefault(); addTopicQuick(); }
+  if(e.target.id==='lvRpName' && e.key==='Enter' && !e.isComposing){ e.preventDefault(); addReportQuick(); }   // 変換確定のEnterでは足さない
 });
 // メンバー一覧（⚙管理の中）
 // ===== 作業マスターの取り込み（定例シート③月次ガント → ボード）=====
