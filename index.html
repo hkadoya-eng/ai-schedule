@@ -3447,12 +3447,12 @@ function tpGroup(rows, label, cls){
 // 「話したこと・決まったことを、その場で残す」場所。事前のお題も、その場で出た話も同じ並びに入れ、
 // 「決まったこと」を最初から見せる。細かい話は書かせない（文字起こしから AI が議事録にまとめる）。
 // 報告は kind:'report' の議題として持つ（Slack・GAS の議題一覧にもそのまま載る）。
-let _mtLive=new Map();   // 会議id→true/false（画面の状態・保存しない）。未設定なら「当日なら定例中」
-function mtLiveOn(m){ return _mtLive.has(m.id) ? _mtLive.get(m.id) : (m.date===ymd(new Date())); }
+let _mtLive=new Map();   // 会議id→true/false（画面の状態・保存しない）。未設定なら準備の画面（ユーザー指定・2026-11-02）
+function mtLiveOn(m){ return _mtLive.has(m.id) ? _mtLive.get(m.id) : false; }
 function isReport(t){ return !!(t && t.kind==='report'); }
 function lvModeBar(m){ const on=mtLiveOn(m);
-  return `<div class="lvmode"><button data-lvmode="1" class="${on?'on':''}" title="会議中：話題と決まったことだけを並べます">🎤 定例中の画面</button>`+
-    `<button data-lvmode="0" class="${on?'':'on'}" title="会議の前後：お題を集める・メモや背景を書く">📝 準備の画面</button></div>`; }
+  return `<div class="lvmode"><button data-lvmode="0" class="${on?'':'on'}" title="会議の前後：お題を集める・メモや背景を書く">📝 準備の画面</button>`+
+    `<button data-lvmode="1" class="${on?'on':''}" title="会議中：話題と決まったことだけを並べます">🎤 定例中の画面</button></div>`; }
 function lvReportRow(t){
   const url=(String(t.links||'').match(/https?:\/\/[^\s　"'<>]+/)||[])[0]||'';
   return `<div class="lvrow rp">`+
