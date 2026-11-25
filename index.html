@@ -1038,6 +1038,15 @@
   .tpcard:focus-within{border-color:var(--teal);}
   .tpcard.done:not(.open){opacity:.55;}   /* 開いて記入中のカードは薄くしない（✓のあとに議事録を書くため） */
   .tpcard.carried{border-left:3px solid #e0a12c;}
+  /* AI推進会議からの報告（定例の冒頭） */
+  .ainews{border:1px solid var(--karte-bd); background:var(--karte-bg); border-radius:10px; padding:9px 11px 5px; margin:0 0 12px;}
+  .ainews .ainhd{font-size:13px; font-weight:800; color:var(--karte-fg); margin:0 0 7px;}
+  .ainews .ainhd .sm{font-weight:400; color:var(--muted); font-size:11.5px; margin-left:4px;}
+  .ainews .ainrow{display:flex; align-items:flex-start; gap:8px; margin-bottom:5px;}
+  .ainews .ainlb{flex:none; width:48px; font-size:12.5px; font-weight:700; color:var(--text); padding-top:7px;}
+  .ainews textarea{flex:1; min-width:0; min-height:32px; resize:none; overflow:hidden; background:var(--panel3); color:var(--text);
+    border:1px solid var(--line); border-radius:7px; padding:6px 9px; font-family:inherit; font-size:13px; line-height:1.55;}
+  .ainews textarea:focus{outline:none; border-color:var(--karte-fg);}
   /* 定例中の画面：話題1行＋「決まったこと」を最初から見せる。報告は名前と資料リンクだけ */
   .lvmode{display:flex; gap:6px; margin:-4px 0 12px;}
   .lvmode button{flex:1; background:var(--panel3); border:1px solid var(--line); color:var(--muted); border-radius:8px;
@@ -3137,7 +3146,7 @@ function tpArea(t, field, cls, ph){
     ` placeholder="${esca(ph)}">${esc(t[field]||'')}</textarea>`;
 }
 function tpGrow(el){ if(!el) return; el.style.height='auto'; el.style.height=Math.max(34, el.scrollHeight+2)+'px'; }
-function tpGrowAll(){ document.querySelectorAll('#topicBody textarea.cell').forEach(tpGrow); }
+function tpGrowAll(){ document.querySelectorAll('#topicBody textarea.cell, #topicBody [data-ainews]').forEach(tpGrow); }
 function tpCell(t, field, cls, ph){
   return `<div class="cell ${cls}" contenteditable="true" data-edit="${esca(t.id)}" data-field="${field}" data-ph="${esca(ph)}">${esc(t[field]||'')}</div>`;
 }
@@ -3453,6 +3462,13 @@ function isReport(t){ return !!(t && t.kind==='report'); }
 function lvModeBar(m){ const on=mtLiveOn(m);
   return `<div class="lvmode"><button data-lvmode="0" class="${on?'':'on'}" title="会議の前後：お題を集める・メモや背景を書く">📝 準備の画面</button>`+
     `<button data-lvmode="1" class="${on?'on':''}" title="会議中：話題と決まったことだけを並べます">🎤 定例中の画面</button></div>`; }
+// 定例の冒頭で伝える「AI推進会議の内容」。チームごとに一言二言（m.aiNews = {all,sub,kikaku,main,eizo}）
+const AI_NEWS=[['all','全体'],['sub','サブ'],['kikaku','企画'],['main','メイン'],['eizo','映像']];
+function aiNewsBox(m){ const v=m.aiNews||{};
+  return `<div class="ainews"><div class="ainhd">🏢 AI推進会議からの報告 <span class="sm">定例の冒頭で共有</span></div>`+
+    AI_NEWS.map(([k,lb])=>`<div class="ainrow"><span class="ainlb">${lb}</span>`+
+      `<textarea data-ainews="${k}" rows="1" placeholder="一言二言で">${esc(v[k]||'')}</textarea></div>`).join('')+
+  `</div>`; }
 function lvReportRow(t){
   const url=(String(t.links||'').match(/https?:\/\/[^\s　"'<>]+/)||[])[0]||'';
   return `<div class="lvrow rp">`+
@@ -3523,6 +3539,7 @@ function renderMeetingTable(box){
           `<div class="mtline"><input class="mtedit drvin" data-mt="drive" value="${esca(m.drive||'')}"`+
             ` placeholder="資料フォルダのURL（DriveでフォルダをコピーしたURLを貼る）"></div>`+
           mtAutoRow(m,true)+`</div>`;
+  h+=aiNewsBox(m);   // 冒頭の報告は、準備・定例中のどちらの画面でも一番上に置く
   if(mtLiveOn(m)){ box.innerHTML=h+renderMeetingLive(m, rows); return; }   // 定例中の画面
   // 会議の概要：ふだんは本文だけ見せて、押したら書き換えられる（空の入力欄を並べない）
   let note='';
@@ -4137,6 +4154,19 @@ document.getElementById('topicBody').addEventListener('input', e=>{
   m.note=ta.value; m._u=Date.now(); autoGrowNote();
   clearTimeout(_noteTimer); _noteTimer=setTimeout(persist, 600);
 });
+// AI推進会議からの報告：概要欄と同じく、入力中は再描画せず共有だけ
+let _aiNewsTimer=null;
+document.getElementById('topicBody').addEventListener('input', e=>{
+  const ta=e.target.closest('[data-ainews]'); if(!ta) return;
+  const m=state.meetings.find(x=>x&&x.id===_openMeeting); if(!m) return;
+  const k=ta.dataset.ainews; m.aiNews=Object.assign({}, m.aiNews||{});
+  if((m.aiNews[k]||'')===ta.value) return;
+  m.aiNews[k]=ta.value; m._u=Date.now(); tpGrow(ta);
+  clearTimeout(_aiNewsTimer); _aiNewsTimer=setTimeout(persist, 600);
+});
+document.getElementById('topicBody').addEventListener('blur', e=>{
+  if(e.target.closest && e.target.closest('[data-ainews]')){ clearTimeout(_aiNewsTimer); save(); }
+}, true);
 // 議事録：入力中は再描画しない（カーソルが飛ぶ）。文字数の表示だけ直接書き換える。
 // 文字起こしを貼ると一度に数万字動くので、共有までの間は少し長め（800ms）にしてある。
 let _minTimer=null;
