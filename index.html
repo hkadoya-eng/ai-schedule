@@ -3465,7 +3465,7 @@ function lvModeBar(m){ const on=mtLiveOn(m);
 // 定例の冒頭で伝える「AI推進会議の内容」。チームごとに一言二言（m.aiNews = {all,sub,kikaku,dedama,main,eizo}）
 const AI_NEWS=[['all','全体'],['sub','サブ'],['kikaku','企画'],['dedama','出玉'],['main','メイン'],['eizo','映像']];
 function aiNewsBox(m){ const v=m.aiNews||{};
-  return `<div class="ainews"><div class="ainhd">🏢 AI推進会議からの報告 <span class="sm">定例の冒頭で共有</span></div>`+
+  return `<div class="ainews"><div class="ainhd">🏢 AI推進会議からの報告 <span class="sm">${v.src?esc(v.src)+'の内容':'定例の冒頭で共有'}</span></div>`+
     AI_NEWS.map(([k,lb])=>`<div class="ainrow"><span class="ainlb">${lb}</span>`+
       `<textarea data-ainews="${k}" rows="1" placeholder="一言二言で">${esc(v[k]||'')}</textarea></div>`).join('')+
   `</div>`; }
